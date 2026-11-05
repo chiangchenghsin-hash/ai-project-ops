@@ -14,15 +14,18 @@ unattended automation. Ships as a Claude Code skill.
 | `references/metering.md` | Token/cost metering rules + measured on/off protocol |
 | `references/panel.md` | Human–AI command panel spec + presence gate for scheduled jobs |
 
-## The 7 disciplines
+## The disciplines
 
 1. **PDCA task log** — one append-only ledger; no Check evidence = task not done.
 2. **Subagent briefs** — self-contained briefs, mutually exclusive file ownership, acceptance = pasted evidence.
 3. **Token/cost metering** — numbers from scripts reading the meter DB read-only; one small table + one conclusion line.
-4. **Command panel** — command snapshot / issue ledger / hour-axis gantt; data contracts for jobs.
+4. **Command panel** — command snapshot / issue ledger / work-division board / hour-axis gantt; SQLite is the single source of truth, the panel is a TypeScript UI over the service API.
 5. **Presence gate** — scheduled jobs run only while the human is active in the project.
 6. **Measured on/off switches** — token-spending automation ships disabled; probe, meter, score, then decide.
 7. **Structure gates** — optional symbol-graph structural rules for rewrites.
+8. **Day-one bootstrap** — ordered checklist to stand the discipline up on a fresh project.
+9. **Rework, replanning & sync loops** — rework = new PDCA entry + its own gantt bar; deterministic sync scripts; memory↔todos boundary; git for artifacts, SQLite for state.
+10. **Script-value judgment** — repeated deterministic flows become versioned scripts (background / conditions / version header); the AI proactively proposes scripting.
 
 ## Install
 

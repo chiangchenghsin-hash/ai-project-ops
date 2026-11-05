@@ -40,7 +40,11 @@ Battle-tested rules:
 - Check must paste actual output (`R1 PASS 183 edges 0 violations`,
   `counts={...}`) — never "should work".
 - When several packages land at once, keep one archive entry pointing to the
-  per-package entries; the scoreboard counts only scored entries.
+  per-package entries (the MAIN session writes that archive entry).
+  Re-check verdict one-liner format: `Re-check (main): <command> → <result> — PASS|FAIL`.
+  Scoreboard counts only scored entries — a scored entry is one whose Act carries
+  a PASS/FAIL verdict; entries still awaiting the main-session re-check are not
+  counted yet.
 - A gap found and fixed during verification belongs in Check (honesty) and its
   lesson in Act.
 - Date/name skew between entries is fine; the ledger is a log, not a schedule.

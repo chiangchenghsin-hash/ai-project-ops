@@ -1,6 +1,6 @@
 ---
 name: ai-project-ops
-description: Operating discipline for AI-led engineering projects (esp. clean-room rewrites and reverse-engineering-driven development) where a human directs and Claude executes. Use when starting or running such a project, or when the user asks about task logging (PDCA), subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / gantt), scheduled jobs that must not run unattended, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "dashboard", "is it worth enabling", "rework", "re-planning", "todo sync", "memory and todos".
+description: Operating discipline for AI-led engineering projects (esp. clean-room rewrites and reverse-engineering-driven development) where a human directs and Claude executes. Use when starting or running such a project, or when the user asks about task logging (PDCA), subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / gantt), scheduled jobs that must not run unattended, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "dashboard", "is it worth enabling", "rework", "re-planning", "todo sync", "memory and todos", "when to script", "script proposal".
 ---
 
 # AI-led Project Ops Discipline
@@ -37,8 +37,8 @@ command); a handback report is a claim, not proof.
 
 ## 3. Token/cost metering (never estimate by hand)
 
-- All spend numbers come from scripts reading the meter DB read-only (e.g.
-  cc-switch.db via a probe script). Never count by hand, never guess.
+- All spend numbers come from scripts reading your meter DB read-only (via a
+  probe script). Never count by hand, never guess.
 - Output format: ONE small table (project / requests / in / out / cache-read / $)
   plus one conclusion line. No essays.
 - Billed = in + out + cache-read; also show fresh = in + out.
@@ -50,11 +50,17 @@ command); a handback report is a claim, not proof.
 
 ## 4. Command panel (human-AI loop)
 
+**The panel is a BUILD deliverable, not documentation.** Project setup must end
+with a working web panel the human can open in a browser; an AI that only
+describes the panel has failed this section. (This skill ships the spec — you
+build the page for the project.)
+
 Human intent flows through a snapshot, not through chat archaeology:
 - Command desk: the human types the "next command" and fills reply cells → one
   button generates a command snapshot (command + checkbox state + measured spend +
-  latest rounds) → clipboard → paste to Claude. Panel state lives in SQLite/JSON
-  that jobs can write; the UI is replaceable, the data contract is not.
+  latest rounds) → clipboard → paste to Claude. Panel state lives in SQLite (jobs
+  deliver through JSON handoff files, humans edit via PUT endpoints); the UI is
+  replaceable, the data contract is not.
 - Issue ledger: one row per open question (id / source / title / reply cell /
   ENDDATE / urgent / status). Highlights: overdue = red, due ≤48h = amber,
   urgent = red edge. Replies travel via the snapshot.
@@ -100,10 +106,15 @@ Create, in order: `docs/TASK-LOG.md` (header block from
 against YOUR meter DB (introspect the schema first — the join in
 [references/metering.md](references/metering.md) is one working example, not a
 standard); empty `rounds.json` / `notifications.json` / `status.json` per the
-data contracts in [references/panel.md](references/panel.md); a static panel page
-plus one launcher script that serves them (DB/API layer optional); scheduled jobs
-in whatever scheduler the OS provides (cron / schtasks / launchd), each gated per
-section 5 and shipped per section 6. Briefs live inside the assignment message
+data contracts in [references/panel.md](references/panel.md); BUILD the web panel
+— a working TypeScript page plus one launcher that serves it (day one may render
+the JSON files directly; a tiny service over SQLite is the target and the sole
+state store). Day-one minimum views: command desk (snapshot button) + issue
+ledger + job status; add gantt / tokens / modules only when needed. Done = the
+page opens, one click copies a command snapshot, a reply cell survives reload.
+Then: scheduled jobs in whatever scheduler the OS provides (cron /
+schtasks / launchd; typical starters: usage refresh, test regression, red-line
+guard, git patrol, snapshot), each gated per section 5 and shipped per section 6. Briefs live inside the assignment message
 itself (template in [references/subagent-brief.md](references/subagent-brief.md))
 — no brief directory is required.
 
@@ -112,7 +123,9 @@ itself (template in [references/subagent-brief.md](references/subagent-brief.md)
 - Rework and re-plans WILL happen. Log each as a NEW PDCA entry (the ledger is
   append-only for exactly this reason) and draw the redo as its own gantt bar
   (cost-first label) beside the round it repairs. Never edit old entries to
-  absorb a rework — the trace of the redo is the value.
+  absorb a rework — the trace of the redo is the value. Score the redo as its own
+  entry and link it (`rework-of: <original entry>`); cite the original's FAIL
+  lesson in the redo entry if there was one.
 - Todo/issue/status sync between files, panel, and meter = deterministic
   scheduled scripts under the presence gate (section 5), zero-token. If a sync
   ever needs judgment, split it: the script moves bytes; an LLM wakes only on
@@ -120,3 +133,20 @@ itself (template in [references/subagent-brief.md](references/subagent-brief.md)
 - Memory ↔ todos boundary: memory holds durable facts (preferences, lessons,
   contracts); the issue ledger / todos hold in-flight state. Cross-link by
   reference (an issue cites a memory slug); never copy content both ways.
+- Version control split: artifacts (code, docs, the ledger itself) live in git —
+  one PDCA entry per commit; identity = git author for humans, `by: subagent-xxx`
+  in the entry for AI work. In-flight state (todos / issues / work-division rows)
+  lives in SQLite only — never commit it. PR review only when ≥2 humans write code.
+
+## 10. Script-value judgment (propose, don't re-reason)
+
+- Value gate: a deterministic flow that repeats (same steps, stable I/O, seen 2+
+  times) is worth a script — one scripted run is cheaper, faster, and reproducible
+  compared with an LLM re-reasoning it every time. LLMs judge and improvise;
+  scripts execute. (Token-spending scripts still obey section 6.)
+- Script header contract — every script documents three things, or it is not
+  done: BACKGROUND (what it replaces and why it exists), CONDITIONS (env / deps /
+  preconditions / exit codes), VERSION (number + one-line changelog).
+- Proactive proposal duty: the moment a flow repeats or a manual step shows up a
+  second time, propose "script this?" with a one-line cost/benefit. Do not wait
+  for the human to ask.

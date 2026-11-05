@@ -7,6 +7,9 @@ imports them into **SQLite** (the single source of truth) → the panel is a
 land in SQLite too (PUT endpoints), so every update — human or job — travels the
 same path. UI is replaceable, the data contract is not.
 
+Treat this file as a BUILD spec: the deliverable is a working page the human
+opens daily — an AI that merely documents the panel has not delivered it.
+
 ## Views (top-nav, dashboard style)
 
 1. **Command desk** — KPI tiles (span in hours, billed tokens, $, round count) +

@@ -2,12 +2,13 @@
 
 ## Metering rules
 
-- Source of truth: your proxy's meter DB (e.g. `~/.cc-switch/cc-switch.db` —
-  schemas differ between proxies; introspect yours first and adapt the join
-  below). Open it READ-ONLY (`file:...?mode=ro`). Never write it; never echo
-  secrets/config rows.
-- Attribute spend to projects via session transcripts
-  (`session_log_sync.file_path LIKE '%' || session_id || '%'` → project slug).
+- Source of truth: your proxy's meter DB (whatever your proxy writes — schemas
+  differ by tool; introspect yours first and adapt the join below). No meter DB
+  at all → read the per-call usage fields the API returns; never estimate. Open
+  it READ-ONLY (`file:...?mode=ro`). Never write it; never echo secrets/config rows.
+- Attribute spend to projects via session transcripts (example join on one
+  tool's schema — adapt to yours: `session_log_sync.file_path LIKE '%' ||
+  session_id || '%'` → project slug).
   Per-run attribution: each `claude -p` invocation is its own session — measure
   per session id, not by guessing.
 - Columns to report: requests / in / out / cache-read / billed (= in+out+cacheR) /
