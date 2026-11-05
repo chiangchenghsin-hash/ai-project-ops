@@ -72,7 +72,8 @@ Human intent flows through a snapshot, not through chat archaeology:
   what, what is stuck). Useful only: nothing ships unless it steers a decision.
 Panel spec: [references/panel.md](references/panel.md). Signature interaction:
 the gantt and the work-division kanban are one dataset — dragging a card or a
-time bar is the same move (linked drag, Apple-style visual example included).
+time bar is the same move (linked drag; custom status columns; Apple-style
+visual example included).
 
 ## 5. Presence gate for scheduled jobs
 

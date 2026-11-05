@@ -8,7 +8,7 @@ unattended automation. Ships as a Claude Code skill.
 
 | File | What it gives you |
 |---|---|
-| `SKILL.md` | The 7 core disciplines, loaded when the skill triggers |
+| `SKILL.md` | The 10 core disciplines, loaded when the skill triggers |
 | `references/task-log-pdca.md` | PDCA ledger template + scoring rules (`docs/TASK-LOG.md`) |
 | `references/subagent-brief.md` | Task-brief template for delegating to subagents |
 | `references/metering.md` | Token/cost metering rules + measured on/off protocol |
