@@ -70,7 +70,9 @@ Human intent flows through a snapshot, not through chat archaeology:
   truth); the panel is a TypeScript UI over the service API. Keep a work-division
   board (human members / AI main sessions / subagents / agent teams — who owns
   what, what is stuck). Useful only: nothing ships unless it steers a decision.
-Panel spec: [references/panel.md](references/panel.md).
+Panel spec: [references/panel.md](references/panel.md). Signature interaction:
+the gantt and the work-division kanban are one dataset — dragging a card or a
+time bar is the same move (linked drag, Apple-style visual example included).
 
 ## 5. Presence gate for scheduled jobs
 

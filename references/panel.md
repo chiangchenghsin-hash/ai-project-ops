@@ -35,10 +35,18 @@ opens daily — an AI that merely documents the panel has not delivered it.
    graph" legend (layers, hubs, zero-indegree = plugin/reflection, ghosts).
 6. **Archive map** — milestones → produced artifacts, with an in-app markdown
    reader (fetch + render; never rely on the browser's charset guessing).
-7. **Work-division board** (project-management core) — one row per work unit:
-   owner (human member / AI main session / subagent / agent team) / role / task /
-   status / handoff note. Filter by owner type; see at a glance who owns what and
-   where work is stuck. Keep only columns that steer a decision.
+7. **Work-division board** (project-management core) — a kanban whose COLUMNS
+   are custom statuses (default: pending / in-progress / done — the project may
+   add, rename, or remove columns; statuses live in the DB, not hardcoded). One
+   card per work unit: owner (human member / AI main session / subagent / agent
+   team) / role / task / handoff note. Filter by owner type; see at a glance who
+   owns what and where work is stuck. Keep only fields that steer a decision.
+   **Highlight: gantt ↔ board drag link.** The board is a draggable kanban and
+   the gantt is the same data on a time axis — dragging a card between status
+   columns or a bar across hours is ONE move on ONE dataset (optimistic UI, snap
+   to the hour grid, PUT on drop, label + cost visible while dragging). Build
+   this linked drag before any decorative feature; it is the panel's signature
+   interaction.
 
 ## Command snapshot (the reply channel)
 
@@ -95,3 +103,22 @@ after crashes.
   full-page re-renders.
 - **Useful only**: a view, column, or control ships only after it earns its place
   — if it never changes a decision, it does not ship. No speculative widgets.
+
+## Visual language (Apple-style default)
+
+Default look = calm Apple-style: system font stack (`-apple-system, "SF Pro
+Text", "Segoe UI", sans-serif`), generous whitespace, large rounded corners
+(12–16px), hairline borders, soft layered shadows, frosted translucency for
+toolbars/modals, ONE muted accent (blue family) + grays, full light/dark via
+`prefers-color-scheme`. No heavy chrome, no rainbow charts.
+
+```css
+:root{--bg:#f5f5f7;--card:rgba(255,255,255,.72);--text:#1d1d1f;--accent:#0071e3;
+      --radius:14px;--shadow:0 4px 24px rgba(0,0,0,.08);--hair:1px solid rgba(0,0,0,.08)}
+@media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:rgba(44,44,46,.72);
+      --text:#f5f5f7;--shadow:0 4px 24px rgba(0,0,0,.4);--hair:1px solid rgba(255,255,255,.1)}}
+.card{background:var(--card);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+      border-radius:var(--radius);box-shadow:var(--shadow);border:var(--hair)}
+```
+
+Tokens above are the style example — copy and adjust; no CSS framework needed.
