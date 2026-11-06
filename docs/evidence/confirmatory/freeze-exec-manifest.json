@@ -1,0 +1,13 @@
+{
+  "schema": "ai-project-ops/confirmatory-freeze-manifest/1.0",
+  "freeze_id": "ai-project-ops/C4/confirmatory-execution/2026-11-06-v1-001",
+  "freeze_exec_file": "docs/evidence/confirmatory/freeze-exec.json",
+  "freeze_exec_sha256": "aede0317e20d992d4a6a60d49ea64b0d853040646b37cd7065cecd4204eb5e42",
+  "design_freeze_sha256": "172858c1e12e3bdb7601ad85bf65c26a17926db25df0a04b7f75d4b303d1f49d",
+  "rules": [
+    "Changing any frozen artifact without a NEW freeze id VOIDS this round.",
+    "blind-map.json is main-session only; a rater reading it fires E08 (unblinding) -> FAIL + round VOID.",
+    "The scoring rule above is locked before data; it must not be reworded after scores arrive."
+  ],
+  "created_at": "2026-11-06"
+}

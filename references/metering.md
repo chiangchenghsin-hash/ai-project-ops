@@ -11,10 +11,16 @@
   session_id || '%'` → project slug).
   Per-run attribution: each `claude -p` invocation is its own session — measure
   per session id, not by guessing.
-- Columns to report: requests / in / out / cache-read / billed (= in+out+cacheR) /
-  fresh (= in+out) / USD. ONE small table + one conclusion line. (These are
-  measured columns; the S/M/L/XL tiers are a separate planning scale — never mix
-  the two in one table.)
+- Columns to report: ONE small table with exactly six columns —
+  project / requests / in / out / cache-read / $ — plus one conclusion line.
+  (These are measured columns; the S/M/L/XL tiers are a separate planning
+  scale — never mix the two in one table.)
+  Derived figures are FORMULA NOTES under the table, never extra columns:
+  billed = in + out + cache-read; fresh = in + out.
+  This matches SKILL.md section 3 verbatim; do not reintroduce billed / fresh as
+  columns. Note: the panel's own internal `rounds.json` data contract and its
+  round-ledger UI table (see `references/panel.md`) are implementation details,
+  not this metering report format.
 - Keep a reusable probe script in the repo (`tools/usage_probe.py` style) and a
   round-segment script (`tools/gantt_rounds.py` style) that sums spend over task
   time-windows whose boundaries come from the human's command timestamps.

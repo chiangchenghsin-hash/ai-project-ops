@@ -1,0 +1,102 @@
+{
+  "schema": "ai-project-ops/evidence-layer-coverage/v1",
+  "release": "C2",
+  "generated_by": "P1",
+  "description": "Machine-readable summary of the four-layer evidence matrix and which verification cases cover each layer. Companion to references/evidence-matrix.md.",
+  "counts": {
+    "pre_c2_baseline_cases": 19,
+    "pre_c2_baseline_result": "19/19 PASS",
+    "pre_c2_baseline_status": "PRE-C2 baseline, retained for audit only; not the C2 acceptance claim",
+    "c2_minimum_verification_cases": 30,
+    "c2_note": "C2 ships >=30 verification cases; docs/evidence/freeze-manifest.json (owned by P4) is the authoritative instance-level enumeration.",
+    "case_families_in_this_matrix": 24
+  },
+  "layers": [
+    {
+      "id": "configuration",
+      "name": "Configuration",
+      "order": 1,
+      "evidence": "The artifact is correctly constituted: files exist, frontmatter is complete, JSON parses, paths are consistent, ownership is declared, frozen hashes match, case counts reconcile. Static; no program runs against behavior.",
+      "machine_check": "python -c 'import json;json.load(open(...))' for every JSON; CJK regex scan with count == 0; SHA-256 compare against the freeze manifest; frontmatter field-count assert; ../-base grep; ownership table diff; 19/19 vs >=30 reconciliation.",
+      "failure_mode": "Missing file, schema mismatch, undeclared owner, mixed path base, frozen artifact changed, self-hash gap, missing frontmatter field.",
+      "pdca_state": "PASS if every config assertion is green; FAIL for a concrete assertion failure (E02, E07); UNCERTAIN if a config file cannot be read or a manifest is absent.",
+      "cases": ["VC01", "VC02", "VC03", "VC04", "VC05", "VC06", "VC07", "VC24"],
+      "primary_error_codes": ["E02", "E07"]
+    },
+    {
+      "id": "execution",
+      "name": "Execution",
+      "order": 2,
+      "evidence": "A command actually ran and produced real output: exit codes, pasted PASS lines, 0 exceptions, persisted writes. Dynamic but not yet consumed by a real user.",
+      "machine_check": "node selftest.js (capture stdout, assert PASS count and 0 JS exceptions); node panel.js start|stop; PUT-persistence assert; clipboard-path assert; node:sqlite presence check; grep for the literal string 'should work' in Check sections.",
+      "failure_mode": "Command not run, false 'should work' claim, snapshot copy failed, PUT rollback, degradation shim invoked, no Check evidence.",
+      "pdca_state": "PASS if all commands ran with pasted PASS output; FAIL if a performed command returned negative (E01, E05, E06, E09, E11); UNCERTAIN if a command could not be executed at all (E12).",
+      "cases": ["VC08", "VC09", "VC10", "VC11", "VC12", "VC13", "VC14"],
+      "primary_error_codes": ["E01", "E05", "E06", "E09", "E11"]
+    },
+    {
+      "id": "consumer_load",
+      "name": "Consumer-load",
+      "order": 3,
+      "evidence": "A real consumer loaded the artifact: CDP-driven Chrome rendered the panel, a cold reader consumed the docs with no context, a browser actually copied the snapshot, state survived a reload.",
+      "machine_check": "CDP suite attached to Chrome --headless=new --remote-debugging-port=9224; cold-read protocol (3 readers, no context); /data/ returns 403 and only /api/* is read; clipboard event fired by a real user gesture; reload-survival assert.",
+      "failure_mode": "'The page opens' claimed as delivery, Chrome unavailable / UI unverified, raw JSON read directly, presence-gate false start, consumer observed a defect.",
+      "pdca_state": "PASS if a real consumer loaded it cleanly; UNCERTAIN if the consumer was unavailable so the UI is unverified (E12, UNCERTAIN wins over FAIL here); FAIL if the consumer loaded it and observed a defect (E03, E05).",
+      "cases": ["VC11", "VC15", "VC16", "VC17", "VC18", "VC19"],
+      "primary_error_codes": ["E03", "E12"]
+    },
+    {
+      "id": "acceptance",
+      "name": "Acceptance",
+      "order": 4,
+      "evidence": "The stated acceptance criteria were met and can be discriminated: all 2x2 cells populated, statistical power sufficient, blinding intact, no veto fired, PDCA verdict with pasted evidence.",
+      "machine_check": "2x2 cell-completeness assert; p_min <= 0.05 power assert; per-cell discrimination statistic; blind-key exposure scan; veto-condition scan; PDCA three-state verdict with evidence lines.",
+      "failure_mode": "Underpowered experiment, missing 2x2 cell, no discrimination in a failure cell, unblinding, frozen-artifact veto, contradictory criteria.",
+      "pdca_state": "PASS only if all criteria met, evidence pasted and no veto; UNCERTAIN if the experiment is underpowered or evidence incomplete (E04, E08, E10); FAIL / VOID if a veto fired or a criterion was contradicted (E07, E08).",
+      "cases": ["VC20", "VC21", "VC22", "VC23", "VC24"],
+      "primary_error_codes": ["E04", "E08", "E10"]
+    }
+  ],
+  "cases": [
+    {"id": "VC01", "description": "CJK scan over all owned English files: count == 0", "layers": ["configuration"]},
+    {"id": "VC02", "description": "json.load on every docs/evidence/*.json including P4 freeze files", "layers": ["configuration"]},
+    {"id": "VC03", "description": "Frozen SHA-256 matches files; manifest self-hash present (no gap)", "layers": ["configuration"]},
+    {"id": "VC04", "description": "8 required frontmatter fields present in every cold-read report", "layers": ["configuration"]},
+    {"id": "VC05", "description": "Package-root-relative paths consistent; gaps list matches references/panel.md; deviation NOT a gap", "layers": ["configuration"]},
+    {"id": "VC06", "description": "Mutually-exclusive file ownership: every path has exactly one owner", "layers": ["configuration"]},
+    {"id": "VC07", "description": "Case-count reconciliation: 19/19 PRE-C2 baseline vs >=30 C2", "layers": ["configuration"]},
+    {"id": "VC08", "description": "node selftest.js runs, PASS lines pasted, exit 0", "layers": ["execution"]},
+    {"id": "VC09", "description": "Check sections contain real output; literal 'should work' absent", "layers": ["execution"]},
+    {"id": "VC10", "description": "node:sqlite active, Node >= 22.5, no degradation shim", "layers": ["execution"]},
+    {"id": "VC11", "description": "Snapshot clipboard: navigator + execCommand both PASS", "layers": ["execution", "consumer_load"]},
+    {"id": "VC12", "description": "PUT persists to SQLite; rollback detected and handled", "layers": ["execution"]},
+    {"id": "VC13", "description": "Incremental reconciler; no full-page re-render", "layers": ["execution"]},
+    {"id": "VC14", "description": "Presence-gate skip path: absent -> skipped: not present, zero spend", "layers": ["execution"]},
+    {"id": "VC15", "description": "CDP Chrome renders panel; 0 JS exceptions / console errors", "layers": ["consumer_load"]},
+    {"id": "VC16", "description": "UI never reads raw JSON: /data/ 403, /api/* only", "layers": ["consumer_load"]},
+    {"id": "VC17", "description": "3 cold readers consumed docs with no context (M1 fixed)", "layers": ["consumer_load"]},
+    {"id": "VC18", "description": "Snapshot actually copied in browser by a real user gesture", "layers": ["consumer_load"]},
+    {"id": "VC19", "description": "Reload survival: time / status / columns / command / reply", "layers": ["consumer_load"]},
+    {"id": "VC20", "description": "2x2 experiment: all four cells populated and recorded", "layers": ["acceptance"]},
+    {"id": "VC21", "description": "Statistical power: p_min <= 0.05 with enough paired cards", "layers": ["acceptance"]},
+    {"id": "VC22", "description": "Unblinding check: blind keys not exposed before scoring", "layers": ["acceptance"]},
+    {"id": "VC23", "description": "PDCA three-state verdict with precedence and pasted evidence", "layers": ["acceptance"]},
+    {"id": "VC24", "description": "Veto rules + voided-round-as-correction (E07 / E08)", "layers": ["configuration", "acceptance"]}
+  ],
+  "pre_c2_selftest_mapping": {
+    "note": "The PRE-C2 19/19 selftest suite covered execution + consumer-load only; it had no configuration or acceptance cases, which is why the cold-read defects went undetected.",
+    "case_families": ["VC08", "VC11", "VC12", "VC13", "VC15", "VC16", "VC18", "VC19"]
+  },
+  "precedence": [
+    "A veto wins over a positive primary result (E07, E08).",
+    "UNCERTAIN wins over FAIL when evidence is incomplete (E02, E08, E10, E12).",
+    "FAIL for a produced negative result (E03, E04, E05, E06, E09, E11).",
+    "PASS only if all criteria met, all four layers green, evidence pasted, no veto."
+  ],
+  "voided_round": {
+    "is_scored_entry": false,
+    "classification": "correction, not a scored task",
+    "triggers": ["E07", "E08"],
+    "rules": ["preserved as evidence, never edited or deleted", "numbered as a correction", "no PASS/FAIL score and no scoreboard change", "new round re-frozen with new hashes by P4"]
+  }
+}

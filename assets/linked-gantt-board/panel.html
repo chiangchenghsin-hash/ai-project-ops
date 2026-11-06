@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Command Desk | AI Project Ops Panel</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-brand">
+        <div class="brand-mark"><i></i><i></i><i></i></div>
+        <div class="side-brand-text">
+          <h1>Command Desk</h1>
+          <p>Hour-axis gantt x work-division kanban</p>
+        </div>
+      </div>
+      <p class="side-purpose unset" id="sidePurpose">Purpose not set.</p>
+
+      <nav class="nav" id="nav">
+        <button type="button" data-view="desk" class="active"><span class="nav-dot"></span><span class="nav-label">Command desk</span></button>
+        <button type="button" data-view="plan"><span class="nav-dot"></span><span class="nav-label">Plan linkage</span></button>
+        <button type="button" data-view="ledger"><span class="nav-dot"></span><span class="nav-label">Issue ledger</span></button>
+        <button type="button" data-view="meter"><span class="nav-dot"></span><span class="nav-label">Meter</span></button>
+      </nav>
+
+      <div class="side-block">
+        <div class="side-eyebrow">Work division</div>
+        <ul class="roster" id="ownerRoster"></ul>
+        <p class="side-note">Who owns what. Owner type is stored on the work unit.</p>
+      </div>
+
+      <div class="side-block">
+        <div class="side-eyebrow">Measured spend</div>
+        <div class="spend">
+          <strong id="sideCost">-</strong>
+          <span id="sideTokens">-</span>
+        </div>
+        <p class="side-note">Figures come from the meter import. Never hand-counted.</p>
+      </div>
+
+      <button type="button" id="btnCollapse" class="side-collapse" title="Collapse sidebar">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
+        <span class="nav-label">Collapse</span>
+      </button>
+    </aside>
+
+    <div class="main-col">
+    <div id="demoBanner" class="demo-banner">DEMO build: seeded sample data only. SQLite state is disposable; do not enter real project data.</div>
+
+    <section class="charter" id="charter" aria-label="Project charter">
+      <div class="charter-head">
+        <div class="side-eyebrow">First principles</div>
+        <button type="button" id="btnCharterEdit" class="btn mini">Edit</button>
+      </div>
+      <div class="charter-grid">
+        <div class="charter-cell">
+          <h3>Purpose</h3>
+          <p id="charterPurpose" class="charter-text unset">Not set.</p>
+        </div>
+        <div class="charter-cell">
+          <h3>Technical resources</h3>
+          <p id="charterResources" class="charter-text unset">Not set.</p>
+        </div>
+        <div class="charter-cell">
+          <h3>Evaluation</h3>
+          <p id="charterEval" class="charter-text unset">Not set.</p>
+        </div>
+      </div>
+    </section>
+
+    <header class="topbar">
+      <div class="top-actions">
+        <label class="search-wrap"><svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.6"/><path d="M10.4 10.4 L14 14"/></svg>
+          <input id="globalSearch" type="search" placeholder="Search tasks / owners / handoff notes" autocomplete="off"></label>
+        <select id="ownerFilter" class="select" aria-label="Filter by owner type">
+          <option value="all">All owner types</option>
+          <option value="human">Human member</option>
+          <option value="main">AI main session</option>
+          <option value="subagent">Subagent</option>
+          <option value="team">Agent team</option>
+        </select>
+        <button id="btnAddTask" class="btn btn-primary">New work unit</button>
+        <button id="btnColumns" class="btn">Status settings</button>
+        <button id="btnRefresh" class="btn">Refresh</button>
+      </div>
+    </header>
+
+    <main class="views">
+      <!-- Command desk -->
+      <section class="view active" id="view-desk">
+        <div class="kpi-grid">
+          <div class="card kpi"><span>Span (hours)</span><strong id="kpiSpan">-</strong></div>
+          <div class="card kpi"><span>billed tokens</span><strong id="kpiTokens">-</strong></div>
+          <div class="card kpi"><span>measured $</span><strong id="kpiCost">-</strong></div>
+          <div class="card kpi"><span>Rounds</span><strong id="kpiRounds">-</strong></div>
+        </div>
+        <p class="data-line" id="deskDataLine">-</p>
+        <div class="desk-grid">
+          <div class="card">
+            <h2>Command console</h2>
+            <p class="hint">Human intent travels through the snapshot, not by scrolling chat history. Commands and replies are written to SQLite and survive a reload.</p>
+            <textarea id="nextCommand" rows="3" placeholder="Next command..."></textarea>
+            <div class="row-btns">
+              <button id="btnSend" class="btn btn-primary">Send update (copy snapshot)</button>
+              <button id="btnGenerate" class="btn">Generate only</button>
+            </div>
+            <pre id="snapshotOut" class="snapshot">(no snapshot generated yet)</pre>
+            <p class="hint">Collaboration rule: the human issues commands only through snapshots; every AI change leaves a PDCA trail; cost figures come only from the read-only meter import.</p>
+          </div>
+          <div class="card">
+            <h2>Notification inbox</h2>
+            <div id="noticeList" class="notice-list"></div>
+            <h2 class="mt">Scheduled job status</h2>
+            <table class="grid-table"><thead><tr><th>Job</th><th>Last run</th><th>Result</th><th>Summary</th></tr></thead>
+              <tbody id="jobBody"></tbody></table>
+            <p class="hint">Scheduling is gated by presence; when absent it silently skips with zero notices and zero spend.</p>
+          </div>
+          <div class="card">
+            <h2>Command ACKs</h2>
+            <p class="hint">Copying a snapshot opens an ACK row. Approve to move it in progress; Reject requires a reason and writes a PDCA-style rejections.json entry.</p>
+            <ul id="ackList" class="ack-list"></ul>
+          </div>
+          <div class="card">
+            <h2>Needs human decision</h2>
+            <p class="hint">Blocking signals (stuck &gt; 24h, dependency unfinished, urgent + overdue). Plain text list, no decorative widgets.</p>
+            <ul id="signalList" class="signal-list"></ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Plan linkage: gantt and kanban share one data set -->
+      <section class="view" id="view-plan">
+        <div class="split" id="view-plan-split" style="--gantt-h:48%">
+          <div class="card panel" id="ganttPanel">
+            <div class="panel-head"><h2>Milestone gantt</h2>
+              <span class="hint">Hour axis | 12h ticks | midnight grid | NOW line | drag snaps to hour | cost label first</span>
+              <div class="panel-tools">
+                <button id="btnBaseline" class="btn mini" title="Freeze the current window as the baseline">Freeze baseline</button>
+                <button id="btnCritical" class="btn mini" title="Dim every bar outside the critical path">Critical path</button>
+              </div>
+            </div>
+            <div id="ganttScroll" class="gantt-scroll"></div>
+          </div>
+          <div class="divider" id="divider" title="Drag to resize"><span></span></div>
+          <div class="card panel">
+            <div class="panel-head"><h2>Work-division kanban</h2>
+              <span class="hint">Cross-column drag = one move over one data set | double-click a card to edit</span></div>
+            <div class="board-area">
+              <div class="board-wrap">
+                <div id="boardColumns" class="kb-columns"></div>
+                <button type="button" id="btnAddColumn" class="kb-add-col">+ Add status</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Issue ledger -->
+      <section class="view" id="view-ledger">
+        <div class="card ledger-card">
+          <div class="panel-head"><h2>Issue ledger</h2><span class="hint">Reply / ENDDATE / urgent write to SQLite and travel with the snapshot to the AI</span></div>
+          <div class="ledger-tools">
+            <input id="issueQuery" class="text-input" type="search" placeholder="Filter issues...">
+            <div class="chips" id="issueChips">
+              <button type="button" data-filter="all" class="active">all</button>
+              <button type="button" data-filter="open">open</button>
+              <button type="button" data-filter="overdue">overdue</button>
+              <button type="button" data-filter="urgent">urgent</button>
+              <button type="button" data-filter="done">done</button>
+            </div>
+          </div>
+          <div class="table-wrap">
+          <table class="grid-table issue-table">
+            <thead><tr><th>ID</th><th>Source</th><th>Title / detail</th><th>Reply</th><th>ENDDATE</th><th>Urgent</th><th>Status</th></tr></thead>
+            <tbody id="issueBody"></tbody>
+          </table>
+          </div>
+          <div class="empty-state hidden" id="issueEmpty">No issues match this filter.</div>
+          <div class="ledger-foot">
+            <div class="ledger-foot-actions">
+              <button id="btnLedgerSend" class="btn btn-primary">Send replies (copy snapshot)</button>
+              <button id="btnLedgerGen" class="btn">Show snapshot</button>
+            </div>
+            <p class="hint">Send saves every reply to SQLite, copies the command snapshot and opens an ACK row. You never leave this tab.</p>
+            <pre id="ledgerSnapOut" class="snapshot small">(no snapshot generated yet)</pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- Meter -->
+      <section class="view" id="view-meter">
+        <div class="card">
+          <div class="panel-head"><h2>Token meter</h2><span class="hint">Figures come from the read-only handoff JSON imported from the meter DB, not hand-computed</span></div>
+          <table class="grid-table"><thead><tr><th>Round</th><th>Name</th><th>Window</th><th>billed</th><th>fresh</th><th>$</th></tr></thead>
+            <tbody id="roundBody"></tbody></table>
+          <p class="data-line" id="roundTotal">-</p>
+          <h2 class="mt">Estimate tiers</h2>
+          <table class="grid-table"><thead><tr><th>tier</th><th>token range</th><th>use</th></tr></thead>
+            <tbody><tr><td>S</td><td>10-50k</td><td>small fix / single file</td></tr><tr><td>M</td><td>50-200k</td><td>single module</td></tr>
+            <tr><td>L</td><td>0.2-1M</td><td>multi-module rewrite</td></tr><tr><td>XL</td><td>1-3M</td><td>full clean-room rewrite</td></tr></tbody></table>
+          <p class="hint">billed = in + out + cache-read; fresh = in + out. tier is a planning word only; measured columns come from the meter.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="statusbar"><span>Data: SQLite (single source of truth) | UI goes through the service API only | handoff JSON is written by jobs then imported</span>
+      <span class="nav-note">Buttons and labels carry no dynamic counts | counts live in data views only</span>
+      <span>Left / Right arrow moves 1 hour | Esc clears selection</span></footer>
+    </div>
+  </div>
+
+  <div class="modal-layer hidden" id="modalLayer"><div class="modal-sheet" id="modalSheet"></div></div>
+  <div class="toast" id="toast"></div>
+
+  <script defer src="./dist/types.js"></script>
+  <script defer src="./dist/time.js"></script>
+  <script defer src="./dist/graph.js"></script>
+  <script defer src="./dist/store.js"></script>
+  <script defer src="./dist/gantt.js"></script>
+  <script defer src="./dist/board.js"></script>
+  <script defer src="./dist/desk.js"></script>
+  <script defer src="./dist/ledger.js"></script>
+  <script defer src="./dist/app.js"></script>
+</body>
+</html>

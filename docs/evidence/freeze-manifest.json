@@ -1,0 +1,41 @@
+{
+  "schema": "ai-project-ops.freeze-manifest/2.0",
+  "freeze_id": "ai-project-ops/C2/effectiveness-freeze/2026-11-05-P4-v2-001",
+  "release": "C2",
+  "owner": "P4",
+  "status": "DESIGN_ONLY_NOT_EXECUTED",
+  "generated_date": "2026-11-05",
+  "description": "Root-of-trust manifest for the C2 effectiveness freeze. It stores the SHA-256 of docs/evidence/effectiveness-freeze.json, which is the file that contains all decision rules and therefore could otherwise be edited silently (the pre-C2 self-hash gap, finding F5 / error E07).",
+  "freeze_file": "docs/evidence/effectiveness-freeze.json",
+  "freeze_file_sha256": "172858c1e12e3bdb7601ad85bf65c26a17926db25df0a04b7f75d4b303d1f49d",
+  "frozen_artifacts": {
+    "docs/IMPROVEMENT-PLAN.md": "6a443e3f440b18101e7d1f2650140dc5fba2fa0b85fe8d4fef73d7d83080865c",
+    "docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md": "09798275ad1f17189af898ba8b253cff3ca1e4d4b0e9777224391649a6da4645",
+    "docs/effectiveness-report.template.md": "032cbcc564252c9530f1285e26ff709323cbfd8d0656f3646d0c0e8babf4f8c7",
+    "docs/evidence/effectiveness-freeze.json": "172858c1e12e3bdb7601ad85bf65c26a17926db25df0a04b7f75d4b303d1f49d"
+  },
+  "voided_v1_hashes": {
+    "note": "SHA-256 of the pre-C2 Chinese v1 documents, retained verbatim for audit from docs/TASK-LOG.md (the 'void the pre-C2 frozen round' entry). v1 is VOID, not deleted, not edited, not scored.",
+    "docs/IMPROVEMENT-PLAN.md": "89b59fb993e62754427dc78c18200aa33a41fd13c3089d5ab3d480c23880abfc",
+    "docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md": "0246d26ba3c70b084b258b2c734329d0eb5d1feb89ebcea414d982207e4491bf"
+  },
+  "rules": {
+    "primary_rule": "Changing ANY frozen artifact (any file in frozen_artifacts, the freeze file, or this manifest) WITHOUT a NEW freeze id VOIDS the round. This closes the post-hoc rule-change loophole: editing a decision rule changes a recorded digest that can be checked, firing E07.",
+    "correction_voids_round": "A correction (localization, defect fix, rule change, added card, changed alpha) VOIDS the current round. The voided round is preserved as evidence, NOT scored, NOT deleted, NOT edited.",
+    "no_same_id_rerun": "A voided round CANNOT be silently re-run under the same freeze id. Re-running the SAME freeze id after a correction is prohibited.",
+    "new_round_requirements": "Any NEW round requires a NEW freeze id and NEW hashes for every frozen artifact. The new round starts from a clean slate.",
+    "scored_fail_is_final": "Within one live freeze id, a scored FAIL is a recorded result: 'FAIL must not be deleted / no retest' applies and it cannot be erased by re-running. Across freeze ids, a correction voids the whole round (unscored) and a new freeze id begins. There is NO path that changes a rule and re-runs under the same freeze.",
+    "veto": "E07 (frozen artifact changed) or E08 (unblinding) is a veto -> three-cell label FAIL + round VOID; recovery is a NEW freeze id, never a same-id re-run.",
+    "precedence": "veto > UNCERTAIN > FAIL > PASS (references/pdca-three-state.md)."
+  },
+  "integrity_anchor": {
+    "note": "This manifest is the root of trust. It stores the hash of the freeze file (which holds the decision rules) but does NOT store a hash of itself. Its own integrity is anchored externally by the main session: the main session records this manifest's SHA-256 in docs/TASK-LOG.md (append-only, main-session-owned) and commits the frozen set to git. P4 does NOT write docs/TASK-LOG.md.",
+    "self_hash_stored_here": false,
+    "self_hash_owner": "main session (docs/TASK-LOG.md)",
+    "detection": "Any sha256sum comparison of the frozen set or of this manifest against the recorded digests detects an edit and fires E07."
+  },
+  "verification": {
+    "command": "sha256sum docs/IMPROVEMENT-PLAN.md docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md docs/effectiveness-report.template.md docs/evidence/effectiveness-freeze.json",
+    "check": "A Python snippet loads both JSON files and verifies the two document hashes, the freeze hash in frozen_artifacts / freeze_file_sha256, 2^8=256, p_min <= alpha, 2 cards per 2x2 cell, and exactly 4 self_check cases."
+  }
+}

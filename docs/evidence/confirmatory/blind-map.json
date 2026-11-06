@@ -1,0 +1,70 @@
+{
+  "seed": 20261105,
+  "map": {
+    "R01": {
+      "pair_id": "P01",
+      "arm": "A"
+    },
+    "R16": {
+      "pair_id": "P01",
+      "arm": "B"
+    },
+    "R06": {
+      "pair_id": "P02",
+      "arm": "A"
+    },
+    "R09": {
+      "pair_id": "P02",
+      "arm": "B"
+    },
+    "R14": {
+      "pair_id": "P03",
+      "arm": "A"
+    },
+    "R08": {
+      "pair_id": "P03",
+      "arm": "B"
+    },
+    "R04": {
+      "pair_id": "P04",
+      "arm": "A"
+    },
+    "R12": {
+      "pair_id": "P04",
+      "arm": "B"
+    },
+    "R07": {
+      "pair_id": "P05",
+      "arm": "A"
+    },
+    "R02": {
+      "pair_id": "P05",
+      "arm": "B"
+    },
+    "R10": {
+      "pair_id": "P06",
+      "arm": "A"
+    },
+    "R03": {
+      "pair_id": "P06",
+      "arm": "B"
+    },
+    "R15": {
+      "pair_id": "P07",
+      "arm": "A"
+    },
+    "R11": {
+      "pair_id": "P07",
+      "arm": "B"
+    },
+    "R13": {
+      "pair_id": "P08",
+      "arm": "A"
+    },
+    "R05": {
+      "pair_id": "P08",
+      "arm": "B"
+    }
+  },
+  "access": "MAIN_SESSION_ONLY; blind raters MUST NOT read this file"
+}

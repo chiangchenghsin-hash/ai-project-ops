@@ -1,0 +1,33 @@
+{
+  "DEMO": true,
+  "_comment": "Isolated demo seed. All sample records live here; db.js loads this file and never commits runtime state. English/ASCII only.",
+  "columns": [
+    ["pending", "Pending", "#8e8e93", 0],
+    ["in_progress", "In Progress", "#0071e3", 1],
+    ["done", "Done", "#34c759", 2]
+  ],
+  "tasks": [
+    ["t1", "Kickoff & goal breakdown", "Lin Che", "human", "Project lead", "Scope frozen, see TASK-LOG", "done", -96, -72, 100, 0, "S", 12.4, 0.31],
+    ["t2", "Clean-room rewrite scope freeze", "Zhou Yu", "human", "Reviewer", "Freeze list signed off", "done", -72, -52, 100, 0, "S", 18.6, 0.47],
+    ["t3", "Symbol graph build & query", "Main session A", "main", "Architecture", "3 GQL queries pending review", "in_progress", -50, -18, 72, 0, "L", 103.7, 2.24],
+    ["t4", "API contract extraction", "subagent-api", "subagent", "Contract", "2 return-value annotations missing", "in_progress", -44, -8, 55, 0, "M", 64.2, 1.38],
+    ["t5", "Regression test wiring", "subagent-test", "subagent", "Verification", "12+7 checks pass, rerun pending", "in_progress", -20, 16, 40, 0, "M", 47.9, 0.96],
+    ["t6", "Module disposition tagging", "agent-team-RE", "team", "Tagging", "Zero-omission assertion pending", "pending", 2, 30, 0, 0, "M", 8.1, 0.18],
+    ["t7", "Docs & evidence archiving", "Chen Mo", "human", "Archiving", "Screenshots not filed", "pending", 12, 40, 0, 0, "S", 3.2, 0.07],
+    ["t8", "Cost probe wiring", "Main session B", "main", "Metering", "Read-only meter DB", "done", -88, -66, 100, 0, "S", 5.3, 0.11],
+    ["t9", "Structure gate G1", "subagent-guard", "subagent", "Gate", "1 layer-ban red line", "in_progress", -12, 20, 25, 0, "S", 21.4, 0.44],
+    ["t10", "Snapshot channel integration", "agent-team-UI", "team", "Integration", "Clipboard two paths to test", "pending", 20, 48, 0, 0, "M", 6.8, 0.14],
+    ["t11", "Regression report generation", "Main session A", "main", "Report", "Awaiting meter data", "pending", 30, 58, 0, 0, "S", 4.1, 0.09],
+    ["t12", "Release review", "Lin Che", "human", "Owner", "Human presence required", "pending", 46, 64, 0, 0, "S", 2.6, 0.05],
+    ["p1", "Placeholder: next rewrite round", "Unassigned", "main", "Placeholder", "Non-commitment", "pending", 72, 96, 0, 1, "L", 0, 0],
+    ["p2", "Placeholder: full acceptance", "Unassigned", "human", "Placeholder", "Non-commitment", "pending", 100, 124, 0, 1, "M", 0, 0],
+    ["p3", "Placeholder: retrospective", "Unassigned", "team", "Placeholder", "Non-commitment", "pending", 128, 148, 0, 1, "S", 0, 0]
+  ],
+  "issues": [
+    ["ISS-1", "subagent-api", "2 return-value annotations missing", "Found in contract-extraction round 3; human must confirm scope", "", -2, 1, "open"],
+    ["ISS-2", "Main session A", "3 GQL queries pending review", "1 layer-ban + 1 contract-coverage item", "", 1, 0, "open"],
+    ["ISS-3", "meter", "Does cost scope include cache-read", "billed = in + out + cache-read", "", 3, 0, "open"],
+    ["ISS-4", "subagent-test", "Regression rerun window", "Waiting for presence gate", "", 6, 0, "open"],
+    ["ISS-5", "human", "Clipboard fallback tested", "navigator + execCommand both paths", "Approved", -5, 0, "done"]
+  ]
+}

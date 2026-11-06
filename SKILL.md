@@ -1,12 +1,38 @@
 ---
 name: ai-project-ops
-description: Operating discipline for AI-led engineering projects (esp. clean-room rewrites and reverse-engineering-driven development) where a human directs and Claude executes. Use when starting or running such a project, or when the user asks about task logging (PDCA), subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / gantt), scheduled jobs that must not run unattended, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "dashboard", "is it worth enabling", "rework", "re-planning", "todo sync", "memory and todos", "when to script", "script proposal".
+display_name: 'AI Project Ops'
+display_name_en: 'AI Project Ops'
+description: 'Operating discipline for AI-led engineering projects (especially clean-room rewrites and reverse-engineering-driven development) where a human directs and an AI executes. Use when starting or running such a project, or when the user asks about PDCA task logging, subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / linked gantt), presence-gated scheduled jobs, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "is it worth enabling", "rework", "re-planning", "linked gantt board", "day-one bootstrap", "script proposal", "when to script", "ASD-STE100", "simplified technical English", "aircraft maintenance manual style", "short sentences", "80% STE". Not for: pure report or document generation, multi-tenant authentication or authorization systems, 3D or spatial views, cloud file sync, or answering conceptual questions about what skills are or how the skill system works.'
+description_zh: 'Operating discipline for AI-led engineering projects: PDCA task logs, subagent briefs, token metering, a human-AI command panel, and presence-gated scheduled automation. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or conceptual questions about skills.'
+description_en: 'Apply traceability, cost-control, and safe-automation rules to AI-led engineering projects: a single PDCA ledger, self-contained subagent briefs, measured token metering, a built command panel, and measured on/off switches. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or answering conceptual questions about skills.'
+version: '1.2.0'
+author: 'Chiang Chenghsin'
+agent_created: true
+allowed-tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+examples_zh:
+  - 'Start a clean-room rewrite and stand up the PDCA task log'
+  - 'Draft a subagent brief with mutually exclusive file ownership'
+  - 'Meter token spend and decide whether to enable a scheduled digest'
+examples_en:
+  - 'Set up a PDCA ledger for a reverse-engineering-driven rewrite'
+  - 'Write a self-contained subagent brief whose acceptance is pasted evidence'
+  - 'Measure token spend from the meter DB before enabling an unattended job'
 ---
 
 # AI-led Project Ops Discipline
 
 Apply these rules from day one. AI-led projects fail on traceability, cost
 blindness, and unattended automation — not on code.
+
+Release packaging (the 8 required frontmatter fields, resource-directory
+conventions, zip rules, SkillHub red lines and the release checklist) is
+specified in [references/packaging-spec.md](references/packaging-spec.md).
+Blank templates live in [templates/](templates/); validation and E2E scripts
+live in [scripts/](scripts/).
 
 ## 1. PDCA task log (single ledger, `docs/TASK-LOG.md`)
 
@@ -23,7 +49,9 @@ criteria were met with pasted evidence; FAIL = criteria missed, evidence absent,
 or a later re-check contradicted the claim. Keep a scoreboard (`PASS n / FAIL m`)
 — the main session owns that header line; entry bodies are append-only.
 FAIL entries must be referenced by name in later briefs ("lessons learned").
-Template: [references/task-log-pdca.md](references/task-log-pdca.md).
+Template: [references/task-log-pdca.md](references/task-log-pdca.md). Blank
+files: [templates/TASK-LOG.template.md](templates/TASK-LOG.template.md) and
+[templates/pdca-entry.template.md](templates/pdca-entry.template.md).
 
 ## 2. Subagent briefs (delegate multifront work)
 
@@ -31,7 +59,8 @@ When 2+ independent packages are in flight, delegate with self-contained briefs:
 paths + constraints + mutually-exclusive file ownership + acceptance = evidence +
 report-length limit + the PDCA line ("when done, append a PDCA entry per the
 TASK-LOG template; the Check section must paste verification evidence").
-Template: [references/subagent-brief.md](references/subagent-brief.md).
+Template: [references/subagent-brief.md](references/subagent-brief.md). Blank
+brief: [templates/subagent-brief.template.md](templates/subagent-brief.template.md).
 Verify subagent output before trusting it (spot-check files, re-run its key
 command); a handback report is a claim, not proof.
 
@@ -39,9 +68,15 @@ command); a handback report is a claim, not proof.
 
 - All spend numbers come from scripts reading your meter DB read-only (via a
   probe script). Never count by hand, never guess.
-- Output format: ONE small table (project / requests / in / out / cache-read / $)
-  plus one conclusion line. No essays.
-- Billed = in + out + cache-read; also show fresh = in + out.
+- Report format: ONE small table with exactly these six columns, plus one
+  conclusion line. No essays.
+
+  | project | requests | in | out | cache-read | $ |
+  |---|---|---|---|---|---|
+  | <slug> | <n> | <tokens> | <tokens> | <tokens> | <usd> |
+
+- Derived figures are FORMULA NOTES under the table, never extra columns:
+  billed = in + out + cache-read; fresh = in + out.
 - Estimate work in token tiers (S≈10–50k, M≈50–200k, L≈0.2–1M, XL≈1–3M), not hours.
   Tiers are a planning vocabulary; measured columns above come only from the meter.
 - Time axes on plans/gantts are HOUR-based (day-and-night work), never week-based.
@@ -52,8 +87,11 @@ command); a handback report is a claim, not proof.
 
 **The panel is a BUILD deliverable, not documentation.** Project setup must end
 with a working web panel the human can open in a browser; an AI that only
-describes the panel has failed this section. (This skill ships the spec — you
-build the page for the project.)
+describes the panel has failed this section. This skill ships a STARTER KIT /
+reference implementation (below), not your finished project panel: copying or
+opening that shipped page does NOT satisfy this section. You build (or adapt) a
+working panel for YOUR project, backed by YOUR data contract, and you prove it
+with pasted verification output.
 
 Human intent flows through a snapshot, not through chat archaeology:
 - Command desk: the human types the "next command" and fills reply cells → one
@@ -74,6 +112,21 @@ Panel spec: [references/panel.md](references/panel.md). Signature interaction:
 the gantt and the work-division kanban are one dataset — dragging a card or a
 time bar is the same move (linked drag; custom status columns; Apple-style
 visual example included).
+
+**Reference implementation (starter kit, ships with this skill):**
+[assets/linked-gantt-board/](assets/linked-gantt-board/) is a working TypeScript
+panel plus a SQLite service that implements this signature interaction: hour-axis
+gantt with cost-first labels and non-commitment placeholders, linked drag with
+optimistic UI and PUT-on-drop, status columns stored in SQLite (not hardcoded),
+Apple-style light/dark, command snapshot with clipboard fallback, issue ledger,
+job status and token metering. It is a STARTER KIT / reference implementation —
+a starting point to learn from and fork, NOT a complete production panel and NOT
+a substitute for the panel your project must build under this section. Shipping
+or opening this page therefore does NOT satisfy section 4. Read
+[references/linked-board-reference.md](references/linked-board-reference.md)
+for the spec-to-implementation map, the run/verify commands and the remaining
+gaps BEFORE claiming a build is delivered. A page that merely opens is not
+evidence; paste verification output (the CDP suite prints PASS lines).
 
 ## 5. Presence gate for scheduled jobs
 
@@ -153,3 +206,27 @@ itself (template in [references/subagent-brief.md](references/subagent-brief.md)
 - Proactive proposal duty: the moment a flow repeats or a manual step shows up a
   second time, propose "script this?" with a one-line cost/benefit. Do not wait
   for the human to ask.
+
+## 11. Response style for human comprehension
+
+A human directs this project. A human must read every snapshot, Check line and
+reply. Write those surfaces in the softened controlled style described in
+[references/response-style-ste100.md](references/response-style-ste100.md):
+short sentences, active voice with a named actor, one word with one meaning,
+numbered steps, no hedging, no synonym rotation. Number procedures. One step
+holds one action.
+
+Apply it to command snapshots, PDCA Check lines, subagent briefs and issue
+replies. Do not apply it to frozen artifacts: editing a frozen document voids
+its round (correction C2).
+
+Mandatory gate: the style controls clarity, not truth. Short rewrites drop
+numbers, dates, negations and conditions. Before accepting any rewritten text,
+extract those four sets from the source and from the rewrite. Accept only when
+the sets match. Paste that comparison as Check evidence. A clean sentence is not
+evidence.
+
+Provenance is graded in the reference file. The 2026-10 ASD-STE100 suggestion is
+corroborated by secondary reports only. Do not cite an unverified primary post
+or a disputed view count. Chinese has no official ASD-STE100 clause; treat the
+~20-character sentence as a local approximation.

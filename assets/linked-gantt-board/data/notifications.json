@@ -1,0 +1,5 @@
+[
+  {"ts":"2026-11-05 17:40","title":"Structure gate G1: 1 red line","body":"Layer-ban broken; fix in next round before claiming contract done.","level":"warn","read":false},
+  {"ts":"2026-11-05 15:12","title":"Regression rerun complete","body":"12 modules / 12+7 checks pass.","level":"info","read":false},
+  {"ts":"2026-11-05 09:03","title":"usage refresh skipped","body":"skipped: not present (presence gate closed).","level":"info","read":true}
+]

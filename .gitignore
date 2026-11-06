@@ -1,0 +1,39 @@
+# Runtime state — never commit (see assets/linked-gantt-board/db.js)
+assets/linked-gantt-board/data/panel.db
+assets/linked-gantt-board/data/panel.db-shm
+assets/linked-gantt-board/data/panel.db-wal
+assets/linked-gantt-board/data/panel.pid
+assets/linked-gantt-board/data/backups/
+assets/linked-gantt-board/data/rejections.json
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Build scratch
+*.log
+*.tmp
+
+# Browser-automation tooling scratch (never part of the package)
+.playwright-mcp/
+.chrome-check*
+
+# Competitive-research scratch (Chinese reports; never package content)
+.research/
+
+# Local dev state moved aside (regenerated from demo-seed.json on panel start)
+.local-state/

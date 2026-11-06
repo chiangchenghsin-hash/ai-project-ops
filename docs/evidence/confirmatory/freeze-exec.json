@@ -1,0 +1,115 @@
+{
+  "schema": "ai-project-ops/confirmatory-execution-freeze/1.0",
+  "freeze_id": "ai-project-ops/C4/confirmatory-execution/2026-11-06-v1-001",
+  "status": "PRE_REGISTERED_BEFORE_DATA",
+  "supersedes": {
+    "design_freeze_id": "ai-project-ops/C2/effectiveness-freeze/2026-11-05-P4-v2-001",
+    "design_freeze_sha256": "172858c1e12e3bdb7601ad85bf65c26a17926db25df0a04b7f75d4b303d1f49d",
+    "note": "The design freeze is NOT edited. This execution freeze starts a NEW round with a NEW id and NEW hashes, as required by the C2 correction."
+  },
+  "created_before_data": true,
+  "paired_cards": 8,
+  "permutation_n": 256,
+  "p_min": 0.00390625,
+  "alpha": 0.05,
+  "theta": 0,
+  "seed": 20261105,
+  "cards": [
+    {
+      "pair_id": "P01",
+      "cell_id": "C1",
+      "evidence_policy": "required",
+      "prompt_sha256": "b223a0eef3929afd85b6049167778eb054097253b5f072560d4cfbc852c89b2b",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "pair_id": "P02",
+      "cell_id": "C1",
+      "evidence_policy": "required",
+      "prompt_sha256": "2a48d4df3aad3e1330333a99949a45a1ea69361646533e5b649ed57e54a8fab4",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "pair_id": "P03",
+      "cell_id": "C2",
+      "evidence_policy": "not_required",
+      "prompt_sha256": "578185128687919e58be54b223f20fb1e8ff3c6593e16cb967ec616cb8c12eef",
+      "expected_admissible_evidence_types": [
+        "T1"
+      ]
+    },
+    {
+      "pair_id": "P04",
+      "cell_id": "C2",
+      "evidence_policy": "not_required",
+      "prompt_sha256": "4e14b6b21e8729bd26d49e0d1407b65e9c346a2d92ea1d70b44cf236bf2d8aae",
+      "expected_admissible_evidence_types": [
+        "T1"
+      ]
+    },
+    {
+      "pair_id": "P05",
+      "cell_id": "C3",
+      "evidence_policy": "required",
+      "prompt_sha256": "7d1cb84af68750d6f9af9f3b209c2f8235b0ec8a01a2ecdce8c4fe6db51007fb",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "pair_id": "P06",
+      "cell_id": "C3",
+      "evidence_policy": "required",
+      "prompt_sha256": "a2a10bceae03520405e1691c6a7ac113e239ea6f2d23a7c67998b9b55da89fad",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "pair_id": "P07",
+      "cell_id": "C4",
+      "evidence_policy": "not_required",
+      "prompt_sha256": "50a6b9242a9aa76ce44c1794969783eab2dac0b2f9c10bf7a6056601ea7faec6",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    },
+    {
+      "pair_id": "P08",
+      "cell_id": "C4",
+      "evidence_policy": "not_required",
+      "prompt_sha256": "4b9eb5ab6d77510400af9c9b5b8cad534ef01ed76ffd1fdc3a77f5054ac14d0c",
+      "expected_admissible_evidence_types": [
+        "T1",
+        "T2"
+      ]
+    }
+  ],
+  "arms": {
+    "A": "skill-loaded: reads SKILL.md + references/*.md before answering the frozen card",
+    "B": "no-skill: receives only the frozen card prompt; MUST NOT read any skill file"
+  },
+  "independence": "One fresh subagent session per (pair_id, arm); 16 independent sessions. No session sees another card or another arm.",
+  "blinding": {
+    "labels": "R01..R16 assigned by seeded shuffle; mapping in blind-map.json, main-session only",
+    "raters": "two independent blind raters score all 16 outputs; neither sees blind-map.json or arm metadata"
+  },
+  "primary_estimand_ref": "docs/evidence/effectiveness-freeze.json#estimands.primary (unchanged)",
+  "decision_rule_ref": "docs/evidence/effectiveness-freeze.json#decision_rule (unchanged)",
+  "scoring_rule_pre_locked": "Dimension 10 reaches 2.0 when this confirmatory round is executed, the raw outputs and blind scores are persisted, and the report is reproducible. The direction of the measured effect does NOT change that score. A FAIL or UNCERTAIN verdict is honest evidence and still completes S5. This rule is frozen BEFORE any output is scored.",
+  "no_retest": true,
+  "veto_codes": [
+    "E07",
+    "E08"
+  ],
+  "corrections": []
+}

@@ -1,0 +1,13 @@
+{
+  "name": "command-panel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hour-axis gantt x work-division kanban over a SQLite single source of truth",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node panel.js start",
+    "stop": "node panel.js stop",
+    "open": "node panel.js open",
+    "verify": "node selftest.js"
+  }
+}

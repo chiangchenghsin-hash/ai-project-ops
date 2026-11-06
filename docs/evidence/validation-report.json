@@ -1,0 +1,119 @@
+{
+  "schema": "ai-project-ops/validation-report/v1",
+  "tool": "scripts/validate_skill.py",
+  "version": "1.2.0",
+  "deterministic": true,
+  "summary": {
+    "total": 14,
+    "passed": 14,
+    "failed": 0,
+    "blocking_failed": 0,
+    "warning_failed": 0,
+    "exit_code": 0
+  },
+  "exit_code_meaning": {
+    "0": "all pass",
+    "1": "warnings",
+    "2": "blocking"
+  },
+  "checks": [
+    {
+      "id": "required_frontmatter_fields",
+      "description": "SKILL.md has all 8 required frontmatter fields",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "missing=none"
+    },
+    {
+      "id": "name_matches_directory",
+      "description": "frontmatter name equals the package directory name",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "name=ai-project-ops dir=ai-project-ops"
+    },
+    {
+      "id": "no_overclaim_words_in_description",
+      "description": "no unbounded-claim phrases in any description field",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "overclaim_hits=none"
+    },
+    {
+      "id": "not_for_negative_triggers",
+      "description": "each description field carries a Not for negative-trigger clause",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "present=True"
+    },
+    {
+      "id": "agent_created_true",
+      "description": "agent_created: true is kept",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "value=true"
+    },
+    {
+      "id": "optional_frontmatter_fields",
+      "description": "examples_zh/examples_en (3 each) and allowed-tools present",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "examples_zh=3 examples_en=3 allowed-tools=yes"
+    },
+    {
+      "id": "dependency_declarations_present",
+      "description": "README declares runtime + dependency policy",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "section=True node=True stdlib=True"
+    },
+    {
+      "id": "zip_utf8_flag_policy_documented",
+      "description": "packaging-spec documents zip UTF-8 flag + exclusion rules",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "missing_markers=none"
+    },
+    {
+      "id": "runtime_state_files_absent",
+      "description": "no *.db / *.pid / .chrome-check* runtime state in package",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "found=none"
+    },
+    {
+      "id": "scripts_and_templates_exist",
+      "description": "scripts/ and templates/ exist with the required files",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "scripts=True templates=True"
+    },
+    {
+      "id": "validation_scripts_have_headers",
+      "description": "BACKGROUND/CONDITIONS/VERSION header on all three scripts",
+      "severity": "blocking",
+      "status": "PASS",
+      "detail": "validate_skill.py=ok, verify.js=ok, localize_check.py=ok"
+    },
+    {
+      "id": "all_markdown_relative_links_resolve",
+      "description": "every markdown relative link resolves",
+      "severity": "warning",
+      "status": "PASS",
+      "detail": "38 links / 40 md files; broken=0"
+    },
+    {
+      "id": "no_cjk_in_packaged_text_files",
+      "description": "zero CJK characters in any packaged text file",
+      "severity": "warning",
+      "status": "PASS",
+      "detail": "cjk_count=0"
+    },
+    {
+      "id": "no_absolute_personal_paths_or_credentials",
+      "description": "no absolute personal paths or hardcoded credentials",
+      "severity": "warning",
+      "status": "PASS",
+      "detail": "leaks=0"
+    }
+  ]
+}

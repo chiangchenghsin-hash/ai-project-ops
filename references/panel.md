@@ -122,3 +122,19 @@ toolbars/modals, ONE muted accent (blue family) + grays, full light/dark via
 ```
 
 Tokens above are the style example — copy and adjust; no CSS framework needed.
+
+## Reference implementation (ships with this skill)
+
+A runnable version of the work-division board + linked gantt described in
+"Views" item 7 lives in [../assets/linked-gantt-board/](../assets/linked-gantt-board/).
+It uses the hour axis, cost-first labels, lane packing, NOW line, placeholder
+bars, custom status columns in SQLite, optimistic linked drag with PUT-on-drop,
+light/dark theming and an incremental DOM reconciler. Screenshots:
+`preview-plan.png`, `preview-desk.png`, `preview-dark.png`.
+
+It is a starter kit, not a production panel. Read
+[linked-board-reference.md](linked-board-reference.md) for the exact
+spec-to-implementation map, the verification evidence and the remaining gaps
+(presence-gated scheduled jobs, measured on/off probes, module inventory and
+archive-map views, virtualized long tables). Never treat "the page opens" as
+section 4 being delivered — paste the CDP suite's PASS lines instead.

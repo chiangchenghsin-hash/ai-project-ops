@@ -1,0 +1,9 @@
+{
+  "entry": ["ui.panel", "core.gql"],
+  "nodes": [
+    {"name": "ui.panel", "indeg": 0, "outdeg": 2},
+    {"name": "core.gql", "indeg": 1, "outdeg": 1},
+    {"name": "core.storage", "indeg": 2, "outdeg": 0}
+  ],
+  "edges": [["ui.panel", "core.gql"], ["ui.panel", "core.storage"], ["core.gql", "core.storage"]]
+}

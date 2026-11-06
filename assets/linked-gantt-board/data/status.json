@@ -1,0 +1,7 @@
+{
+  "usage_refresh": {"last_run": "2026-11-05 17:00", "ok": true, "summary": "billed 221.1M / $4.71 (meter read-only)"},
+  "test_regression": {"last_run": "2026-11-05 15:12", "ok": true, "summary": "12 modules, 12+7 tests PASS"},
+  "red_line_guard": {"last_run": "2026-11-05 16:30", "ok": false, "summary": "1 layer-ban violation"},
+  "git_patrol": {"last_run": "2026-11-05 09:00", "ok": true, "summary": "skipped: not present"},
+  "snapshot": {"last_run": "2026-11-05 18:00", "ok": true, "summary": "handoff JSON imported"}
+}

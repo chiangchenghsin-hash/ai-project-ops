@@ -1,0 +1,5 @@
+{
+  "core.gql": {"domain": "query", "disp": "bench", "what": "GQL translator", "why": "Locating TCK Q1-Q7 failures"},
+  "core.storage": {"domain": "storage", "disp": "later", "what": "Page layout and schema migration", "why": "Cross-minor extension incompatibility"},
+  "ui.panel": {"domain": "ui", "disp": "bench", "what": "Command desk", "why": "Human command channel"}
+}

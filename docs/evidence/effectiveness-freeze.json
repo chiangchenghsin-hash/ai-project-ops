@@ -1,0 +1,261 @@
+{
+  "schema": "ai-project-ops.effectiveness-freeze/2.0",
+  "freeze_id": "ai-project-ops/C2/effectiveness-freeze/2026-11-05-P4-v2-001",
+  "release": "C2",
+  "owner": "P4",
+  "version": "2.0",
+  "status": "DESIGN_ONLY_NOT_EXECUTED",
+  "generated_date": "2026-11-05",
+  "description": "Frozen design of the no-skill A/B effectiveness experiment. No control or treatment card has been run and no three-cell verdict exists in this round. Any correction VOIDS this round and requires a NEW freeze id and NEW hashes.",
+  "supersedes": {
+    "round": "pre-C2 Chinese v1",
+    "status": "VOID (correction C2)",
+    "archive": "archived outside the package",
+    "audit_reference": "docs/TASK-LOG.md and docs/evidence/freeze-manifest.json (voided_v1_hashes)"
+  },
+  "parameters": {
+    "paired_cards": 8,
+    "permutation_n": 256,
+    "permutation_basis": "2^8 sign assignments over 8 paired cards",
+    "p_min": 0.00390625,
+    "p_min_basis": "1 / 2^8 = 1 / 256",
+    "alpha": 0.05,
+    "theta": 0,
+    "theta_meaning": "sharp null of no pair-level treatment effect",
+    "seed": 20261105,
+    "n_per_cell": 2,
+    "bh_family_tests": 1,
+    "bh_note": "The Benjamini-Hochberg family contains exactly ONE primary test. BH over a single primary test does NOT change the threshold: critical value = (1/1) * 0.05 = 0.05. No multiplicity correction is applied to the primary test."
+  },
+  "admissible_evidence_types": {
+    "count": 3,
+    "note": "Exactly 3 admissible types. The pre-C2 draft's 'four evidence types' wrongly included a 4th, prose-only type ('should work' / author assertion), which is NOT admissible and fires E01.",
+    "types": [
+      {"id": "T1", "name": "pasted command output", "machine_check": "fenced real stdout / stderr / PASS lines in the Check section"},
+      {"id": "T2", "name": "machine counts, exit codes and hashes", "machine_check": "grep -c, exit codes, sha256sum comparison"},
+      {"id": "T3", "name": "screenshots and CDP traces", "machine_check": "image artifact or CDP trace referenced"}
+    ],
+    "inadmissible": "T4 prose-only claim such as 'should work' (E01 -> FAIL)"
+  },
+  "grid": {
+    "axes": {
+      "type": ["specification", "execution"],
+      "evidence": ["required", "not_required"]
+    },
+    "note": "All FOUR cells are present with n=2 paired cards each. C4 (execution x evidence-not-required) is the cell missing in the pre-C2 v1 design.",
+    "cells": [
+      {"id": "C1", "type": "specification", "evidence": "required", "n_pairs": 2, "pair_ids": ["P01", "P02"], "role": "treatment_expected_gain", "failure_cell": false},
+      {"id": "C2", "type": "specification", "evidence": "not_required", "n_pairs": 2, "pair_ids": ["P03", "P04"], "role": "failure_cell_negative_control", "failure_cell": true},
+      {"id": "C3", "type": "execution", "evidence": "required", "n_pairs": 2, "pair_ids": ["P05", "P06"], "role": "treatment_expected_gain", "failure_cell": false},
+      {"id": "C4", "type": "execution", "evidence": "not_required", "n_pairs": 2, "pair_ids": ["P07", "P08"], "role": "failure_cell_negative_control", "failure_cell": true}
+    ],
+    "total_pairs": 8
+  },
+  "cards": [
+    {
+      "pair_id": "P01",
+      "cell_id": "C1",
+      "task_type": "specification",
+      "evidence_policy": "required",
+      "blind_label": "CARD-P01",
+      "failure_cell": false,
+      "prompt": "You are an AI project lead. Write a one-page subagent brief for a data-migration task. The brief must declare exact output file paths, an exhaustive FORBIDDEN list, mutually-exclusive file ownership, and an acceptance section that requires pasted verification evidence. Deliver the brief as your answer.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    },
+    {
+      "pair_id": "P02",
+      "cell_id": "C1",
+      "task_type": "specification",
+      "evidence_policy": "required",
+      "blind_label": "CARD-P02",
+      "failure_cell": false,
+      "prompt": "You are improving a skill package. Draft an improvement-plan section that maps three named cold-read findings to concrete remediation tasks, and include a 10-dimension score table with a baseline total, a target total and per-dimension deltas. Deliver the section as your answer.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    },
+    {
+      "pair_id": "P03",
+      "cell_id": "C2",
+      "task_type": "specification",
+      "evidence_policy": "not_required",
+      "blind_label": "CARD-P03",
+      "failure_cell": true,
+      "prompt": "Summarize, in exactly three sentences for a newcomer, why a PDCA task log is used in AI-led engineering projects. No sources or evidence are required in your answer.",
+      "control_seed_defect": "The no-skill control arm is expected to answer with prose only (T4), so a treatment that enforces at least one admissible evidence item should discriminate.",
+      "expected_admissible_evidence_types": ["T1"]
+    },
+    {
+      "pair_id": "P04",
+      "cell_id": "C2",
+      "task_type": "specification",
+      "evidence_policy": "not_required",
+      "blind_label": "CARD-P04",
+      "failure_cell": true,
+      "prompt": "List four trigger phrases that should open the ai-project-ops skill. Provide only the four phrases, with no justification and no evidence.",
+      "control_seed_defect": "The no-skill control arm is expected to answer with prose only (T4), so a treatment that enforces at least one admissible evidence item should discriminate.",
+      "expected_admissible_evidence_types": ["T1"]
+    },
+    {
+      "pair_id": "P05",
+      "cell_id": "C3",
+      "task_type": "execution",
+      "evidence_policy": "required",
+      "blind_label": "CARD-P05",
+      "failure_cell": false,
+      "prompt": "Run the package self-check suite and report the result. Your answer must contain the pasted PASS lines and the process exit code, and must assert that the exit code is 0 and that there are zero JS exceptions.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    },
+    {
+      "pair_id": "P06",
+      "cell_id": "C3",
+      "task_type": "execution",
+      "evidence_policy": "required",
+      "blind_label": "CARD-P06",
+      "failure_cell": false,
+      "prompt": "Compute the SHA-256 of two frozen documents and report the result. Your answer must paste the sha256sum output lines and state whether the digests match the values recorded in the freeze manifest.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    },
+    {
+      "pair_id": "P07",
+      "cell_id": "C4",
+      "task_type": "execution",
+      "evidence_policy": "not_required",
+      "blind_label": "CARD-P07",
+      "failure_cell": true,
+      "prompt": "Start the local panel server for the linked-gantt-board asset and report that it is up. No verification output is required in your answer.",
+      "control_seed_defect": "The no-skill control arm is expected to claim success with prose only (T4) and no process evidence, so a treatment that attaches a real health check should discriminate. This is the cell missing in the pre-C2 v1 design.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    },
+    {
+      "pair_id": "P08",
+      "cell_id": "C4",
+      "task_type": "execution",
+      "evidence_policy": "not_required",
+      "blind_label": "CARD-P08",
+      "failure_cell": true,
+      "prompt": "Copy the command snapshot to the system clipboard and report that the copy is done. No verification output is required in your answer.",
+      "control_seed_defect": "The no-skill control arm is expected to claim success with prose only (T4) and no clipboard read-back, so a treatment that attaches a real read-back should discriminate.",
+      "expected_admissible_evidence_types": ["T1", "T2"]
+    }
+  ],
+  "blinding": {
+    "method": "Cards carry neutral blind_label values only. Control and treatment arm identity, and the arm-to-pair mapping, are sealed in a blind key held outside the package by the main session. No card filename, label, metadata or prompt reveals the arm.",
+    "unblinding_code": "E08",
+    "effect": "Any exposure of arm identity before scoring is a veto -> FAIL + round VOID."
+  },
+  "estimands": {
+    "primary": {
+      "name": "paired verifiable-outcome difference",
+      "definition": "For each of the 8 paired cards, the difference (treatment minus control) in whether the produced Check section contains at least one admissible evidence item (T1/T2/T3).",
+      "statistic": "exact randomization / sign test over 2^8 = 256 assignments",
+      "theta_null": 0,
+      "alpha": 0.05
+    },
+    "secondary_exploratory": [
+      "per-cell mean paired difference (4 cells, n=2 each)",
+      "per-cell discrimination including the failure cells (E10)",
+      "leave-one-out stability of the exact p-value (8 recomputations)"
+    ],
+    "note": "Only the primary estimand drives the three-cell verdict. Secondary estimands are exploratory, are outside the BH family, and can never change the verdict."
+  },
+  "decision_rule": {
+    "precedence": ["veto", "UNCERTAIN", "FAIL", "PASS"],
+    "precedence_note": "Highest first; the first rule that fires wins. Matches references/pdca-three-state.md.",
+    "alpha": 0.05,
+    "gain_with_corrected_p_above_alpha": "UNCERTAIN (not PASS)",
+    "gain_note": "A gain whose corrected exact p > 0.05 is UNCERTAIN, NEVER PASS.",
+    "bh_family": {
+      "tests": 1,
+      "note": "ONE primary test. BH over a single primary test does NOT change the threshold: (1/1)*0.05 = 0.05."
+    },
+    "rules": [
+      {
+        "rank": 1,
+        "label": "FAIL",
+        "round_void": true,
+        "condition": "Any veto fired: E07 (frozen artifact changed) or E08 (unblinding detected).",
+        "note": "Veto overrides ANY positive primary result, including a 30/30 PASS."
+      },
+      {
+        "rank": 2,
+        "label": "UNCERTAIN",
+        "round_void": false,
+        "condition": "Evidence incomplete or unverifiable: E12 (Chrome unavailable), E02 (meter schema mismatch), E10 (no discrimination in a failure cell), underpowered, OR a gain with corrected exact p > 0.05.",
+        "note": "UNCERTAIN wins over FAIL when evidence is incomplete."
+      },
+      {
+        "rank": 3,
+        "label": "FAIL",
+        "round_void": false,
+        "condition": "A performed check returned negative, or Check evidence is absent (E01, E03, E04, E05, E06, E09, E11). Evidence is complete.",
+        "note": "FAIL for a produced negative result."
+      },
+      {
+        "rank": 4,
+        "label": "PASS",
+        "round_void": false,
+        "condition": "A/B comparison present, corrected exact p <= 0.05, all four 2x2 cells have n=2, all four evidence layers green, no veto, and real evidence pasted.",
+        "note": "PASS is the LAST rule, not the default. It requires both an A/B comparison and a p-value."
+      }
+    ]
+  },
+  "self_check": {
+    "count": 4,
+    "note": "Exactly 4 self-check cases, defined identically in docs/IMPROVEMENT-PLAN.md (Section 11), docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md (Section 7) and here. Every case maps to an explicit three-cell label. No case expects PASS without an A/B comparison and a p-value.",
+    "cases": [
+      {
+        "id": "SC1",
+        "expected_label": "PASS",
+        "ab_comparison": true,
+        "p_value": 0.00390625,
+        "scenario": "Full valid round: 8 paired cards, A/B comparison present, corrected exact p = 0.00390625 <= 0.05, all 4 cells n=2, no veto, all 4 evidence layers green, evidence pasted.",
+        "why": "PASS requires an A/B comparison and a p-value; both are present. This fixes the v1 case 1 that expected PASS with no A/B and no p."
+      },
+      {
+        "id": "SC2",
+        "expected_label": "FAIL",
+        "ab_comparison": true,
+        "p_value": 0.00390625,
+        "scenario": "A/B comparison complete and significant, but a performed self-check returned a red FAIL line (E09) with Check evidence present; no veto; evidence complete.",
+        "why": "A produced negative result is FAIL; evidence is complete, so UNCERTAIN does not apply."
+      },
+      {
+        "id": "SC3",
+        "expected_label": "UNCERTAIN",
+        "ab_comparison": true,
+        "p_value": 0.0625,
+        "scenario": "A/B comparison shows a gain but corrected exact p = 0.0625 > 0.05; one failure cell shows no discrimination (E10). No veto.",
+        "why": "A gain with corrected p > 0.05 is UNCERTAIN, not PASS."
+      },
+      {
+        "id": "SC4",
+        "expected_label": "FAIL",
+        "round_void": true,
+        "ab_comparison": true,
+        "p_value": 0.00390625,
+        "scenario": "A frozen artifact SHA-256 mismatch (E07) or unblinding (E08) is detected while a 30/30 PASS primary result exists.",
+        "why": "Veto has top precedence and overrides the positive primary result. Three-cell label FAIL, round VOID. This fixes the v1 case 4 that said 'veto fires' without a three-cell label."
+      }
+    ]
+  },
+  "failure_cells": {
+    "definition": "2x2 cells in which the no-skill control arm is deliberately seeded with a known defect, so a measurable control-vs-treatment difference is expected. A failure cell with effect = 0 or per-cell p >= 0.05 fires E10 and resolves the round to UNCERTAIN. Failure cells are discrimination anchors, NOT FAIL verdicts.",
+    "cell_ids": ["C2", "C4"],
+    "note": "C2 = specification x evidence-not-required; C4 = execution x evidence-not-required (the cell missing in the pre-C2 v1 design). Each has n=2 paired cards."
+  },
+  "veto": {
+    "codes": ["E07", "E08"],
+    "short_names": {"E07": "frozen artifact changed", "E08": "unblinding detected"},
+    "definitions_in": "references/error-codes.md (owned by P1)",
+    "effect": "FAIL + round VOID; overrides any positive primary result",
+    "precedence_rank": 1
+  },
+  "frozen_documents": {
+    "docs/IMPROVEMENT-PLAN.md": "6a443e3f440b18101e7d1f2650140dc5fba2fa0b85fe8d4fef73d7d83080865c",
+    "docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md": "09798275ad1f17189af898ba8b253cff3ca1e4d4b0e9777224391649a6da4645"
+  },
+  "self_hash": {
+    "stored": false,
+    "note": "This file stores NO hash of itself. Its SHA-256 is recorded in docs/evidence/freeze-manifest.json. A freeze file that changed its own decision rules cannot silently re-certify itself."
+  },
+  "hashes_policy": "The two document hashes above were computed with sha256sum after both v2 documents were final. The SHA-256 of THIS freeze file is stored in docs/evidence/freeze-manifest.json, never here."
+}
