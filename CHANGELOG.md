@@ -2,6 +2,20 @@
 
 All notable changes to this skill package. Versions follow semver.
 
+## 1.8.1 - 2026-11-09 (graph design + skill map)
+
+Docs-only round. No product code change.
+
+- **R25 graph registry design**: `docs/GRAPH-DESIGN.md` (pre-registered, design
+  only). One relation registry over the existing id spaces (M/W/I/entry/handoff),
+  a mandatory `Graph: scope ...` machine line in future PDCA entries, and eight
+  locked acceptance criteria for the future implementation round.
+- **R26 skill map note**: `references/prd-to-action.md` records the wording-level
+  hardening of the installed prd-to-action skill (activation precondition,
+  Phase 3 evidence rule, quantified BREAK miss_rate gate). The skill file itself
+  lives outside this package and is READ, not copied.
+- **Unchanged**: 18.0/20, the C4 UNCERTAIN verdict, all frozen artifacts.
+
 ## 1.8.0 - 2026-11-09 (C10 link audit + C11 desk sheets + release audit)
 
 Two rounds recorded in `docs/TASK-LOG.md` after the 1.7.0 packaging, plus the

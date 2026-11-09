@@ -1668,3 +1668,21 @@ Re-check (main): implementation round must LOCK docs/GRAPH-DESIGN.md section 7 b
   the C4 UNCERTAIN verdict unchanged.
 
 Re-check (main): behavior claim remains open — if a non-PRD session still hijacks on "status", record it here as evidence for a future trigger-stats round — pending observation.
+
+### 2026-11-09 R26-A correction - CHANGELOG missed the R25/R26 round (by: main session)
+
+- **P** Plan: the human spotted that CHANGELOG.md stopped at 1.8.0 while the
+  R25/R26 batch was already on origin/main. A release-notes file that lags
+  shipped content is the same defect class as the 1.7.0/1.8.0 gap fixed in
+  R24. Non-goal: no code change.
+- **D** Do: added a 1.8.1 docs-only entry (R25 graph design + R26 skill map
+  note), bumped SKILL.md version 1.8.0 -> 1.8.1 in the same commit.
+- **C** Check: `python scripts/validate_skill.py` -> `14/14 checks passed`,
+  `leaks=0`; `python scripts/localize_check.py` -> `CJK_COUNT=0`;
+  `grep "version: '1.8.1'" SKILL.md` -> 1 hit. Re-check line records the push.
+- **A** Act: PASS as a correction (not scored, per the C4/C6 rule that a
+  correction is not a scored task). Lesson: the R24 audit rule is not
+  self-executing — "the release audit bumps it in the same commit" needs a
+  gate, or it drifts again. Candidate invariant: CHANGELOG head version ==
+  SKILL.md version == newest shipped round; defer wiring until the graph
+  round (it has a natural --check home).
