@@ -99,7 +99,7 @@
       "description": "every markdown relative link resolves",
       "severity": "warning",
       "status": "PASS",
-      "detail": "38 links / 75 md files; broken=0"
+      "detail": "38 links / 76 md files; broken=0"
     },
     {
       "id": "no_cjk_in_packaged_text_files",

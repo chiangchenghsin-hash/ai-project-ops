@@ -18,6 +18,12 @@ the ai-project-ops command-panel package so a future session can re-apply the
 method without re-reading prose. The package keeps its own English/ASCII files;
 the skill stays where it is.
 
+Version note (R26): the installed skill gained three wording-level controls
+(activation precondition, Phase 3 evidence rule, quantified BREAK miss_rate
+gate). The infrastructure half of that hardening lives in THIS package
+(plan-sync, discipline-gate I9/I10, negative controls) and was not
+back-flowed into the skill.
+
 ## Phase-to-package mapping table
 
 | Installed skill phase / artifact | Skill source | This package | Enforced by |

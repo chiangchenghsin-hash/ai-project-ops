@@ -12,7 +12,7 @@
 > A gap found and fixed during verification belongs in Check; its lesson in Act.
 
 ## Scoreboard
-PASS 17 / FAIL 1
+PASS 19 / FAIL 1
 
 ---
 
@@ -1591,3 +1591,80 @@ Re-check (main, C7): `node scripts/discipline-gate.js` after this entry -> I2 PA
   C4 UNCERTAIN verdict unchanged.
 
 Re-check (main): `python scripts/validate_skill.py && python scripts/localize_check.py` after this entry -> `14/14 checks passed`, `leaks=0`, `CJK_COUNT=0` — PASS.
+
+### 2026-11-09 R25 - graph registry design, pre-registered only (tier S, by: main session)
+
+- **P** Plan: the human reports task UUID management is messy and tasks do not
+  connect into a graph. Round scope decided with the human: DESIGN ONLY, no
+  code. Acceptance: one design file that fixes the node/edge model over the
+  EXISTING id spaces, a machine line that attaches PDCA rounds to plan nodes,
+  a locked acceptance section for the future implementation round, and the
+  documented non-goals. Non-goals: no implementation, no UUID renumbering, no
+  edit of old ledger entries, no UI work, no C4 re-test.
+- **D** Do: audited the live id spaces first (milestones M1-M6, work units
+  W1-W18, issues I-001..I-019, entries C/R series, handoffs G/P series) and
+  the three live edge stores (milestone-plan.relations, SQLite task_deps,
+  parent_id). Wrote docs/GRAPH-DESIGN.md: node kinds, six edge types, the
+  `Graph: scope M4/W10 | fixes I-018 | rework-of C7` machine line (scope
+  mandatory, one node per entry), relations.json shape with a hand-maintained
+  backfill block, graph.js --build/--check/--query contract, future invariant
+  I11 with negative controls, and the PDCA-to-PRD close loop by shared id.
+- **C** Check: real output, pasted.
+  - `python scripts/localize_check.py` -> `Text files scanned: 159`,
+    `CJK_COUNT=0`.
+  - `python scripts/validate_skill.py` -> `14/14 checks passed`,
+    `broken=0`, `leaks=0`, `cjk_count=0`.
+  - `node scripts/discipline-gate.js` -> `DISCIPLINE GATE PASS (8 hard / 2
+    soft)`, `GATE_EXIT=0` (I11 does not exist yet; it is created by the
+    implementation round, which is exactly why this round ships no code).
+  - Design completeness probe: section 7 lists 8 locked acceptance criteria
+    covering representation counts, machine-line enforcement, two negative
+    controls, template slot, backfill minimum and the full green battery.
+- **A** Act: PASS (design task; scored on the stated acceptance). Lesson: the
+  ids were never the defect — five readable namespaces are assets. The defect
+  was that cross-space relations lived in prose, so no machine could walk
+  them. One registry plus one machine line per entry fixes the graph WITHOUT
+  renumbering anything. Scoreboard PASS 18 / FAIL 1. 18.0/20 and the C4
+  UNCERTAIN verdict unchanged; this design is structure, not effectiveness
+  evidence.
+
+Re-check (main): implementation round must LOCK docs/GRAPH-DESIGN.md section 7 before touching code — pending that round.
+
+### 2026-11-09 R26 - prd-to-action skill hardening, wording level (tier S, by: main session)
+
+- **P** Plan: apply the four method-level improvements agreed after the R25
+  discussion to the INSTALLED skill (user-level prd-to-action/SKILL.md).
+  Scope locked by the pre-work benefit review: activation precondition (#5),
+  evidence rule for Phase 3 (report numbers copied from pasted output, no
+  pasted output = not done, rework as new entries), quantified BREAK
+  calibration (miss_rate gate at 0.20 over a rolling 3 milestones). Non-goals:
+  no infrastructure back-flow into the skill (this repo owns the hard gates),
+  no behavior-level claim, no change to the skill's phase structure.
+- **D** Do: snapshot first (skill dir has NO git): sha256 of SKILL.md =
+  8adbc705...b9eba8018b, full-tree backup at /tmp/prd-to-action-backup-
+  20261109/. Three Edits to SKILL.md (description precondition; Phase 3
+  Evidence rule block; calibration Quantified BREAK record). Nothing else
+  touched.
+- **C** Check: STRUCTURAL verification only — this is the honest limit. The
+  skill has no selftest and trigger behavior is model-side, so the claim is
+  "the wording is in place", NOT "misfires decreased".
+  - `grep -c` assertions, all = 1/2 as expected: `ACTIVATION PRECONDITION`,
+    `do NOT activate this skill`, `never hand-counted`, `is NOT done`,
+    `miss_rate` x2, `0.20` x2.
+  - Line-level diff audit vs the backup: 23 changed lines, all attributable
+    to the three intended edits (the 4 residual lines shown by the filter are
+    the re-wrapped Triggers sentence, one precondition continuation line, and
+    two blank separators). Zero collateral edits.
+  - `python scripts/localize_check.py` -> `CJK_COUNT=0` (package tree;
+    skill file itself is English-only by the same grep pass).
+  - `python scripts/validate_skill.py` -> `14/14 checks passed`, `leaks=0`.
+- **A** Act: PASS (wording task, scored on the stated acceptance). Lessons:
+  (1) a user-level skill dir without git is a rollback hazard — the sha256 +
+  /tmp backup pair is the minimum, and it should have been versioned from day
+  one; (2) trigger-precondition wording is a SOFT control: it biases model
+  activation, it does not gate it. A behavior-level measurement would need an
+  activation log, which was judged not worth building for this tier (pre-work
+  review). Scoreboard PASS 19 / FAIL 1. No package code changed; 18.0/20 and
+  the C4 UNCERTAIN verdict unchanged.
+
+Re-check (main): behavior claim remains open — if a non-PRD session still hijacks on "status", record it here as evidence for a future trigger-stats round — pending observation.
