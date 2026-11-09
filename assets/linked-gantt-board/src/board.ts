@@ -1,15 +1,35 @@
+/*!
+ * BACKGROUND: Work-division kanban (drag, shared order, multi-select) and the
+ * S2 blocking-signal computation surfaced on the Command desk. I-019 adds a
+ * session-level signal diff logger so the Human decisions sheet's History
+ * records raise / clear transitions through POST /api/events.
+ * CONDITIONS: classic scripts (namespace CP, no ESM); signal history records
+ * transitions observed while a session is open; signals are computed live from
+ * tasks/issues/deps. Logging is fire-and-forget and must never break rendering.
+ * Each signal carries a stable key (kind + entity id) that the transition
+ * logger diffs on, so mutable detail text never drives raise/clear.
+ * VERSION: 2.0.0 - per-unit desk sheets + queryable history (I-019);
+ * 2.0.1 - stable signal keys (kind + entity id) so hour-counter drift cannot fabricate raise/clear pairs
+ */
 namespace CP {
   let root: HTMLElement | null = null;
   let draggingId: string | null = null;
   let dropTarget: { status: string; ref: string | null; after: boolean } | null = null;
   let line: HTMLElement | null = null;
   let suppressClick = false;
+  /** C9 / B5: the board's multi-selection set (separate from single select). */
+  let multi: Set<string> = new Set<string>();
+  /** Shared-order rank per task id, rebuilt on every board patch. */
+  let boardOrderIndex: Record<string, number> = {};
 
   /** S2 blocking signal: fixed stuck threshold N=24 hours (documented, not tunable). */
   export const STUCK_HOURS = 24;
 
   export interface Signal {
     kind: 'stuck' | 'dependency' | 'urgent_overdue';
+    /** Stable diff identity: kind + entity id (e.g. "stuck:T-1"). Detail text
+     *  may drift (the stuck hour counter ticks); this key never does. */
+    key: string;
     label: string;
     detail: string;
   }
@@ -30,23 +50,66 @@ namespace CP {
     s.tasks.filter((t) => t.status !== 'done' && !t.placeholder).forEach((t) => {
       const hrs = (now.getTime() - parse(t.start).getTime()) / 3600000;
       if (hrs > STUCK_HOURS) {
-        out.push({ kind: 'stuck', label: 'Stuck > 24h', detail: `${t.id} ${t.title} (open ${hrs.toFixed(0)}h, threshold N=24)` });
+        out.push({ kind: 'stuck', key: `stuck:${t.id}`, label: 'Stuck > 24h', detail: `${t.id} ${t.title} (open ${hrs.toFixed(0)}h, threshold N=24)` });
       }
     });
     const deps: Deps = s.deps || { nodes: [], edges: [] };
     (deps.nodes || []).filter((n) => n.indeg > 0).forEach((n) => {
-      out.push({ kind: 'dependency', label: 'Dependency unfinished', detail: `${n.name} has ${n.indeg} unresolved upstream dependency edge(s)` });
+      out.push({ kind: 'dependency', key: `dependency:${n.name}`, label: 'Dependency unfinished', detail: `${n.name} has ${n.indeg} unresolved upstream dependency edge(s)` });
     });
     s.issues.filter((i) => i.status !== 'done' && i.urgent && hoursUntil(i.enddate) < 0).forEach((i) => {
-      out.push({ kind: 'urgent_overdue', label: 'Urgent + overdue', detail: `${i.id} ${i.title} (due ${i.enddate})` });
+      out.push({ kind: 'urgent_overdue', key: `urgent_overdue:${i.id}`, label: 'Urgent + overdue', detail: `${i.id} ${i.title} (due ${i.enddate})` });
     });
     return out;
   }
 
+  /**
+   * I-019 signal history: signal history records transitions observed while a
+   * session is open; signals are computed live from tasks/issues/deps.
+   * `lastSigKeys` holds the last observed key set for this session. The FIRST
+   * render that sees loaded state seeds it silently (no POST), so a reload
+   * never writes duplicate raise rows for signals that were already up. Later
+   * renders diff the key sets: a key appearing posts kind 'raise', a key
+   * vanishing posts kind 'clear', both fire-and-forget so rendering can never
+   * break on a history write. Posts happen only when the key sets differ.
+   * The diff identity is `s.key` (kind + entity id), never the display text,
+   * so the drifting stuck-hour counter cannot fabricate raise/clear pairs;
+   * the POSTed detail payload stays the human-readable label + ': ' + detail.
+   */
+  let lastSigKeys: string[] | null = null;
+  /** Last observed label + ': ' + detail per key, so a clear row still carries
+   *  the human-readable text (task id included) of the signal that went away. */
+  let lastSigText: Record<string, string> = {};
+
+  function logSignalTransitions(signals: Signal[]): void {
+    const keys = signals.map((s) => s.key);
+    const text: Record<string, string> = {};
+    signals.forEach((s) => { text[s.key] = s.label + ': ' + s.detail; });
+    if (lastSigKeys === null) { lastSigKeys = keys; lastSigText = text; return; }
+    const prev = new Set(lastSigKeys);
+    const cur = new Set(keys);
+    const raised = keys.filter((k) => !prev.has(k));
+    const cleared = lastSigKeys.filter((k) => !cur.has(k));
+    if (!raised.length && !cleared.length) { lastSigText = text; return; }
+    raised.forEach((k) => {
+      void store.call('POST', '/api/events', { unit: 'signal', kind: 'raise', detail: text[k] })
+        .catch(() => { /* history is best-effort: never break rendering */ });
+    });
+    cleared.forEach((k) => {
+      void store.call('POST', '/api/events', { unit: 'signal', kind: 'clear', detail: lastSigText[k] })
+        .catch(() => { /* history is best-effort: never break rendering */ });
+    });
+    lastSigKeys = keys;
+    lastSigText = text;
+  }
+
   export function renderSignals(): void {
     const list = document.getElementById('signalList');
-    if (!list) return;
     const signals = blockingSignals();
+    /* Seed/diff only once state exists: the pre-load call computes an empty
+       set that must not be mistaken for the session baseline. */
+    if (store.state) logSignalTransitions(signals);
+    if (!list) return;
     list.textContent = '';
     if (!signals.length) {
       const li = document.createElement('li');
@@ -84,7 +147,10 @@ namespace CP {
     const col = columnById(t.status);
     el.dataset.taskId = t.id;
     el.dataset.key = t.id;
-    el.className = 'kb-card' + (store.selected === t.id ? ' is-selected' : '') + (t.placeholder ? ' is-placeholder' : '');
+    el.className = 'kb-card' + (store.selected === t.id ? ' is-selected' : '')
+      + (multi.has(t.id) ? ' is-multi-selected' : '')
+      + (t.placeholder ? ' is-placeholder' : '');
+    if (boardOrderIndex[t.id] !== undefined) el.dataset.order = String(boardOrderIndex[t.id]);
     el.style.borderLeftColor = col.color;
     const chip = el.querySelector('.kb-owner-chip') as HTMLElement;
     chip.textContent = ownerLabel(t.owner_type);
@@ -123,12 +189,17 @@ namespace CP {
     (el.querySelector('.kb-col-title') as HTMLElement).textContent = c.label;
     const list = el.querySelector('.kb-list') as HTMLElement;
     list.dataset.status = c.id;
-    const tasks = visibleTasks().filter((t) => t.status === c.id).sort((a, b) => a.sort - b.sort);
+    /* C9 / B5: the kanban renders in the shared order, not a private sort. */
+    const tasks = sharedOrder(visibleTasks().filter((t) => t.status === c.id));
     reconcile(list, tasks, (t) => t.id, cardCreate, cardUpdate);
   }
 
   export function patchBoard(): void {
     if (!root || !store.state) return;
+    /* C9 / B5: recompute the shared-order rank so cards carry the same
+       data-order as the gantt's flat work-unit list. */
+    boardOrderIndex = {};
+    sharedOrder(visibleTasks()).forEach((t, i) => { boardOrderIndex[t.id] = i; });
     reconcile(root, store.state.columns, (c) => c.id, colCreate, colUpdate);
   }
 
@@ -203,12 +274,115 @@ namespace CP {
     const target = e.target as HTMLElement;
     if (target.closest('[data-columns]') || target.closest('#btnAddColumn')) { CP.openColumnManager(); return; }
     const card = target.closest('.kb-card') as HTMLElement | null;
-    if (card && card.dataset.taskId && !suppressClick) CP.select(card.dataset.taskId, true);
+    if (!card || !card.dataset.taskId || suppressClick) return;
+    const id = card.dataset.taskId;
+    /* C9 / B5: a modified click toggles the card into the multi-selection
+       instead of replacing the single selection. */
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      if (multi.has(id)) multi.delete(id); else multi.add(id);
+      paintMulti();
+      return;
+    }
+    CP.select(id, true);
   }
 
   function onDblClick(e: MouseEvent): void {
     const card = (e.target as HTMLElement).closest('.kb-card') as HTMLElement | null;
     if (card && card.dataset.taskId) CP.openTaskModal(card.dataset.taskId);
+  }
+
+  /** Repaint the is-multi-selected class from the current selection set. */
+  function paintMulti(): void {
+    document.querySelectorAll<HTMLElement>('.kb-card').forEach((el) => {
+      const on = !!el.dataset.taskId && multi.has(el.dataset.taskId);
+      el.classList.toggle('is-multi-selected', on);
+    });
+  }
+
+  function clearMultiSelection(): void {
+    multi.clear();
+    paintMulti();
+  }
+
+  /**
+   * C9 / B5: move the selected cards to the top or bottom of their OWN column.
+   * Selected cards are the multi-selection, or the single selection when the
+   * set is empty. New sort values are chosen strictly beyond the current
+   * column extremes, then persisted one PUT per task.
+   */
+  function moveSelectedCards(dir: 'top' | 'bottom'): void {
+    const s = store.state;
+    if (!s) return;
+    const ids = multi.size ? Array.from(multi) : (store.selected ? [store.selected] : []);
+    const chosen: Task[] = [];
+    ids.forEach((id) => { const t = taskById(id); if (t) chosen.push(t); });
+    if (!chosen.length) return;
+    const groups: Record<string, Task[]> = {};
+    chosen.forEach((t) => { (groups[t.status] = groups[t.status] || []).push(t); });
+    const updates: { id: string; sort: number }[] = [];
+    Object.keys(groups).forEach((status) => {
+      const group = groups[status].slice().sort((a, b) => a.sort - b.sort || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      /* C9-1 fix (found by the strengthened A4 assertion): base the new sort
+         on the WHOLE column's extremes, not on the unselected subset. Using
+         the subset could assign a selected card exactly its old sort, so only
+         1 of 2 selected cards appeared to move. Every selected card now gets
+         a value strictly beyond the column extreme. */
+      const colSorts = s.tasks.filter((t) => t.status === status).map((t) => t.sort);
+      const lo = colSorts.length ? Math.min(...colSorts) : 0;
+      const hi = colSorts.length ? Math.max(...colSorts) : 0;
+      const n = group.length;
+      if (dir === 'top') {
+        group.forEach((t, i) => { updates.push({ id: t.id, sort: lo - (n - i) }); });
+      } else {
+        group.forEach((t, i) => { updates.push({ id: t.id, sort: hi + i + 1 }); });
+      }
+    });
+    store.optimistic((st) => {
+      updates.forEach((u) => { const x = st.tasks.filter((z) => z.id === u.id)[0]; if (x) x.sort = u.sort; });
+    });
+    /* Serial commits: each store.commit() reloads the whole state, so firing
+       them concurrently lets one reload overwrite another's optimistic value. */
+    void (async () => {
+      for (const u of updates) {
+        await store.commit('PUT', `/api/tasks/${encodeURIComponent(u.id)}`, { sort: u.sort },
+          `Moved ${u.id} to ${dir === 'top' ? 'top' : 'bottom'}`);
+      }
+    })();
+  }
+
+  /** Public, CDP-queryable handle for the board keyboard model. */
+  export const Board = {
+    selectedIds(): string[] { return Array.from(multi); },
+    moveSelected(dir: 'top' | 'bottom'): void { moveSelectedCards(dir); },
+    clearMulti(): void { clearMultiSelection(); },
+  };
+
+  /** C9 / B5: keyboard help line added with createElement, never in HTML. */
+  function addBoardHelp(): void {
+    const head = document.querySelector('#view-board .panel-head');
+    if (!head || document.getElementById('boardKeyHelp')) return;
+    const help = document.createElement('span');
+    help.id = 'boardKeyHelp';
+    help.className = 'kb-help';
+    help.textContent = 'Shift / Ctrl / Cmd + Click: multi-select | Alt + Up / Down: move to top / bottom | Esc: clear';
+    head.appendChild(help);
+  }
+
+  /** C9 / B5: the board owns its keyboard model. Alt+Up/Down never collides
+   *  with the ArrowLeft/ArrowRight hour shift in app.ts. */
+  function initBoardKeys(): void {
+    document.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { clearMultiSelection(); return; }
+      if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      const el = e.target as HTMLElement | null;
+      const typing = !!el && typeof el.matches === 'function' && el.matches('input, textarea, select');
+      if (typing) return;
+      const layer = document.getElementById('modalLayer');
+      if (layer && !layer.classList.contains('hidden')) return;
+      e.preventDefault();
+      moveSelectedCards(e.key === 'ArrowUp' ? 'top' : 'bottom');
+    });
   }
 
   export function initBoard(): void {
@@ -220,6 +394,8 @@ namespace CP {
     root.addEventListener('dragend', cleanup);
     root.addEventListener('click', onClick);
     root.addEventListener('dblclick', onDblClick);
+    addBoardHelp();
+    initBoardKeys();
     store.subscribe(patchBoard);
     store.subscribe(renderSignals);
     patchBoard();

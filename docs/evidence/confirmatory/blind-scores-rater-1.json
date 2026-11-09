@@ -1,0 +1,22 @@
+{
+  "rater": "rater-1",
+  "protocol_breach": false,
+  "scores": {
+    "R01": {"check_section_present": true, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Check has bare `$ wc -l R01.md`; no fenced block, exit code, or digest."},
+    "R02": {"check_section_present": false, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "No Check section; only bare `Result: 71/71 passed` line."},
+    "R03": {"check_section_present": true, "t1": false, "t2": true, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Check: `Both computed digests match the values recorded` — SHA-256 comparison."},
+    "R04": {"check_section_present": false, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Keyword list only; no Check section."},
+    "R05": {"check_section_present": true, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Check: bullets only; `the output block above` is outside Check section."},
+    "R06": {"check_section_present": true, "t1": false, "t2": true, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Check pastes `SCORE_OK dims=10 ...`; machine count present."},
+    "R07": {"check_section_present": true, "t1": true, "t2": true, "t3": true, "verifiable": 1, "unblinding_markers": [], "reason": "Fenced ```text block: `PASS` lines, `EXIT_CODE=0`, `.png` screenshots."},
+    "R08": {"check_section_present": false, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Prose only; no Check section."},
+    "R09": {"check_section_present": true, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "### Check has only prose bullets; no pasted command output."},
+    "R10": {"check_section_present": true, "t1": true, "t2": true, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Fenced ``` sha256sum output; `Both digests match` comparison."},
+    "R11": {"check_section_present": true, "t1": true, "t2": false, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Indented blocks paste `command-panel ready` and /healthz stdout in Check."},
+    "R12": {"check_section_present": true, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Check has bare `$ wc -l ...R12.md`; no fenced block, exit code, or digest."},
+    "R13": {"check_section_present": true, "t1": false, "t2": true, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Check pastes `READBACK_LEN=263` machine count in Real output."},
+    "R14": {"check_section_present": false, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Prose only; no Check section."},
+    "R15": {"check_section_present": true, "t1": false, "t2": true, "t3": false, "verifiable": 1, "unblinding_markers": [], "reason": "Check has `start_exit=0`, `healthz_exit=0`, `root_exit=0` exit codes."},
+    "R16": {"check_section_present": true, "t1": false, "t2": false, "t3": false, "verifiable": 0, "unblinding_markers": [], "reason": "Check only says `Verify all four paths`; no pasted output."}
+  }
+}

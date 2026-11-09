@@ -7,6 +7,24 @@ var CP;
      * a rendered line.
      */
     CP.DEP_TYPES = ['FS', 'SS', 'FF', 'SF'];
+    /**
+     * C9 / B5: one canonical order shared by the kanban board and the gantt's
+     * flat work-unit list. Pure - it never mutates the input and touches no DOM
+     * or store. Sorting by (status, sort, id) gives a stable, total order, so
+     * the list surface and the board surface always agree on where a unit sits.
+     */
+    function sharedOrder(tasks) {
+        return tasks.slice().sort((a, b) => {
+            if (a.status !== b.status)
+                return a.status < b.status ? -1 : 1;
+            if (a.sort !== b.sort)
+                return a.sort - b.sort;
+            if (a.id === b.id)
+                return 0;
+            return a.id < b.id ? -1 : 1;
+        });
+    }
+    CP.sharedOrder = sharedOrder;
     function depTypeLabel(t) {
         switch (t) {
             case 'FS': return 'finish -> start';

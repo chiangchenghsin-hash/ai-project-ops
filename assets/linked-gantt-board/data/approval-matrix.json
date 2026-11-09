@@ -1,0 +1,68 @@
+{
+  "schema": "ai-project-ops.approval-matrix/1.0",
+  "actions": [
+    {
+      "id": "a1",
+      "action": "edit task dates / status",
+      "actor": "AI",
+      "gate": "none (optimistic + PUT)",
+      "requires_reason": 0,
+      "endpoint": "PUT /api/tasks/:id",
+      "enforced": 1
+    },
+    {
+      "id": "a2",
+      "action": "change a frozen artifact",
+      "actor": "anyone",
+      "gate": "VETO (E07)",
+      "requires_reason": 1,
+      "endpoint": "n/a (spec only)",
+      "enforced": 0
+    },
+    {
+      "id": "a3",
+      "action": "close an ACK",
+      "actor": "human only",
+      "gate": "approve / reject",
+      "requires_reason": 1,
+      "endpoint": "PUT /api/acks/:id",
+      "enforced": 1
+    },
+    {
+      "id": "a4",
+      "action": "publish a template master",
+      "actor": "owner only",
+      "gate": "--publish role check",
+      "requires_reason": 0,
+      "endpoint": "n/a (spec only)",
+      "enforced": 0
+    },
+    {
+      "id": "a5",
+      "action": "spend tokens on an automated probe",
+      "actor": "measured on/off",
+      "gate": "section 6 probe",
+      "requires_reason": 0,
+      "endpoint": "n/a (spec only)",
+      "enforced": 0
+    },
+    {
+      "id": "a6",
+      "action": "change the scoreboard",
+      "actor": "main session",
+      "gate": "ledger append",
+      "requires_reason": 0,
+      "endpoint": "n/a (spec only)",
+      "enforced": 0
+    },
+    {
+      "id": "a7",
+      "action": "delete a status column with tasks",
+      "actor": "human",
+      "gate": "explicit list of moved tasks",
+      "requires_reason": 0,
+      "endpoint": "DELETE /api/columns/:id",
+      "enforced": 1
+    }
+  ]
+}

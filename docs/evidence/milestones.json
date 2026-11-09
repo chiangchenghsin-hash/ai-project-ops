@@ -1,0 +1,239 @@
+{
+  "schema": "ai-project-ops.milestones/1.0",
+  "source": "docs/PRD.md",
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Ingest and plan bootstrap",
+      "depends_on": [],
+      "type": "design",
+      "files": [
+        "docs/PRD.md",
+        "templates/PRD.template.md",
+        "docs/PLAN.md"
+      ],
+      "completion": "docs/PRD.md has 6 milestone blocks with all seven fields; docs/evidence/milestones.json parses under ai-project-ops.milestones/1.0 with 6 entries; node scripts/scaffold.js emits the ai-project-ops.plan/1.0 marker into docs/PLAN.md; gate A reports zero banned phrases in the PRD.",
+      "verify": "node scripts/scaffold.js",
+      "status": "done"
+    },
+    {
+      "id": "M2",
+      "name": "Milestone plan data contract and structure graph",
+      "depends_on": [
+        "M1"
+      ],
+      "type": "code",
+      "files": [
+        "assets/linked-gantt-board/data/milestone-plan.json",
+        "assets/linked-gantt-board/data/module-deps.json"
+      ],
+      "completion": "milestone-plan.json parses under ai-project-ops.milestone-plan/1.0 with 6 milestones, 18 work units and 16 acyclic relations; node scripts/discipline-gate.js exits 0 with I4 zero cycles and I5 zero dangling ids in docs/evidence/structure-gate.json.",
+      "verify": "node scripts/discipline-gate.js",
+      "status": "done"
+    },
+    {
+      "id": "M3",
+      "name": "Issue ledger and Stop gate (TodoWrite state machine)",
+      "depends_on": [
+        "M2"
+      ],
+      "type": "code",
+      "files": [
+        "scripts/issue.js",
+        "scripts/session-start.js",
+        "docs/evidence/issue-delta.json",
+        "docs/TASK-LOG.md"
+      ],
+      "completion": "scripts/issue.js supports list, add, update, close and no-new; scripts/session-start.js emits the discipline-gate reminder; node scripts/selftest-discipline.js prints 12/12 passed with the skipped turn blocked at exit 2 and the compliant turn at exit 0.",
+      "verify": "node scripts/selftest-discipline.js",
+      "status": "done"
+    },
+    {
+      "id": "M4",
+      "name": "Command panel build (linked gantt and relationship layer)",
+      "depends_on": [
+        "M3"
+      ],
+      "type": "code",
+      "files": [
+        "assets/linked-gantt-board/src/gantt.ts",
+        "assets/linked-gantt-board/src/app.ts",
+        "assets/linked-gantt-board/dist/gantt.js",
+        "assets/linked-gantt-board/panel.html"
+      ],
+      "completion": "dist/gantt.js and dist/app.js exist and panel.html loads them as classic scripts; milestone-plan.json main_line, sub_lines and relations render as milestone lanes and FS/SS/FF/SF edges; node scripts/verify.js exits 0 with selftest.js printing PASS lines from a real headless Chrome over CDP.",
+      "verify": "node scripts/verify.js",
+      "status": "done"
+    },
+    {
+      "id": "M5",
+      "name": "PRD-to-action adversarial gate",
+      "depends_on": [
+        "M4"
+      ],
+      "type": "code",
+      "files": [
+        "scripts/prd-to-action.js",
+        "references/prd-to-action.md"
+      ],
+      "completion": "scripts/prd-to-action.js prints one PASS line per gate and the PRD-TO-ACTION GATE: n/n passed summary; normal mode exits 0 at n/n; --negative mode injects a banned phrase into a temp PRD copy and the gate detects it with exit 2; references/prd-to-action.md carries the phase-to-package mapping table.",
+      "verify": "node scripts/prd-to-action.js",
+      "status": "done"
+    },
+    {
+      "id": "M6",
+      "name": "English-only release packaging and validation",
+      "depends_on": [
+        "M5"
+      ],
+      "type": "code",
+      "files": [
+        "scripts/package.py",
+        "scripts/validate_skill.py",
+        "scripts/localize_check.py",
+        "docs/handoffs/G1.md"
+      ],
+      "completion": "python scripts/validate_skill.py reports failed = 0; python scripts/package.py --out ai-project-ops.zip builds a zip whose entry count matches the packaged file set of the same run and a checksum outside the archive; a CJK scan over the owned files prints 0; docs/handoffs/G1.md has the four required sections and stays under 40 lines.",
+      "verify": "python scripts/validate_skill.py",
+      "status": "done"
+    }
+  ],
+  "main_line": [
+    "M1",
+    "M2",
+    "M3",
+    "M4",
+    "M5",
+    "M6"
+  ],
+  "sub_lines": {
+    "M1": [
+      "W1",
+      "W2",
+      "W3"
+    ],
+    "M2": [
+      "W4",
+      "W5",
+      "W6"
+    ],
+    "M3": [
+      "W7",
+      "W8",
+      "W9"
+    ],
+    "M4": [
+      "W10",
+      "W11",
+      "W12"
+    ],
+    "M5": [
+      "W13",
+      "W14",
+      "W15"
+    ],
+    "M6": [
+      "W16",
+      "W17",
+      "W18"
+    ]
+  },
+  "relations": [
+    {
+      "from": "W1",
+      "to": "W3",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W1",
+      "to": "W4",
+      "type": "SS",
+      "lag": 0
+    },
+    {
+      "from": "W2",
+      "to": "W5",
+      "type": "SS",
+      "lag": 0
+    },
+    {
+      "from": "W3",
+      "to": "W6",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W4",
+      "to": "W7",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W5",
+      "to": "W9",
+      "type": "FF",
+      "lag": 0
+    },
+    {
+      "from": "W6",
+      "to": "W8",
+      "type": "SS",
+      "lag": 0
+    },
+    {
+      "from": "W7",
+      "to": "W10",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W8",
+      "to": "W11",
+      "type": "SS",
+      "lag": 2
+    },
+    {
+      "from": "W9",
+      "to": "W12",
+      "type": "FF",
+      "lag": 0
+    },
+    {
+      "from": "W10",
+      "to": "W13",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W11",
+      "to": "W14",
+      "type": "SS",
+      "lag": 0
+    },
+    {
+      "from": "W12",
+      "to": "W15",
+      "type": "SF",
+      "lag": 0
+    },
+    {
+      "from": "W13",
+      "to": "W16",
+      "type": "FS",
+      "lag": 0
+    },
+    {
+      "from": "W14",
+      "to": "W17",
+      "type": "SS",
+      "lag": 1
+    },
+    {
+      "from": "W15",
+      "to": "W18",
+      "type": "FF",
+      "lag": 0
+    }
+  ]
+}

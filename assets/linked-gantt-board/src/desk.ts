@@ -1,3 +1,15 @@
+/*!
+ * BACKGROUND: Command desk surface - the per-unit sheets (Command console /
+ * Notifications / Command ACKs / Human decisions), the command snapshot loop,
+ * ACK rows, and the per-sheet queryable History backed by GET /api/events.
+ * CONDITIONS: classic scripts (namespace CP, no ESM); the active sheet lives in
+ * localStorage('desk.sheet'); history rows read /api/events and never throw on
+ * a 404/400 (they show "History unavailable."); sheet content keeps rendering
+ * while hidden; the policy tables mount point (#view-desk) stays outside the
+ * sheets so #c9PolicyTables is always visible; labels are English ASCII and
+ * carry no dynamic counts.
+ * VERSION: 2.0.0 - per-unit desk sheets + queryable history (I-019)
+ */
 namespace CP {
   let forceClipboardFail = false;
   export function setClipboardFail(v: boolean): void { forceClipboardFail = v; }
@@ -27,6 +39,107 @@ namespace CP {
     ta.remove();
     (window as unknown as Record<string, unknown>).__copyPath = ok ? 'execCommand' : 'failed';
     return ok ? 'execCommand' : 'failed';
+  }
+
+  /* ---- I-019 per-unit desk sheets + queryable history ---------------- *
+   * Four sheets (console / inbox / acks / signals), one visible at a time.
+   * Each sheet ends in a History block fed by GET /api/events?unit=...; the
+   * unit mapping is console->command, inbox->job, acks->ack, signals->signal. */
+
+  type SheetName = 'console' | 'inbox' | 'acks' | 'signals';
+  type HistUnit = 'command' | 'job' | 'ack' | 'signal';
+  const SHEET_UNITS: Record<SheetName, HistUnit> = {
+    console: 'command', inbox: 'job', acks: 'ack', signals: 'signal',
+  };
+  /** localStorage key holding the active sheet name. */
+  const SHEET_KEY = 'desk.sheet';
+
+  function isSheetName(v: string | null | undefined): v is SheetName {
+    return !!v && Object.prototype.hasOwnProperty.call(SHEET_UNITS, v);
+  }
+
+  function activeSheet(): SheetName {
+    const el = document.querySelector('#deskTabs .desk-tab.active') as HTMLElement | null;
+    const n = el ? el.dataset.sheet : null;
+    return isSheetName(n) ? n : 'console';
+  }
+
+  /** Activate one sheet (invalid names fall back to console), persist the
+   *  choice, and refresh that sheet's history so it opens on fresh rows. */
+  function setSheet(name: string): void {
+    const n: SheetName = isSheetName(name) ? name : 'console';
+    document.querySelectorAll<HTMLElement>('#view-desk .desk-sheet').forEach((s) => {
+      s.classList.toggle('active', s.id === 'sheet-' + n);
+    });
+    document.querySelectorAll<HTMLElement>('#deskTabs .desk-tab').forEach((t) => {
+      const on = t.dataset.sheet === n;
+      t.classList.toggle('active', on);
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    try { localStorage.setItem(SHEET_KEY, n); } catch (_e) { /* storage blocked: in-memory only */ }
+    void refreshHistory(SHEET_UNITS[n]);
+  }
+
+  function debounce(fn: () => void, ms: number): () => void {
+    let t = 0;
+    return () => { window.clearTimeout(t); t = window.setTimeout(fn, ms); };
+  }
+
+  /** One history row: ts | kind | detail. Status rows carry a single message
+   *  (never a count) for the empty and unavailable states. */
+  function historyStatusRow(msg: string): HTMLElement {
+    const tr = document.createElement('tr');
+    tr.className = 'hist-row hist-status';
+    const td = document.createElement('td');
+    td.colSpan = 3;
+    td.textContent = msg;
+    tr.appendChild(td);
+    return tr;
+  }
+
+  function historyRow(ev: DeskEvent): HTMLElement {
+    const tr = document.createElement('tr');
+    tr.className = 'hist-row';
+    const ts = document.createElement('td');
+    ts.className = 'hist-ts';
+    const time = document.createElement('time');
+    time.textContent = ev.ts;
+    ts.appendChild(time);
+    const kind = document.createElement('td');
+    const chip = document.createElement('span');
+    chip.className = 'hist-kind';
+    chip.textContent = ev.kind;
+    kind.appendChild(chip);
+    const detail = document.createElement('td');
+    detail.className = 'hist-detail';
+    detail.textContent = ev.detail;
+    tr.appendChild(ts);
+    tr.appendChild(kind);
+    tr.appendChild(detail);
+    return tr;
+  }
+
+  function renderHistory(body: HTMLElement, rows: DeskEvent[] | null): void {
+    body.textContent = '';
+    if (rows === null) { body.appendChild(historyStatusRow('History unavailable.')); return; }
+    if (!rows.length) { body.appendChild(historyStatusRow('No events yet.')); return; }
+    rows.forEach((ev) => { body.appendChild(historyRow(ev)); });
+  }
+
+  /** Fetch one unit's history. Any failure (404/400/network) renders
+   *  "History unavailable." instead of throwing. */
+  async function refreshHistory(unit: HistUnit): Promise<void> {
+    const body = document.getElementById('histBody-' + unit);
+    if (!body) return;
+    const filterEl = document.getElementById('histFilter-' + unit) as HTMLInputElement | null;
+    const q = filterEl ? filterEl.value.trim() : '';
+    const path = '/api/events?unit=' + unit + '&limit=100' + (q ? '&q=' + encodeURIComponent(q) : '');
+    try {
+      const r = await store.call('GET', path) as { events?: DeskEvent[] };
+      renderHistory(body, (r && r.events) || []);
+    } catch (_e) {
+      renderHistory(body, null);
+    }
   }
 
   function noticeCreate(n: Notice): HTMLElement {
@@ -66,7 +179,8 @@ namespace CP {
       <span class="ack-state"></span>
       <input class="ack-reason" type="text" placeholder="Reason (required to reject)">
       <button type="button" class="btn mini" data-ack="approve">Approve</button>
-      <button type="button" class="btn mini danger" data-ack="reject">Reject</button>`;
+      <button type="button" class="btn mini danger" data-ack="reject">Reject</button>
+      <time class="ack-created"></time>`;
     el.addEventListener('click', (e: MouseEvent) => {
       const b = (e.target as HTMLElement).closest('button[data-ack]') as HTMLElement | null;
       if (!b || !el.dataset.key) return;
@@ -95,6 +209,7 @@ namespace CP {
     if (a.state === 'REJECTED' && a.reject_reason) {
       (el.querySelector('.ack-reason') as HTMLInputElement).value = a.reject_reason;
     }
+    (el.querySelector('.ack-created') as HTMLElement).textContent = a.created || '';
   }
 
   /** Compact, deterministic ASCII hash so an ACK row can reference the copied snapshot. */
@@ -168,6 +283,22 @@ namespace CP {
     return snapshot();
   }
 
+  /** C9 B1/B6: mount the two policy reference tables into the existing desk
+   *  view. The compiled dist/policy.js comes from the main session's tsc build;
+   *  load it on demand so this works with or without a static script tag, and
+   *  never throw if it is absent (the policy UI is additive). */
+  export function initPolicyTables(): void {
+    const mount = (): void => {
+      if (typeof CP.mountPolicyTables === 'function') void CP.mountPolicyTables('view-desk');
+    };
+    if (typeof CP.mountPolicyTables === 'function') { mount(); return; }
+    const script = document.createElement('script');
+    script.src = './dist/policy.js';
+    script.onload = mount;
+    script.onerror = () => { /* optional tables: leave the desk intact */ };
+    document.head.appendChild(script);
+  }
+
   export function initDesk(): void {
     const cmd = byId<HTMLTextAreaElement>('nextCommand');
     cmd.addEventListener('change', () => {
@@ -187,7 +318,31 @@ namespace CP {
       byId('snapshotOut').textContent = await snapshot();
       CP.toast('Snapshot generated, not copied');
     });
+
+    /* I-019 sheets: tab clicks, per-sheet history controls, and a debounced
+       refresh of the ACTIVE sheet's history on every store change so rows are
+       fresh after actions. Content rendering (patchDesk / renderSignals) stays
+       visibility-independent. */
+    byId('deskTabs').addEventListener('click', (e: MouseEvent) => {
+      const b = (e.target as HTMLElement).closest('.desk-tab') as HTMLElement | null;
+      if (b && b.dataset.sheet) setSheet(b.dataset.sheet);
+    });
+    (Object.keys(SHEET_UNITS) as SheetName[]).forEach((name) => {
+      const unit = SHEET_UNITS[name];
+      const filter = document.getElementById('histFilter-' + unit) as HTMLInputElement | null;
+      const refresh = document.getElementById('histRefresh-' + unit);
+      if (filter) filter.addEventListener('input', debounce(() => { void refreshHistory(unit); }, 250));
+      if (refresh) refresh.addEventListener('click', () => { void refreshHistory(unit); });
+    });
+    store.subscribe(debounce(() => { void refreshHistory(SHEET_UNITS[activeSheet()]); }, 500));
+
     store.subscribe(patchDesk);
     patchDesk();
+    initPolicyTables();
+
+    /* Restore the active sheet (default console; invalid values fall back). */
+    let saved = 'console';
+    try { saved = localStorage.getItem(SHEET_KEY) || 'console'; } catch (_e) { saved = 'console'; }
+    setSheet(isSheetName(saved) ? saved : 'console');
   }
 }

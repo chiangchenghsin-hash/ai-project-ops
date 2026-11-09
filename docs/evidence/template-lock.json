@@ -1,0 +1,65 @@
+{
+  "schema": "ai-project-ops.template-lock/1.0",
+  "instances": [
+    {
+      "instance": "docs/TASK-LOG.md",
+      "master": "templates/TASK-LOG.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": null,
+      "pre_existing": true,
+      "note": "Instance predates the registry; master version is assumed, not proven."
+    },
+    {
+      "instance": "docs/PLAN.md",
+      "master": "templates/PLAN.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": null,
+      "pre_existing": true,
+      "note": "Instance predates the registry; master version is assumed, not proven."
+    },
+    {
+      "instance": "docs/PRD.md",
+      "master": "templates/PRD.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": null,
+      "pre_existing": true,
+      "note": "Instance predates the registry; master version is assumed, not proven."
+    },
+    {
+      "instance": "docs/TEMPLATE-GOVERNANCE.md",
+      "master": "templates/template-governance.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": "2026-11-08T04:25:00.015Z",
+      "benchmark": ".research/notion-monday.md#A1,#A2,#A3,#A4"
+    },
+    {
+      "instance": "docs/AGENT-SESSION.md",
+      "master": "templates/agent-session.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": "2026-11-08T04:25:00.016Z",
+      "benchmark": ".research/linear-height.md#A1,#A2"
+    },
+    {
+      "instance": "docs/APPROVAL-MATRIX.md",
+      "master": "templates/approval-matrix.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": "2026-11-08T04:25:00.018Z",
+      "benchmark": ".research/clickup-asana-motion.md#A3 + synthesis B1"
+    },
+    {
+      "instance": "docs/OWNER-SCOPE.md",
+      "master": "templates/owner-scope.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": "2026-11-08T04:25:00.020Z",
+      "benchmark": "docs/competitive-synthesis.md claim 4 + B6"
+    },
+    {
+      "instance": "docs/SUBAGENT-BRIEF.md",
+      "master": "templates/subagent-brief.template.md",
+      "master_version": "1.0.0",
+      "instantiated_at": "2026-11-08T04:25:00.022Z",
+      "benchmark": "local invention"
+    }
+  ],
+  "publishes": []
+}

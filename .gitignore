@@ -37,3 +37,13 @@ Thumbs.db
 
 # Local dev state moved aside (regenerated from demo-seed.json on panel start)
 .local-state/
+
+# Per-turn gate evidence (regenerated every run; same class scripts/package.py excludes)
+docs/evidence/session.json
+docs/evidence/issue-delta.json
+docs/evidence/gate-report.json
+docs/evidence/structure-gate.json
+
+# Release build output (rebuild: python scripts/package.py) and machine-local hook install state
+release/
+.workbuddy/

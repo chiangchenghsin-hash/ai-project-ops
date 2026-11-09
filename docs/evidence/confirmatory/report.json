@@ -1,0 +1,94 @@
+{
+  "schema": "ai-project-ops/confirmatory-report/1.0",
+  "freeze_id": "ai-project-ops/C4/confirmatory-execution/2026-11-06-v1-001",
+  "design_freeze_id": "ai-project-ops/C2/effectiveness-freeze/2026-11-05-P4-v2-001",
+  "round_status": "COMPLETED_NOT_VOID",
+  "verdict": "UNCERTAIN",
+  "verdict_reasons": [
+    "Arbitration rule 3: 2 rater disagreements on verifiable (R01, R12) >= 2 -> evidence incomplete.",
+    "Primary exact one-sided p = 0.125 > alpha 0.05 -> decision rule rank 2 UNCERTAIN.",
+    "E10: failure cells C2 and C4 show no discrimination (per-cell p 1.0 and 0.5 with n=2; the minimum attainable per-cell p is 0.25 > 0.05)."
+  ],
+  "veto": {"E07_frozen_artifact_changed": false, "E08_unblinding": false},
+  "frozen_hash_checks": {
+    "design_freeze": "MATCH",
+    "exec_freeze": "MATCH",
+    "IMPROVEMENT-PLAN.md": "MATCH",
+    "EFFECTIVENESS-EXPERIMENT-DESIGN.md": "MATCH"
+  },
+  "execution": {
+    "independent_sessions": 16,
+    "prompt_cards": 8,
+    "arms": {"A": "skill-loaded", "B": "no-skill"},
+    "raw_outputs": 16,
+    "blind_raters": 2,
+    "seed": 20261105,
+    "blind_labels": "R01..R16 assigned by seeded shuffle; mapping in blind-map.json"
+  },
+  "rater_agreement": {
+    "rater_1_verifiable_1": 7,
+    "rater_2_verifiable_1": 9,
+    "disagreements": ["R01", "R12"],
+    "arbitration": "conservative AND; >=2 disagreements -> UNCERTAIN",
+    "conservative_verifiable_1": 7,
+    "protocol_breach": false,
+    "unblinding_markers": "none; the token 'experiment' appears only inside the frozen filename EFFECTIVENESS-EXPERIMENT-DESIGN.md"
+  },
+  "primary": {
+    "estimand": "paired verifiable-outcome difference (treatment minus control)",
+    "paired_differences": [0, 1, 0, 0, 1, 0, 0, 1],
+    "T_obs": 3,
+    "permutation_n": 256,
+    "p_exact_one_sided": 0.125,
+    "alpha": 0.05,
+    "bh_family_tests": 1,
+    "bh_threshold": 0.05,
+    "leave_one_out_p_range": [0.125, 0.25]
+  },
+  "cells": {
+    "C1": {"effect": 1, "per_cell_p": 0.5, "discriminates": false},
+    "C2": {"effect": 0, "per_cell_p": 1.0, "discriminates": false, "failure_cell": true},
+    "C3": {"effect": 1, "per_cell_p": 0.5, "discriminates": false},
+    "C4": {"effect": 1, "per_cell_p": 0.5, "discriminates": false, "failure_cell": true}
+  },
+  "discrimination": "3 of 8 pairs show a positive difference. Direction favours the skill arm, but the evidence is not significant and the failure cells do not discriminate.",
+  "reproducibility": {
+    "script": "docs/evidence/confirmatory/recompute.py",
+    "command": "python docs/evidence/confirmatory/recompute.py",
+    "exit_code": 0,
+    "recompute_match": "PASS"
+  },
+  "threat_reconciliation": {
+    "V1_model_and_product_drift": "PARTIAL. An external commit on 2026-11-06 (1c355e4) added src/graph.ts and grew the shipped selftest from 41 to 71 assertions between the C2 freeze and this round. Frozen artifacts were not edited (hashes MATCH), so the round is not void, but comparability with the C2 release state is weakened. Recorded, not hidden.",
+    "V2_context_budget": "A arm read SKILL.md + references; B arm did not. Token asymmetry is inherent to the treatment and is reported, not adjusted.",
+    "V3_rater_unblinding": "No markers, no protocol breach. Blind-map.json was not read by either rater.",
+    "V4_card_leakage": "Card P04 names the skill ('ai-project-ops skill') in the frozen prompt itself. This is a pre-registered card defect; both arms saw the same text. It may depress the measured difference.",
+    "V5_multiplicity": "One primary test only; BH threshold stays 0.05. No correction was changed after data.",
+    "V6_post_hoc_tuning": "No frozen artifact was edited after unblinding. The scoring rule for dimension 10 was locked in freeze-exec.json before data and is applied as written.",
+    "V7_cache_or_timing": "Timing is descriptive only; not in the decision rule.",
+    "V8_self_check_contamination": "The 4 synthetic self-check cases are design fixtures; no real data was reused as a self-check.",
+    "V9_hidden_failure_cells": "Both failure cells are reported above with effect and per-cell p. E10 fired."
+  },
+  "operational_finding": "Repeated E2E runs appended 37 synthetic rejection rows to assets/linked-gantt-board/data/rejections.json. This file is untracked runtime state, was not covered by validate_skill.py's runtime_state_files_absent check, and is now reset to []. It is excluded from the release archive. Lesson: every artifact a test writes must be enumerated in the release gate, not only *.db files.",
+  "packaging_finding": "The package directory also contains external scratch directories (.playwright-mcp/, .research/) with Chinese-language competitive research files. They are the maintainer's own working files, were NOT deleted, and are excluded from the release archive by a hidden-directory rule. Final archive CJK scan = none. Lesson: a package builder must exclude hidden directories by default, not only .git.",
+  "structural_finding": "With n=2 paired cards per cell, the minimum attainable per-cell exact p is 0.25, which is greater than alpha 0.05. The frozen failure-cell rule therefore makes PASS structurally unreachable at cell level. This is a defect of the frozen C2 design, not of the execution. It is reported honestly and must be fixed only in a NEW freeze id (C5), never by rewording this round.",
+  "score_impact": {
+    "rule_locked_before_data": "Dimension 10 reaches 2.0 when this confirmatory round is executed, raw outputs and blind scores are persisted, and the report is reproducible. A FAIL or UNCERTAIN verdict is honest evidence and still completes S5.",
+    "dimension_10_after": 2.0,
+    "total_after": 18.0,
+    "caveat": "18.0/20 measures evidence availability and release engineering, NOT demonstrated skill effectiveness. The substantive question 'does the skill improve AI-led engineering?' remains UNCERTAIN."
+  },
+  "artifacts": [
+    "docs/evidence/confirmatory/freeze-exec.json",
+    "docs/evidence/confirmatory/freeze-exec-manifest.json",
+    "docs/evidence/confirmatory/blind-map.json",
+    "docs/evidence/confirmatory/rater-rubric.md",
+    "docs/evidence/confirmatory/raw/R01.md .. R16.md",
+    "docs/evidence/confirmatory/blind-scores-rater-1.json",
+    "docs/evidence/confirmatory/blind-scores-rater-2.json",
+    "docs/evidence/confirmatory/analysis.json",
+    "docs/evidence/confirmatory/recompute.py",
+    "docs/evidence/confirmatory/round-status.json",
+    "references/effectiveness.md"
+  ]
+}

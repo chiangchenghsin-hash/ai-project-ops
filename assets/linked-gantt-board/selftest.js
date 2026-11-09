@@ -10,11 +10,13 @@
  * Node >= 22 (global WebSocket + fetch). Every assertion prints
  * "PASS  <english label> :: <evidence>"; a FAIL prints "FAIL" and the script
  * exits non-zero (1 failed assertion, 2 fatal harness error).
- * VERSION: 2.0.0 - English localization, env PANEL_PORT/CDP_PORT, >=30
+ * VERSION: 3.0.0 - English localization, env PANEL_PORT/CDP_PORT, >=30
  * assertions covering ACK flow / approve / done / reject-with-reason /
  * rejections.json / error-code visibility / blocking signals / DEMO flag /
  * /healthz / backup / restore / degraded declaration / three-state labels /
- * no-CJK-in-UI, plus all original cases.
+ * no-CJK-in-UI, plus all original cases. G2 adds two-view switching, the
+ * milestone main/sub/relation layer, critical path, plan charter, empty
+ * state and the macOS 27 glass transparency control.
  */
 const fs = require('fs');
 const path = require('path');
@@ -567,12 +569,13 @@ async function main() {
       && charterSet.side === 'TEST purpose line',
     JSON.stringify(charterSet));
 
-  /* Restore honest DEMO placeholder text so the shipped screenshots never
-     carry test strings. The text says what it is, so it invents no fact. */
+  /* Clear the test strings. The service substitutes the effective charter
+     (from the plan file, or an explicit PRD-not-ingested state) for empty
+     values, so shipped screenshots never carry test placeholder text. */
   await api('PUT', '/api/meta', {
-    project_purpose: 'Demo charter. Edit to state why your project exists.',
-    project_resources: 'Demo charter. Edit to list what your project runs on.',
-    project_evaluation: 'Demo charter. Edit to state how your project is judged, by PDCA iteration.',
+    project_purpose: '',
+    project_resources: '',
+    project_evaluation: '',
   });
   await js(`CP.store.load()`);
   await sleep(400);
@@ -1062,7 +1065,172 @@ async function main() {
     if (id) await api('DELETE', '/api/tasks/' + encodeURIComponent(id));
   }
 
-  /* 23. Screenshots + runtime error gate */
+  /* 23. G2 - two independent views, the PRD milestone layer, plan charter
+     and the macOS 27 glass control. A deterministic fixture exercises the
+     render path even while G1's real PRD ingest may still be pending; the
+     real /api/plan empty state is asserted separately. */
+  const FIX = {
+    available: true, state: 'READY', label: 'Milestone plan ready', detail: '',
+    fix_command: 'node scripts/prd-to-action.js', message: '', schema: 'ai-project-ops.plan/1.0',
+    charter: { purpose: 'Fixture purpose', technical_resources: 'Fixture resources',
+      evaluation: 'Fixture evaluation', side_purpose: 'Fixture side purpose' },
+    milestones: [
+      { id: 'M1', name: 'Ingest', depends_on: [], start_offset_h: 0, end_offset_h: 12, status: 'done', completion: 100, verify: 'node scripts/prd-to-action.js' },
+      { id: 'M2', name: 'Scaffold', depends_on: 'M1', start_offset_h: 12, end_offset_h: 30, status: 'in_progress', completion: 40, verify: 'node -c server.js' },
+      { id: 'M3', name: 'Render', depends_on: 'M1', start_offset_h: 12, end_offset_h: 26, status: 'pending', completion: 0, verify: 'node -c app.js' },
+      { id: 'M4', name: 'Verify', depends_on: 'M2', start_offset_h: 30, end_offset_h: 42, status: 'pending', completion: 0, verify: 'node scripts/verify.js' },
+      { id: 'M5', name: 'Ship', depends_on: 'M3', start_offset_h: 26, end_offset_h: 38, status: 'pending', completion: 0, verify: 'git status' },
+      { id: 'M6', name: 'Close', depends_on: 'M4', start_offset_h: 42, end_offset_h: 54, status: 'pending', completion: 0, verify: 'echo done' },
+    ],
+    work_units: [
+      { id: 'W1', milestone_id: 'M1', title: 'Read PRD', owner: 'main', start_offset_h: 0, end_offset_h: 6, progress: 100 },
+      { id: 'W2', milestone_id: 'M1', title: 'Write plan', owner: 'human', start_offset_h: 6, end_offset_h: 12, progress: 100 },
+      { id: 'W3', milestone_id: 'M2', title: 'Scaffold UI', owner: 'subagent', start_offset_h: 12, end_offset_h: 24, progress: 40 },
+      { id: 'W4', milestone_id: 'M3', title: 'Render layer', owner: 'team', start_offset_h: 12, end_offset_h: 26, progress: 0 },
+      { id: 'W5', milestone_id: 'M4', title: 'Run verify', owner: 'main', start_offset_h: 30, end_offset_h: 42, progress: 0 },
+    ],
+    relations: [
+      { from: 'M1', to: 'M2', type: 'FS', lag: 0 },
+      { from: 'M1', to: 'M3', type: 'FS', lag: 0 },
+      { from: 'M2', to: 'M4', type: 'FS', lag: 2 },
+      { from: 'M3', to: 'M5', type: 'SS', lag: 0 },
+      { from: 'M4', to: 'M6', type: 'FS', lag: 0 },
+    ],
+    main_line: ['M1', 'M2', 'M4', 'M6'],
+    sub_lines: { M1: ['W1', 'W2'], M2: ['W3'], M3: ['W4'], M4: ['W5'] },
+  };
+  const EMPTY_FIX = {
+    available: false, state: 'PRD_NOT_INGESTED', label: 'PRD not ingested',
+    detail: 'The milestone plan has no main line, sub-lines or relations because data/milestone-plan.json is missing.',
+    fix_command: 'node scripts/prd-to-action.js',
+    message: 'PRD not ingested - run: node scripts/prd-to-action.js',
+    charter: null, milestones: [], work_units: [], relations: [], main_line: [], sub_lines: {},
+  };
+
+  const twoViews = await js(`(() => ({
+    plan: !!document.getElementById('view-plan'),
+    board: !!document.getElementById('view-board'),
+    boardOwnPage: !!document.getElementById('view-board') && document.getElementById('view-board').querySelector('#boardColumns') !== null,
+    addCol: !!document.getElementById('btnAddColumn'),
+    gantt: !!document.getElementById('ganttScroll'),
+    navBoard: !!document.querySelector('#nav [data-view="board"]')
+  }))()`);
+  PASS('Two independent views exist: plan gantt and board kanban on its own page',
+    twoViews.plan && twoViews.board && twoViews.boardOwnPage && twoViews.addCol && twoViews.gantt && twoViews.navBoard,
+    JSON.stringify(twoViews));
+
+  const switched = await js(`(() => {
+    document.querySelector('#nav [data-view="board"]').click();
+    const boardOn = document.getElementById('view-board').classList.contains('active') && !document.getElementById('view-plan').classList.contains('active');
+    document.querySelector('#nav [data-view="plan"]').click();
+    const planOn = document.getElementById('view-plan').classList.contains('active') && !document.getElementById('view-board').classList.contains('active');
+    return { boardOn, planOn };
+  })()`);
+  PASS('Nav switches between the plan and board views', switched.boardOn && switched.planOn,
+    JSON.stringify(switched));
+
+  const mainBars = await js(`(() => {
+    CP.applyPlan(${JSON.stringify(FIX)});
+    const groups = Array.from(document.querySelectorAll('.ms-group')).map(g => g.dataset.ms);
+    return {
+      bars: document.querySelectorAll('.ms-main').length,
+      groups: groups,
+      first: groups[0],
+      m2AfterM1: groups.indexOf('M2') > groups.indexOf('M1'),
+      m4AfterM2: groups.indexOf('M4') > groups.indexOf('M2')
+    };
+  })()`);
+  PASS('Milestone main-line bars render in depends_on order',
+    mainBars.bars === FIX.milestones.length && mainBars.first === 'M1'
+      && mainBars.m2AfterM1 && mainBars.m4AfterM2,
+    JSON.stringify(mainBars));
+
+  const subBars = await js(`(() => ({
+    bars: document.querySelectorAll('.ms-sub').length,
+    indent: getComputedStyle(document.querySelector('.ms-sub-label')).paddingLeft,
+    underGroup: !!document.querySelector('.ms-group[data-ms="M1"] .ms-sub-row')
+  }))()`);
+  PASS('Milestone sub-line bars render indented under their milestone',
+    subBars.bars === FIX.work_units.length && subBars.underGroup && parseFloat(subBars.indent) > 0,
+    JSON.stringify(subBars));
+
+  const relRows = await js(`(() => {
+    const rows = Array.from(document.querySelectorAll('.ms-rel')).map(r => r.textContent.trim());
+    return { rows: rows, hasArrow: rows.some(t => t.indexOf('->') >= 0), hasFS: rows.some(t => t.indexOf('FS') >= 0) };
+  })()`);
+  PASS('Dependency relations render as connector rows with arrows',
+    relRows.rows.length === FIX.relations.length && relRows.hasArrow && relRows.hasFS,
+    JSON.stringify(relRows));
+
+  const critPath = await js(`(() => ({
+    bars: document.querySelectorAll('.ms-main.ms-critical').length,
+    note: (document.querySelector('.ms-critical-note') || {}).textContent || ''
+  }))()`);
+  PASS('Critical path is emphasised on the main line',
+    critPath.bars === FIX.main_line.length && critPath.note.indexOf('M1') >= 0,
+    JSON.stringify(critPath));
+
+  const charter = await js(`(() => ({
+    p: document.getElementById('charterPurpose').textContent.trim(),
+    r: document.getElementById('charterResources').textContent.trim(),
+    e: document.getElementById('charterEval').textContent.trim(),
+    side: document.getElementById('sidePurpose').textContent.trim(),
+    sideCharter: document.getElementById('sideCharter').textContent.trim()
+  }))()`);
+  const charterOk = ['p', 'r', 'e', 'side'].every((k) => charter[k].length > 0
+    && !/Not set/i.test(charter[k]) && !/Demo charter/i.test(charter[k])) && charter.sideCharter.length > 0;
+  PASS('Charter is populated from the plan service (no Not set / Demo charter)',
+    charterOk, JSON.stringify(charter));
+
+  const glass = await js(`(() => {
+    const el = document.getElementById('glassAlpha');
+    const root = document.documentElement;
+    const before = getComputedStyle(root).getPropertyValue('--glass-alpha').trim();
+    const alphaOf = (s) => {
+      const i = s.indexOf('('), j = s.lastIndexOf(')');
+      if (i < 0 || j < 0) return -1;
+      const parts = s.slice(i + 1, j).split(',');
+      return parts.length === 4 ? parseFloat(parts[3]) : 1;
+    };
+    const cardBefore = getComputedStyle(document.querySelector('.card')).backgroundColor;
+    el.value = '30';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    const after = getComputedStyle(root).getPropertyValue('--glass-alpha').trim();
+    const saved = localStorage.getItem('cp.glass-alpha');
+    const cardAfter = getComputedStyle(document.querySelector('.card')).backgroundColor;
+    el.value = '80'; el.dispatchEvent(new Event('input', { bubbles: true }));
+    return { before: before, after: after, saved: saved,
+      alphaBefore: alphaOf(cardBefore), alphaAfter: alphaOf(cardAfter) };
+  })()`);
+  PASS('Transparency slider changes --glass-alpha, glass surfaces and localStorage',
+    parseFloat(glass.after) === 0.3 && glass.saved === '0.3'
+      && glass.alphaAfter === 0.3 && glass.alphaBefore > glass.alphaAfter,
+    JSON.stringify(glass));
+
+  const emptyState = await js(`(() => {
+    CP.applyPlan(${JSON.stringify(EMPTY_FIX)});
+    const box = document.querySelector('.ms-empty');
+    const text = box ? box.textContent.trim() : '';
+    return { shown: !!box, text: text, bars: document.querySelectorAll('.ms-main').length,
+      hasFix: text.indexOf('node scripts/prd-to-action.js') >= 0,
+      hasLabel: text.toLowerCase().indexOf('prd not ingested') >= 0 };
+  })()`);
+  PASS('Empty state names the fix command when the PRD plan is absent',
+    emptyState.shown && emptyState.bars === 0 && emptyState.hasFix && emptyState.hasLabel,
+    JSON.stringify(emptyState));
+
+  const planApi = await api('GET', '/api/plan');
+  PASS('GET /api/plan exposes the plan or an explicit PRD-not-ingested state',
+    planApi.status === 200 && planApi.body && typeof planApi.body.available === 'boolean'
+      && typeof planApi.body.fix_command === 'string'
+      && planApi.body.fix_command.indexOf('prd-to-action') >= 0,
+    'status=' + planApi.status + ' state=' + (planApi.body && planApi.body.state)
+      + ' available=' + (planApi.body && planApi.body.available));
+
+  /* Restore the real plan state (empty state when G1 has not ingested yet). */
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+
+  /* 24. Screenshots + runtime error gate */
   /* The capture must show the operator's board, not the test filter left in
      the search box by an earlier section. */
   await js(`CP.store.query = ''; const gs = document.getElementById('globalSearch'); if (gs) gs.value = ''; CP.store.emit();`);
@@ -1081,6 +1249,353 @@ async function main() {
   await sleep(220);
   const ledgerShot = await cmd('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   fs.writeFileSync(path.join(OUT, 'preview-ledger.png'), Buffer.from(ledgerShot.data, 'base64'));
+
+  /* C9: benchmark items B1 / B5 / B6 become real, verified end-to-end. */
+  const appr = await api('GET', '/api/policy/approvals');
+  const apprRows = Array.isArray(appr.body) ? appr.body : [];
+  PASS('C9 B1: per-action approval matrix persisted in SQLite (>=6 rows)',
+    appr.status === 200 && apprRows.length >= 6 &&
+    apprRows.every(r => r.action && r.actor && r.gate && r.endpoint),
+    `rows=${apprRows.length} enforced=${apprRows.filter(r => r.enforced).length}`);
+
+  const scope = await api('GET', '/api/policy/owner-scope');
+  const scopeRows = Array.isArray(scope.body) ? scope.body : [];
+  PASS('C9 B6: owner scope readable at runtime for 4 owner types',
+    scope.status === 200 && scopeRows.length === 4 &&
+    ['human', 'main', 'subagent', 'team'].every(t => scopeRows.some(r => r.owner_type === t)) &&
+    scopeRows.every(r => r.needs_ack && r.never_automatic),
+    scopeRows.map(r => r.owner_type).join(','));
+
+  const C9ACK = (await api('POST', '/api/acks', { snapshot_hash: 'hC9', command: 'C9 state-path reject' })).body || {};
+  const c9bad = await api('PUT', '/api/acks/' + encodeURIComponent(C9ACK.id), { state: 'REJECTED', reason: '   ' });
+  PASS('C9 B1: state-path REJECTED with blank reason -> HTTP 400',
+    c9bad.status === 400 && c9bad.body && /reason/i.test(JSON.stringify(c9bad.body)),
+    `status=${c9bad.status} body=${JSON.stringify(c9bad.body)}`);
+  const c9ok = await api('PUT', '/api/acks/' + encodeURIComponent(C9ACK.id), { state: 'REJECTED', reason: 'C9 written reason' });
+  const c9reload = await api('GET', '/api/acks');
+  const c9row = Array.isArray(c9reload.body) ? c9reload.body.find(x => x.id === C9ACK.id) : null;
+  PASS('C9 B1: valid reject persists reject_reason in SQLite',
+    c9ok.status === 200 && c9row && c9row.state === 'REJECTED' && c9row.reject_reason === 'C9 written reason',
+    `state=${c9row && c9row.state} reason=${c9row && c9row.reject_reason}`);
+
+  const policyUI = await js(`(() => ({
+    mount: typeof CP.mountPolicyTables,
+    tables: document.querySelectorAll('#view-desk table').length,
+    text: (document.getElementById('view-desk') || {}).innerText || ''
+  }))()`);
+  PASS('C9 B1/B6: policy tables mounted into the desk view',
+    policyUI.mount === 'function' && /Approval matrix/i.test(policyUI.text) && /Owner scope/i.test(policyUI.text),
+    `mount=${policyUI.mount} tables=${policyUI.tables}`);
+
+  const shared = await js(`(() => {
+    const s = CP.store.state;
+    const out = CP.sharedOrder(s.tasks.slice());
+    const idx = {}; out.forEach((t, i) => { idx[t.id] = i; });
+    const board = Array.from(document.querySelectorAll('#view-board .kb-card[data-order]'));
+    const gantt = Array.from(document.querySelectorAll('.gbar[data-order]'));
+    const boardOk = board.length > 0 &&
+      board.every(c => String(idx[c.dataset.taskId]) === c.dataset.order);
+    const ganttOk = gantt.length > 0 &&
+      gantt.every(c => String(idx[c.dataset.taskId]) === c.dataset.order);
+    const sorted = out.every((t, i, a) => i === 0 || a[i - 1].status <= t.status);
+    return { n: out.length, sorted, board: board.length, gantt: gantt.length, boardOk, ganttOk };
+  })()`);
+  PASS('C9 B5: board and gantt carry the SAME shared-order index per task',
+    shared.n > 0 && shared.sorted && shared.boardOk && shared.ganttOk,
+    JSON.stringify(shared));
+
+  const multi = await js(`(() => {
+    CP.Board.clearMulti();
+    const cards = Array.from(document.querySelectorAll('#view-board .kb-card')).slice(0, 2);
+    cards.forEach(c => c.dispatchEvent(new MouseEvent('click', { bubbles: true, shiftKey: true })));
+    const ids = CP.Board.selectedIds();
+    return { ok: ids.length === 2, ids,
+      painted: cards.every(c => c.classList.contains('is-multi-selected')) };
+  })()`);
+  PASS('C9 B5: Shift+Click multi-selects TWO cards and paints both',
+    multi.ok && multi.painted, JSON.stringify(multi));
+
+  const c9before = await js(`(() => CP.Board.selectedIds().map(id => {
+    const t = CP.store.state.tasks.find(x => x.id === id);
+    return { id: id, sort: t && t.sort };
+  }))()`);
+  await js(`CP.Board.moveSelected('top')`);
+  await sleep(800);
+  const c9state = await api('GET', '/api/state');
+  const c9tasks = (c9state.body && c9state.body.tasks) || [];
+  const c9changed = c9before.filter(b => {
+    const a = c9tasks.find(x => x.id === b.id);
+    return a && a.sort !== b.sort;
+  }).length;
+  PASS('C9 B5: move-to-top persists a new sort for BOTH selected cards',
+    c9before.length === 2 && c9changed === 2,
+    `selected=${c9before.length} persisted=${c9changed} ` +
+    c9before.map(b => b.id + ':' + b.sort).join(' '));
+  await js(`CP.Board.clearMulti()`);
+
+  /* 25. Desk sheets + event history (I-019 P-TEST) */
+  /* Incremental gate for the P-UI desk sheet stack and the P-SVC desk_events
+     log: one-active-sheet tabbing, localStorage('desk.sheet') persistence
+     (write side, reload restore, bogus fallback), the four per-unit History
+     blocks, the GET/POST /api/events contract, the board.ts signal raise/clear
+     differential (fire-and-forget POSTs, polled with a deadline), the ACK
+     created timestamps and the History filter. The probe marker row and the
+     probe task use unique per-run markers; the probe task is deleted again
+     before this block ends. */
+  const errBase = errors.length;
+  const SHEET_UNIT = { console: 'command', inbox: 'job', acks: 'ack', signals: 'signal' };
+  const HIST_UNITS = ['command', 'job', 'ack', 'signal'];
+  await js(`document.querySelector('[data-view="desk"]').click()`);
+
+  /* Tab bar: four sheets exist, exactly one is active, and the active tab
+     names exactly that sheet. */
+  const tabInfo = await js(`(() => {
+    const tabs = Array.from(document.querySelectorAll('#deskTabs .desk-tab'));
+    const sheets = Array.from(document.querySelectorAll('#view-desk .desk-sheet'));
+    const tabEl = document.querySelector('#deskTabs .desk-tab.active');
+    const sheetEl = document.querySelector('#view-desk .desk-sheet.active');
+    return {
+      tabs: tabs.map((t) => t.dataset.sheet || '').sort(),
+      sheets: sheets.map((s) => s.id).sort(),
+      activeTabs: tabs.filter((t) => t.classList.contains('active')).length,
+      activeSheets: sheets.filter((s) => s.classList.contains('active')).length,
+      pair: (tabEl ? tabEl.dataset.sheet : '') + '|' + (sheetEl ? sheetEl.id : ''),
+    };
+  })()`);
+  PASS('Desk tab bar exposes four sheets: console / inbox / acks / signals',
+    JSON.stringify(tabInfo.tabs) === JSON.stringify(['acks', 'console', 'inbox', 'signals'])
+    && JSON.stringify(tabInfo.sheets) === JSON.stringify(['sheet-acks', 'sheet-console', 'sheet-inbox', 'sheet-signals']),
+    'tabs=' + tabInfo.tabs.join(',') + ' sheets=' + tabInfo.sheets.join(','));
+  PASS('Exactly one desk sheet is active and it matches the active tab',
+    tabInfo.activeTabs === 1 && tabInfo.activeSheets === 1
+    && tabInfo.pair.split('|')[1] === 'sheet-' + tabInfo.pair.split('|')[0],
+    'pair=' + tabInfo.pair + ' activeTabs=' + tabInfo.activeTabs + ' activeSheets=' + tabInfo.activeSheets);
+
+  /* Clicking each tab activates its sheet, deactivates the others and loads
+     that sheet's History block (data rows or the explicit status row). */
+  const clickLog = [];
+  for (const sheetName of ['console', 'inbox', 'acks', 'signals']) {
+    const unit = SHEET_UNIT[sheetName];
+    await js(`document.querySelector('#deskTabs .desk-tab[data-sheet=${JSON.stringify(sheetName)}]').click()`);
+    await until(`(() => {
+      const s = document.querySelector('#view-desk .desk-sheet.active');
+      const t = document.querySelector('#deskTabs .desk-tab.active');
+      return (s ? s.id : '') + '|' + (t ? t.dataset.sheet : '')
+        + '|' + document.querySelectorAll('#view-desk .desk-sheet.active').length
+        + '|' + document.querySelectorAll('#deskTabs .desk-tab.active').length;
+    })()`, (v) => v === 'sheet-' + sheetName + '|' + sheetName + '|1|1', 3000);
+    await until(`document.querySelectorAll('#histBody-${unit} tr.hist-row').length`, (v) => Number(v) > 0, 5000);
+    clickLog.push(sheetName + '->sheet-' + sheetName);
+  }
+  PASS('Clicking each desk tab activates its sheet and deactivates the others',
+    clickLog.length === 4, clickLog.join(' '));
+
+  /* Every History block settled above: rows carrying a kind chip, or exactly
+     the one explicit status row when the unit has no events yet. */
+  const histInfo = await js(`(() => {
+    const out = {};
+    ['command', 'job', 'ack', 'signal'].forEach((u) => {
+      const rows = Array.from(document.querySelectorAll('#histBody-' + u + ' tr.hist-row'));
+      out[u] = {
+        rows: rows.length,
+        data: rows.filter((r) => !r.classList.contains('hist-status') && !!r.querySelector('span.hist-kind')).length,
+        status: rows.filter((r) => r.classList.contains('hist-status')).map((r) => r.textContent.trim()),
+        unavailable: rows.some((r) => r.textContent.toLowerCase().indexOf('unavailable') >= 0),
+      };
+    });
+    return out;
+  })()`);
+  PASS('Every per-unit History block renders event rows or an explicit status row',
+    HIST_UNITS.every((u) => histInfo[u].rows > 0 && !histInfo[u].unavailable
+      && (histInfo[u].data > 0 || (histInfo[u].status.length === 1 && histInfo[u].status[0] === 'No events yet.')))
+    && histInfo.command.data >= 1 && histInfo.job.data >= 1 && histInfo.ack.data >= 1,
+    JSON.stringify(histInfo));
+
+  /* Persistence write side: the active sheet lands in localStorage. */
+  await js(`document.querySelector('#deskTabs .desk-tab[data-sheet="acks"]').click()`);
+  const sheetStored = await js(`localStorage.getItem('desk.sheet')`);
+  PASS('Active desk sheet persists to localStorage(desk.sheet)', sheetStored === 'acks',
+    'desk.sheet=' + sheetStored);
+
+  /* Restore on load: a real reload reads the key back. */
+  await js(`localStorage.setItem('desk.sheet', 'acks'); true`);
+  await cmd('Page.reload', { ignoreCache: true });
+  await sleep(900);
+  await ready();
+  const sheetRestored = await js(`(() => {
+    const s = document.querySelector('#view-desk .desk-sheet.active');
+    const t = document.querySelector('#deskTabs .desk-tab.active');
+    return (s ? s.id : '') + '|' + (t ? t.dataset.sheet : '') + '|' + localStorage.getItem('desk.sheet');
+  })()`);
+  PASS('Reload restores the persisted desk sheet (desk.sheet=acks)',
+    sheetRestored === 'sheet-acks|acks|acks', 'after reload: ' + sheetRestored);
+
+  /* A bogus saved value must fall back to console, not break the desk. */
+  await js(`localStorage.setItem('desk.sheet', 'bogus-sheet'); true`);
+  await cmd('Page.reload', { ignoreCache: true });
+  await sleep(900);
+  await ready();
+  const sheetFallback = await js(`(() => {
+    const s = document.querySelector('#view-desk .desk-sheet.active');
+    const t = document.querySelector('#deskTabs .desk-tab.active');
+    return (s ? s.id : '') + '|' + (t ? t.dataset.sheet : '') + '|' + localStorage.getItem('desk.sheet');
+  })()`);
+  PASS('A bogus desk.sheet value falls back to the console sheet on load',
+    sheetFallback === 'sheet-console|console|console', 'after reload: ' + sheetFallback);
+
+  /* GET /api/events contract. */
+  const evCmd = await api('GET', '/api/events?unit=command');
+  const cmdRows = (evCmd.body && evCmd.body.events) || [];
+  PASS('GET /api/events?unit=command returns 200 with an events array',
+    evCmd.status === 200 && Array.isArray(evCmd.body && evCmd.body.events),
+    'status=' + evCmd.status + ' events=' + cmdRows.length);
+
+  const HISTMARK = 'histprobe alpha ' + Math.random().toString(36).slice(2, 8);
+  const markRow = await api('POST', '/api/events', { unit: 'command', kind: 'probe', detail: HISTMARK });
+  PASS('POST /api/events stores the history probe marker row (unit=command)',
+    markRow.status === 200 && !!markRow.body && !!markRow.body.id
+    && markRow.body.unit === 'command' && markRow.body.kind === 'probe' && markRow.body.detail === HISTMARK,
+    'id=' + (markRow.body ? markRow.body.id : '') + ' ts=' + (markRow.body ? markRow.body.ts : ''));
+
+  const qHit = await api('GET', '/api/events?unit=command&q=HISTPROBE');
+  const qRows = (qHit.body && qHit.body.events) || [];
+  PASS('GET /api/events q=HISTPROBE finds the marker case-insensitively',
+    qHit.status === 200 && qRows.length >= 1
+    && qRows.every((r) => String(r.detail).toLowerCase().indexOf('histprobe') >= 0)
+    && qRows.some((r) => r.detail === HISTMARK),
+    'rows=' + qRows.length + ' sample=' + (qRows[0] ? String(qRows[0].detail).slice(0, 40) : '(none)'));
+
+  const badUnit = await api('GET', '/api/events?unit=bogus');
+  PASS('GET /api/events rejects an unknown unit with HTTP 400 + error',
+    badUnit.status === 400 && !!(badUnit.body && badUnit.body.error),
+    'status=' + badUnit.status + ' error=' + (badUnit.body ? String(badUnit.body.error).slice(0, 50) : ''));
+
+  const evClamp = await api('GET', '/api/events?unit=command&limit=0');
+  const clampRows = (evClamp.body && evClamp.body.events) || [];
+  PASS('GET /api/events clamps limit=0 up to one row (listEvents floor of 1)',
+    evClamp.status === 200 && clampRows.length === 1,
+    'rows=' + clampRows.length + ' of total=' + (cmdRows.length + 1) + ' (limit=0 clamped to 1)');
+
+  /* POST /api/events contract. */
+  const okEv = await api('POST', '/api/events', { unit: 'signal', kind: 'raise', detail: 'probe' });
+  PASS('POST /api/events accepts a valid signal/raise row and echoes it back',
+    okEv.status === 200 && !!okEv.body && !!okEv.body.id && !!okEv.body.ts
+    && okEv.body.unit === 'signal' && okEv.body.kind === 'raise' && okEv.body.detail === 'probe',
+    JSON.stringify(okEv.body).slice(0, 120));
+
+  const badEvUnit = await api('POST', '/api/events', { unit: 'nope', kind: 'x', detail: 'y' });
+  PASS('POST /api/events rejects an unknown unit with HTTP 400 + error',
+    badEvUnit.status === 400 && !!(badEvUnit.body && badEvUnit.body.error),
+    'status=' + badEvUnit.status + ' error=' + (badEvUnit.body ? String(badEvUnit.body.error).slice(0, 50) : ''));
+
+  const emptyKind = await api('POST', '/api/events', { unit: 'signal', kind: '', detail: 'y' });
+  PASS('POST /api/events rejects an empty kind with HTTP 400 + error',
+    emptyKind.status === 400 && !!(emptyKind.body && emptyKind.body.error),
+    'status=' + emptyKind.status + ' error=' + (emptyKind.body ? String(emptyKind.body.error).slice(0, 50) : ''));
+
+  const emptyDetail = await api('POST', '/api/events', { unit: 'signal', kind: 'raise', detail: '' });
+  PASS('POST /api/events rejects an empty detail with HTTP 400 + error',
+    emptyDetail.status === 400 && !!(emptyDetail.body && emptyDetail.body.error),
+    'status=' + emptyDetail.status + ' error=' + (emptyDetail.body ? String(emptyDetail.body.error).slice(0, 50) : ''));
+
+  /* ACK rows carry their created timestamp in time.ack-created. */
+  const ackTs = await js(`(() => Array.from(document.querySelectorAll('#ackList .ack-row')).map((r) => {
+    const t = r.querySelector('time.ack-created');
+    return { has: !!t, text: t ? t.textContent.trim() : '' };
+  }))()`);
+  const ackStamp = /^\d{4}-\d{2}-\d{2}T\d{2}:00$/;
+  PASS('ACK rows carry time.ack-created with the row timestamp',
+    ackTs.length > 0 && ackTs.every((a) => a.has)
+    && ackTs.every((a) => !a.text || ackStamp.test(a.text))
+    && ackTs.some((a) => ackStamp.test(a.text)),
+    'rows=' + ackTs.length + ' timestamps=' + ackTs.map((a) => a.text).join(','));
+
+  /* Signal differential logging (board.ts): seed the session baseline first
+     (the first render after a reload seeds silently), then raise and clear one
+     stuck >24h probe task. The POSTs are fire-and-forget, so poll the log. */
+  await js(`CP.store.load().then(() => true).catch(() => false)`);
+  const probeRes = await api('POST', '/api/tasks', {
+    title: 'P-TEST signal probe', status: 'pending', owner: 'subagent-test', owner_type: 'subagent',
+    role: 'Probe', handoff: 'histprobe signal differential',
+    start: at(-30).replace(' ', 'T'), end: at(-28).replace(' ', 'T'),
+  });
+  const probeId = (probeRes.body && probeRes.body.id) || '';
+  await js(`CP.store.load().then(() => true).catch(() => false)`);
+  let raiseEv = null;
+  for (let i = 0; i < 60 && !raiseEv; i += 1) {
+    const ev = await api('GET', '/api/events?unit=signal');
+    const rows = (ev.body && ev.body.events) || [];
+    raiseEv = rows.filter((r) => r.kind === 'raise' && probeId && String(r.detail).indexOf(probeId) >= 0)[0] || null;
+    if (!raiseEv) await sleep(150);
+  }
+  PASS('A stuck >24h probe task posts a signal/raise event naming the task id',
+    !!probeId && !!raiseEv,
+    raiseEv ? 'id=' + raiseEv.id + ' detail=' + String(raiseEv.detail).slice(0, 70) : 'no raise for ' + probeId);
+
+  if (probeId) await api('DELETE', '/api/tasks/' + encodeURIComponent(probeId));
+  await js(`CP.store.load().then(() => true).catch(() => false)`);
+  let clearEv = null;
+  for (let i = 0; i < 60 && !clearEv; i += 1) {
+    const ev = await api('GET', '/api/events?unit=signal');
+    const rows = (ev.body && ev.body.events) || [];
+    clearEv = rows.filter((r) => r.kind === 'clear' && probeId && String(r.detail).indexOf(probeId) >= 0)[0] || null;
+    if (!clearEv) await sleep(150);
+  }
+  PASS('Deleting the probe task posts a signal/clear event naming the task id',
+    !!probeId && !!clearEv,
+    clearEv ? 'id=' + clearEv.id + ' detail=' + String(clearEv.detail).slice(0, 70) : 'no clear for ' + probeId);
+  if (probeId) await api('DELETE', '/api/tasks/' + encodeURIComponent(probeId));
+
+  /* History filter: typing a marker narrows the command history to the probe
+     row; a marker that matches nothing shows the explicit empty status row. */
+  await sleep(600);
+  await js(`(() => {
+    const q = document.getElementById('histFilter-command');
+    q.value = ${JSON.stringify(HISTMARK)};
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    return q.value;
+  })()`);
+  await until(`(() => {
+    const rows = Array.from(document.querySelectorAll('#histBody-command tr.hist-row'))
+      .filter((r) => !r.classList.contains('hist-status'));
+    return rows.length === 1 && rows[0].textContent.toLowerCase().indexOf('histprobe') >= 0
+      ? 'match' : String(rows.length);
+  })()`, (v) => v === 'match', 5000);
+  const fRows = await js(`(() => Array.from(document.querySelectorAll('#histBody-command tr.hist-row')).map((r) => ({
+    status: r.classList.contains('hist-status'), kind: !!r.querySelector('span.hist-kind'),
+    text: r.textContent.trim().slice(0, 70),
+  })))()`);
+  PASS('History filter input narrows #histBody-command to the probe marker row',
+    fRows.length === 1 && !fRows[0].status && fRows[0].kind && /histprobe/i.test(fRows[0].text),
+    JSON.stringify(fRows).slice(0, 150));
+
+  await js(`(() => {
+    const q = document.getElementById('histFilter-command');
+    q.value = 'zzz-no-such-event-zzz';
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  })()`);
+  const emptyMsg = await until(`(() => {
+    const rows = Array.from(document.querySelectorAll('#histBody-command tr.hist-row'));
+    return rows.length === 1 && rows[0].classList.contains('hist-status')
+      ? rows[0].textContent.trim() : '';
+  })()`, (v) => v === 'No events yet.', 5000);
+  PASS('A history filter matching nothing shows the explicit empty status row',
+    emptyMsg === 'No events yet.', 'status row=' + emptyMsg);
+
+  /* Tidy: clear the filters, leave the console sheet active, and prove this
+     block added no console noise of its own. */
+  await js(`(() => {
+    ['command', 'job', 'ack', 'signal'].forEach((u) => {
+      const f = document.getElementById('histFilter-' + u);
+      if (f) f.value = '';
+    });
+    document.querySelector('#deskTabs .desk-tab[data-sheet="console"]').click();
+    return true;
+  })()`);
+  await sleep(400);
+  PASS('The desk sheet and history probes added no JS exceptions or console errors',
+    errors.length === errBase, 'errors before=' + errBase + ' after=' + errors.length);
 
   PASS('No JS exceptions / console errors at runtime', errors.length === 0, errors.join(' | ') || '0 errors');
   const failed = results.filter((r) => !r.ok).length;

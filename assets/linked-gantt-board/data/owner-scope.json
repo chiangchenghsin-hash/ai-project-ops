@@ -1,0 +1,29 @@
+{
+  "schema": "ai-project-ops.owner-scope/1.0",
+  "owner_scopes": [
+    {
+      "owner_type": "human",
+      "may_act_alone": "all human decisions",
+      "needs_ack": "n/a",
+      "never_automatic": "n/a"
+    },
+    {
+      "owner_type": "main",
+      "may_act_alone": "plan, delegate, verify, append PDCA entries",
+      "needs_ack": "changing frozen artifacts; scoreboard edits",
+      "never_automatic": "approving its own output; closing a veto"
+    },
+    {
+      "owner_type": "subagent",
+      "may_act_alone": "only files inside its declared ownership",
+      "needs_ack": "any file outside the brief; any verdict",
+      "never_automatic": "writing docs/TASK-LOG.md; reading the blind map"
+    },
+    {
+      "owner_type": "team",
+      "may_act_alone": "parallel work on disjoint files",
+      "needs_ack": "cross-team dependency changes",
+      "never_automatic": "merging another team's ownership"
+    }
+  ]
+}

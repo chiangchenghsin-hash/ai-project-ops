@@ -22,9 +22,13 @@ namespace CP {
     start: string; end: string; newStart: string; newEnd: string; changed: boolean;
   } | null = null;
   let tip: HTMLDivElement | null = null;
+  /** C9 / B5: shared-order rank per task id, rebuilt on every gantt patch. */
+  let ganttOrderIndex: Record<string, number> = {};
 
-  function lanePlan(tasks: Task[]): Assigned[] {
-    const sorted = tasks.slice().sort((a, b) => parse(a.start).getTime() - parse(b.start).getTime());
+  /** `ordered` is the flat work-unit list in CP.sharedOrder() order. The time
+   *  sort is stable, so equal starts keep that shared (status, sort, id) order. */
+  function lanePlan(ordered: Task[]): Assigned[] {
+    const sorted = ordered.slice().sort((a, b) => parse(a.start).getTime() - parse(b.start).getTime());
     const ends: number[] = [];
     return sorted.map((t) => {
       const startH = diffHours(axis, t.start);
@@ -50,6 +54,7 @@ namespace CP {
     const t = a.t;
     const col = columnById(t.status);
     el.dataset.taskId = t.id;
+    if (ganttOrderIndex[t.id] !== undefined) el.dataset.order = String(ganttOrderIndex[t.id]);
     el.className = 'gbar' + (t.placeholder ? ' placeholder' : '') + (store.selected === t.id ? ' is-selected' : '')
       + (showCritical && !criticalSet[t.id] && !t.placeholder ? ' not-critical' : '');
     el.style.left = `${a.startH * HOUR_W}px`;
@@ -96,7 +101,12 @@ namespace CP {
   export function patchGantt(): void {
     if (!lanesEl || !store.state) return;
     const s = store.state;
-    const plan = lanePlan(visibleTasks());
+    /* C9 / B5: the gantt's flat work-unit list uses the very same shared
+       order as the kanban board, so both surfaces agree on every unit. */
+    const flatWorkUnits = sharedOrder(visibleTasks());
+    ganttOrderIndex = {};
+    flatWorkUnits.forEach((t, i) => { ganttOrderIndex[t.id] = i; });
+    const plan = lanePlan(flatWorkUnits);
     const count = Math.max(1, plan.reduce((m, a) => Math.max(m, a.lane + 1), 0));
     const lanes = Array.from({ length: count }, (_, i) => ({ i, bars: plan.filter((a) => a.lane === i) }));
     reconcile(lanesEl, lanes, (l) => String(l.i), laneCreate, laneUpdate);

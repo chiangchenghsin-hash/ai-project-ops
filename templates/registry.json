@@ -1,0 +1,138 @@
+{
+  "schema": "ai-project-ops.template-registry/1.0",
+  "benchmark": ".research/notion-monday.md#A1 (Monday Managed templates: master -> instance -> Publish) and #A2 (owner may Publish, member may Edit)",
+  "policy": {
+    "instance_overwrite": "never",
+    "upgrade_scope": "future instances only",
+    "publish_role_required": "owner",
+    "note": "A master edit does NOT rewrite an existing instance. Drift is reported, never silently merged."
+  },
+  "masters": [
+    {
+      "id": "task-log",
+      "master": "templates/TASK-LOG.template.md",
+      "instance": "docs/TASK-LOG.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "scoreboard",
+        "append-only entries",
+        "PDCA four lines"
+      ],
+      "benchmark": "local invention; kept under the same governance as benchmark-derived masters"
+    },
+    {
+      "id": "plan",
+      "master": "templates/PLAN.template.md",
+      "instance": "docs/PLAN.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "purpose",
+        "non-goals",
+        "acceptance",
+        "work breakdown",
+        "structure gate",
+        "PRD backbone"
+      ],
+      "benchmark": "local invention; section 7 PRD backbone added in C7"
+    },
+    {
+      "id": "prd",
+      "master": "templates/PRD.template.md",
+      "instance": "docs/PRD.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "tech stack",
+        "constraints",
+        "baseline",
+        "milestones"
+      ],
+      "benchmark": "user-level prd-to-action skill, Phase 0 INGEST"
+    },
+    {
+      "id": "template-governance",
+      "master": "templates/template-governance.template.md",
+      "instance": "docs/TEMPLATE-GOVERNANCE.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "master",
+        "instance",
+        "publish",
+        "drift"
+      ],
+      "benchmark": ".research/notion-monday.md#A1,#A2,#A3,#A4"
+    },
+    {
+      "id": "agent-session",
+      "master": "templates/agent-session.template.md",
+      "instance": "docs/AGENT-SESSION.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "six states",
+        "first-response SLA",
+        "accountability"
+      ],
+      "benchmark": ".research/linear-height.md#A1,#A2"
+    },
+    {
+      "id": "approval-matrix",
+      "master": "templates/approval-matrix.template.md",
+      "instance": "docs/APPROVAL-MATRIX.md",
+      "version": "1.1.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "action",
+        "actor",
+        "gate",
+        "written reason"
+      ],
+      "benchmark": ".research/clickup-asana-motion.md#A3 + synthesis B1"
+    },
+    {
+      "id": "owner-scope",
+      "master": "templates/owner-scope.template.md",
+      "instance": "docs/OWNER-SCOPE.md",
+      "version": "1.1.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "owner_type",
+        "may act alone",
+        "needs ACK",
+        "never automatic"
+      ],
+      "benchmark": "docs/competitive-synthesis.md claim 4 + B6"
+    },
+    {
+      "id": "pdca-entry",
+      "master": "templates/pdca-entry.template.md",
+      "instance": null,
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "P",
+        "D",
+        "C",
+        "A"
+      ],
+      "benchmark": "local invention"
+    },
+    {
+      "id": "subagent-brief",
+      "master": "templates/subagent-brief.template.md",
+      "instance": "docs/SUBAGENT-BRIEF.md",
+      "version": "1.0.0",
+      "publish_role": "owner",
+      "default_properties": [
+        "ownership",
+        "forbidden",
+        "evidence",
+        "length cap"
+      ],
+      "benchmark": "local invention"
+    }
+  ]
+}

@@ -28,8 +28,13 @@ namespace CP {
   export interface Notice { ts: string; title: string; body: string; level: string; read: number; }
   export interface Ack {
     id: string; snapshot_hash: string; command: string; state: string;
-    reject_reason: string; created: string; updated: string;
+    reject_reason: string;
+    /** Row timestamps already carried by the API; optional so an older row
+     *  without them still renders. `created` is shown on the ACK row. */
+    created?: string; updated?: string;
   }
+  /** One row of the I-019 desk_events history stream (GET /api/events). */
+  export interface DeskEvent { id: string; ts: string; unit: string; kind: string; detail: string; }
   export interface Deps {
     entry?: string[]; nodes: { name: string; indeg: number; outdeg: number }[];
     edges: string[][];
@@ -67,6 +72,12 @@ namespace CP {
       const m: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
       return m[c];
     });
+  }
+  /** This is an English release. Any CJK in PRD-derived text is removed before
+   *  it reaches the DOM, so the rendered UI stays CJK-free regardless of what
+   *  the ingest step wrote into the plan file. */
+  export function stripCJK(s: string): string {
+    return String(s).replace(/[\u3400-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/g, '');
   }
   export function rgba(hex: string, a: number): string {
     const h = hex.replace('#', '');

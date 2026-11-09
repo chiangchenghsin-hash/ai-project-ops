@@ -1,0 +1,27 @@
+{
+  "_comment": "Merge these two keys into a PROJECT-LEVEL settings file, never the user-global one. Verified against the local Claude Code and WorkBuddy settings.json formats on 2026-11-08. Replace <SKILL_ROOT> with the absolute path to this skill package.",
+  "UserPromptSubmit": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"<SKILL_ROOT>/scripts/session-start.js\"",
+          "timeout": 5
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "matcher": "",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "node \"<SKILL_ROOT>/scripts/discipline-gate.js\"",
+          "timeout": 15
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "schema": "ai-project-ops/confirmatory-round-status/1.0",
+  "freeze_id": "ai-project-ops/C4/confirmatory-execution/2026-11-06-v1-001",
+  "status": "COMPLETED_NOT_VOID",
+  "verdict": "UNCERTAIN",
+  "note": "Status is recorded HERE, not by editing freeze-exec.json. Editing a frozen artifact would fire E07 and void the round.",
+  "no_retest": true,
+  "next_round_requires": ["NEW freeze id (C5)", "NEW hashes", ">= 3 paired cards per cell so per-cell p can reach <= 0.05", "a tightened dimension-10 scoring rule if the human owner chooses one"],
+  "completed_at": "2026-11-08"
+}

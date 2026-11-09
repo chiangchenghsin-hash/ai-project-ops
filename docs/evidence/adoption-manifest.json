@@ -1,0 +1,9 @@
+{
+  "schema": "ai-project-ops.adoption-manifest/1.0",
+  "version": "1.0.4",
+  "files": {
+    "scripts/benchmark-adoption.js": "sha256:b3822f9c2a452ca79df082a68886ff7992f59ed7923b0048bf1db0162fb822de",
+    "docs/BENCHMARK-ADOPTION.md": "sha256:7ed36634be39e24909bdb85aa47609efde4253511b5a4a4d985e4415149925b6"
+  },
+  "rule": "Changing the gate or the adoption ledger without re-signing this manifest fails I10. The manifest has no hash of itself (circular); editing it requires a new version id (E07 analogue). No third-party signature. Re-signed after the R4/B5 landing fix (C8 revision)."
+}

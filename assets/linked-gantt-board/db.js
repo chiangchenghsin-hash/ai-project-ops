@@ -13,9 +13,7 @@
  * READ-ONLY demo mode serving seeded in-memory state (no disk writes). In that
  * mode state.degraded = true and state.degraded_reason carries the failure text;
  * write endpoints return a readOnly marker instead of persisting.
- * VERSION: 2.0.0 - English localization, isolated DEMO seed, DEMO/DEGRADED flags,
- * acks command loop (ACK/IN_PROGRESS/DONE/REJECTED), rejections.json PDCA entries,
- * /healthz + backup/restore inputs, deps for blocking signals.
+ * VERSION: 2.1.0 - desk_events log + /api/events (queryable history for the desk sheets)
  */
 let DatabaseSync = null;
 let DEGRADED = false;
@@ -106,6 +104,20 @@ CREATE TABLE IF NOT EXISTS acks (
   state TEXT NOT NULL DEFAULT 'ACK', reject_reason TEXT NOT NULL DEFAULT '',
   created TEXT NOT NULL, updated TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS approval_actions (
+  id TEXT PRIMARY KEY, action TEXT NOT NULL, actor TEXT NOT NULL,
+  gate TEXT NOT NULL, requires_reason INTEGER NOT NULL DEFAULT 0,
+  endpoint TEXT NOT NULL DEFAULT '', enforced INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS owner_scopes (
+  owner_type TEXT PRIMARY KEY, may_act_alone TEXT NOT NULL,
+  needs_ack TEXT NOT NULL, never_automatic TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS desk_events (
+  id TEXT PRIMARY KEY, ts TEXT NOT NULL, unit TEXT NOT NULL,
+  kind TEXT NOT NULL, detail TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_desk_events_unit_ts ON desk_events(unit, ts);
 `);
   /* R20: a database created before the relationship layer lacks the new
      columns, and CREATE TABLE IF NOT EXISTS never adds them. Add them once. */
@@ -150,6 +162,46 @@ function seed() {
   db.prepare('INSERT OR IGNORE INTO meta(key,value) VALUES(?,?)').run('next_command', '');
 }
 
+/* ---- C9 B1/B6: policy reference tables ---------------------------------
+ * These are read-only reference tables seeded from the two JSON masters in
+ * ./data. They are static: no PUT endpoint writes to them, so re-seeding from
+ * the JSON on every boot keeps SQLite (the runtime source of truth) exactly in
+ * sync with the versioned spec. The approval matrix rows carry the columns the
+ * SPEC defines: id, action, actor, gate, requires_reason, endpoint, enforced.
+ * ------------------------------------------------------------------------ */
+function seedPolicy() {
+  const matrix = JSON.parse(fs.readFileSync(path.join(DATA, 'approval-matrix.json'), 'utf8'));
+  const scopes = JSON.parse(fs.readFileSync(path.join(DATA, 'owner-scope.json'), 'utf8'));
+  db.exec('DELETE FROM approval_actions');
+  const insAction = db.prepare(`INSERT INTO approval_actions
+    (id,action,actor,gate,requires_reason,endpoint,enforced) VALUES(?,?,?,?,?,?,?)`);
+  (matrix.actions || []).forEach((r) => insAction.run(
+    String(r.id), String(r.action || ''), String(r.actor || ''), String(r.gate || ''),
+    Number(r.requires_reason) ? 1 : 0, String(r.endpoint || ''), Number(r.enforced) ? 1 : 0,
+  ));
+  db.exec('DELETE FROM owner_scopes');
+  const insScope = db.prepare(`INSERT INTO owner_scopes
+    (owner_type,may_act_alone,needs_ack,never_automatic) VALUES(?,?,?,?)`);
+  (scopes.owner_scopes || []).forEach((r) => insScope.run(
+    String(r.owner_type), String(r.may_act_alone || ''),
+    String(r.needs_ack || ''), String(r.never_automatic || ''),
+  ));
+}
+
+/** All per-action approval rows (B1). SELECT-list fixes the response shape. */
+function listApprovals() {
+  if (DEGRADED) return [];
+  return db.prepare(`SELECT id, action, actor, gate, requires_reason, endpoint, enforced
+    FROM approval_actions ORDER BY id`).all();
+}
+
+/** Exactly four owner scopes (B6): human | main | subagent | team. */
+function listOwnerScopes() {
+  if (DEGRADED) return [];
+  return db.prepare(`SELECT owner_type, may_act_alone, needs_ack, never_automatic
+    FROM owner_scopes ORDER BY owner_type`).all();
+}
+
 function totalsFrom(rounds) {
   return {
     billed: rounds.reduce((a, r) => a + Number(r.billed || 0), 0),
@@ -192,6 +244,10 @@ function importHandoff(name) {
     db.exec('DELETE FROM jobs');
     const ins = db.prepare('INSERT INTO jobs(job_name,last_run,ok,summary) VALUES(?,?,?,?)');
     pairs.forEach(([k, v]) => ins.run(k, String(v.last_run || ''), v.ok ? 1 : 0, String(v.summary || '')));
+    /* I-019 desk log: the status import feeds the jobs table, so it is the one
+       handoff that gets history rows - one job/import event per job row. */
+    pairs.forEach(([k, v]) => logDeskEvent('job', 'import',
+      k + ' ok=' + (v.ok ? 1 : 0) + ' ' + String(v.summary || '')));
     return { name, rows: pairs.length };
   }
   const ins = db.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)');
@@ -256,6 +312,8 @@ function readDeps() {
 function state() {
   if (DEGRADED) {
     const m = JSON.parse(JSON.stringify(MEM));
+    const ps = effectiveMeta(m.meta);
+    m.plan_state = ps.state; m.plan_fix_command = ps.fix_command;
     m.now = iso(new Date());
     return m;
   }
@@ -268,9 +326,11 @@ function state() {
   const acks = db.prepare('SELECT * FROM acks ORDER BY created DESC, id DESC').all();
   const meta = {};
   db.prepare('SELECT key,value FROM meta').all().forEach((r) => { if (!r.key.startsWith('handoff_')) meta[r.key] = r.value; });
+  const ps = effectiveMeta(meta);
   return {
     tasks, columns, rounds, issues, notifications, jobs, acks, deps: readDeps(),
     task_deps: listTaskDeps(), meta,
+    plan_state: ps.state, plan_fix_command: ps.fix_command,
     totals: totalsFrom(rounds), demo: DEMO, DEMO, degraded: false, degraded_reason: '',
     /* R19 D4: the service reports where its data lives. A verifier that builds
        the path from its own location reads the wrong tree when the two are not
@@ -462,9 +522,14 @@ function updateIssue(id, patch) {
 }
 
 function setCommand(text) {
-  if (DEGRADED) return readOnly({ next_command: String(text || '') });
-  db.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run('next_command', String(text || ''));
-  return { next_command: String(text || '') };
+  const next = String(text || '');
+  if (DEGRADED) return readOnly({ next_command: next });
+  const cur = db.prepare("SELECT value FROM meta WHERE key='next_command'").get();
+  db.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run('next_command', next);
+  /* I-019 desk log: only a real change of meta.next_command is history, so a
+     double-save of the same text logs exactly one command/save event. */
+  if (!cur || cur.value !== next) logDeskEvent('command', 'save', next.slice(0, 120));
+  return { next_command: next };
 }
 
 /* ---- Project charter: first-principles framing shown on every view ------ */
@@ -488,6 +553,76 @@ function setCharter(patch) {
     db.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run(k, out[k]);
   });
   return out;
+}
+
+/* ---- Milestone plan (PRD -> action ingest, invariant I9) ---------------
+ * The plan file is owned by the PRD-ingest step, not by this service. When it
+ * is absent we advertise an explicit PRD_NOT_INGESTED state with the exact fix
+ * command, so the panel never shows a silent blank milestone area. The same
+ * read seeds the project charter through /api/state, so every charter value on
+ * screen originates from the plan (or from an explicit human edit), never from
+ * hardcoded HTML. Values are ASCII-normalised: this is an English release.
+ * ------------------------------------------------------------------------ */
+const PLAN_FILE = path.join(DATA, 'milestone-plan.json');
+const PLAN_FIX = 'node scripts/prd-to-action.js';
+const PLAN_EMPTY_LABEL = 'PRD not ingested';
+const PLAN_EMPTY_DETAIL = 'The milestone plan has no main line, sub-lines or relations because data/milestone-plan.json is missing.';
+const PLAN_EMPTY_TEXT = PLAN_EMPTY_LABEL + ' - run: ' + PLAN_FIX;
+
+function cleanText(s) {
+  return String(s === undefined || s === null ? '' : s)
+    .replace(/[\u3400-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/g, '');
+}
+function isCharterPlaceholder(v) {
+  return !v || /^\s*(not set\.?|purpose not set\.?|demo charter[\s\S]*)$/i.test(v);
+}
+
+/** Read-only view of the PRD plan, or an explicit empty state. */
+function readPlan() {
+  let raw;
+  try { raw = fs.readFileSync(PLAN_FILE, 'utf8'); }
+  catch (_e) {
+    return { available: false, state: 'PRD_NOT_INGESTED', label: PLAN_EMPTY_LABEL,
+      detail: PLAN_EMPTY_DETAIL, fix_command: PLAN_FIX, message: PLAN_EMPTY_TEXT,
+      charter: null, milestones: [], work_units: [], relations: [], main_line: [], sub_lines: {} };
+  }
+  try {
+    const plan = JSON.parse(raw);
+    if (!plan || !Array.isArray(plan.milestones)) throw new Error('plan missing milestones[]');
+    const ch = plan.charter || {};
+    return {
+      available: true, state: 'READY', schema: String(plan.schema || ''),
+      label: 'Milestone plan ready', detail: '', fix_command: PLAN_FIX, message: '',
+      charter: {
+        purpose: cleanText(ch.purpose), technical_resources: cleanText(ch.technical_resources),
+        evaluation: cleanText(ch.evaluation), side_purpose: cleanText(ch.side_purpose),
+      },
+      milestones: plan.milestones || [], work_units: plan.work_units || [],
+      relations: plan.relations || [], main_line: plan.main_line || [], sub_lines: plan.sub_lines || {},
+    };
+  } catch (e) {
+    return { available: false, state: 'PRD_INVALID', label: 'PRD plan invalid',
+      detail: String((e && e.message) || e), fix_command: PLAN_FIX, message: PLAN_EMPTY_TEXT,
+      charter: null, milestones: [], work_units: [], relations: [], main_line: [], sub_lines: {} };
+  }
+}
+
+/** Effective charter: the plan wins over a placeholder, a real human edit wins
+ *  over both. When no plan exists, say so explicitly instead of showing blank. */
+function effectiveMeta(meta) {
+  const ps = readPlan();
+  const pc = ps.available ? (ps.charter || {}) : null;
+  const eff = (key, pk) => {
+    const cur = meta[key];
+    if (!isCharterPlaceholder(cur)) return cur;
+    if (pc && pc[pk]) return pc[pk];
+    return PLAN_EMPTY_TEXT;
+  };
+  meta.project_purpose = eff('project_purpose', 'purpose');
+  meta.project_resources = eff('project_resources', 'technical_resources');
+  meta.project_evaluation = eff('project_evaluation', 'evaluation');
+  meta.project_side_purpose = eff('project_side_purpose', 'side_purpose');
+  return ps;
 }
 
 /* ---- S2 ACK command loop ------------------------------------------------ */
@@ -525,6 +660,8 @@ function createAck(input) {
   const command = String(input.command || '');
   db.prepare('INSERT INTO acks(id,snapshot_hash,command,state,reject_reason,created,updated) VALUES(?,?,?,?,?,?,?)')
     .run(id, hash, command, 'ACK', '', now, now);
+  /* I-019 desk log: one ack/send event per ACK created. */
+  logDeskEvent('ack', 'send', (hash + ' ' + command).trim().slice(0, 160));
   return db.prepare('SELECT * FROM acks WHERE id=?').get(id);
 }
 
@@ -533,25 +670,99 @@ function updateAck(id, patch) {
   const cur = db.prepare('SELECT * FROM acks WHERE id=?').get(id);
   if (!cur) throw new Error('ack not found: ' + id);
   const action = String(patch.action || '');
+  /* C9 B1: callers may request the target state directly (state: 'REJECTED')
+     or use the original action verb (action: 'reject'). Both paths converge on
+     the same locked rule: a REJECTED decision REQUIRES a written reason. */
+  const requested = String(patch.state || '').toUpperCase();
+  const rawReason = patch.reason === undefined ? patch.reject_reason : patch.reason;
+  const isReject = action === 'reject' || requested === 'REJECTED';
   let nextState = cur.state;
   let reason = cur.reject_reason;
-  if (action === 'approve') {
-    nextState = 'IN_PROGRESS';
-  } else if (action === 'done') {
-    nextState = 'DONE';
-  } else if (action === 'reject') {
-    const r = patch.reason === undefined ? patch.reject_reason : patch.reason;
-    if (!r || !String(r).trim()) throw new Error('reject requires a reason');
+  if (isReject) {
+    if (!rawReason || !String(rawReason).trim()) throw new Error('reject requires a reason');
     nextState = 'REJECTED';
-    reason = String(r).trim();
+    reason = String(rawReason).trim();
+  } else if (action === 'approve' || requested === 'IN_PROGRESS') {
+    nextState = 'IN_PROGRESS';
+  } else if (action === 'done' || requested === 'DONE') {
+    nextState = 'DONE';
   } else {
-    throw new Error('unknown ack action: ' + action);
+    throw new Error('unknown ack action: ' + (action || requested));
   }
   const now = iso(new Date());
   db.prepare('UPDATE acks SET state=?, reject_reason=?, updated=? WHERE id=?').run(nextState, reason, now, id);
   const row = db.prepare('SELECT * FROM acks WHERE id=?').get(id);
-  if (action === 'reject') writeRejection(row);
+  if (isReject) writeRejection(row);
+  /* I-019 desk log: one event per real decision change. A repeated identical
+     action (double-click) resolves to the same state/reason and logs once;
+     approved->kind 'approved', DONE->'done', REJECTED->'rejected' + reason. */
+  if (nextState !== cur.state || reason !== cur.reject_reason) {
+    const kind = nextState === 'REJECTED' ? 'rejected' : (nextState === 'DONE' ? 'done' : 'approved');
+    logDeskEvent('ack', kind, nextState === 'REJECTED' ? reason : nextState);
+  }
   return row;
+}
+
+/* ---- I-019 desk event history (queryable desk sheets) --------------------
+ * One append-only stream behind the four Command desk sheets. The four units
+ * are the desk sheets themselves; the API surface is GET/POST /api/events.
+ * Hooks above funnel through logDeskEvent, which keeps the contract rule
+ * "detail must not be empty" from ever failing a host write.
+ * ------------------------------------------------------------------------ */
+const EVENT_UNITS = ['command', 'ack', 'signal', 'job'];
+
+/**
+ * Queryable history per the frozen /api/events contract: optional exact unit
+ * filter, optional case-insensitive substring match on detail, result capped
+ * by limit (default 200, clamped 1..500), sorted ts DESC, id DESC.
+ */
+function listEvents(opts) {
+  const o = opts || {};
+  if (DEGRADED) return [];
+  const unit = o.unit === undefined || o.unit === null ? '' : String(o.unit);
+  if (unit && EVENT_UNITS.indexOf(unit) < 0) {
+    throw new Error('unknown event unit: ' + (unit || '(empty)') + ' (allowed: ' + EVENT_UNITS.join(', ') + ')');
+  }
+  const q = String(o.q === undefined || o.q === null ? '' : o.q).toLowerCase();
+  let limit = 200;
+  if (o.limit !== undefined && o.limit !== null && o.limit !== '') {
+    const n = Number(o.limit);
+    if (Number.isFinite(n)) limit = Math.min(500, Math.max(1, Math.floor(n)));
+  }
+  /* q matching is case-insensitive on detail, so it runs in JS; the LIMIT is
+     an over-fetch bound and the real cap is the slice after q, per contract. */
+  const rows = db.prepare('SELECT * FROM desk_events ORDER BY ts DESC, id DESC LIMIT 5000').all();
+  return rows
+    .filter((r) => (!unit || r.unit === unit) && (!q || r.detail.toLowerCase().indexOf(q) >= 0))
+    .slice(0, limit);
+}
+
+/** Append one desk event. Validates like the POST contract: unit must be one
+ *  of command | ack | signal | job, kind non-empty after trim, detail trimmed,
+ *  capped to 500 chars and non-empty - otherwise throw. */
+function createEvent(input) {
+  const i = input || {};
+  if (DEGRADED) return readOnly({ id: 'demo_readonly', unit: String(i.unit || ''), kind: String(i.kind || ''), detail: String(i.detail || '') });
+  const unit = i.unit === undefined || i.unit === null ? '' : String(i.unit);
+  if (EVENT_UNITS.indexOf(unit) < 0) {
+    throw new Error('unknown event unit: ' + (unit || '(empty)') + ' (allowed: ' + EVENT_UNITS.join(', ') + ')');
+  }
+  const kind = (i.kind === undefined || i.kind === null ? '' : String(i.kind)).trim();
+  if (!kind) throw new Error('event kind must not be empty');
+  const detail = (i.detail === undefined || i.detail === null ? '' : String(i.detail)).trim().slice(0, 500);
+  if (!detail) throw new Error('event detail must not be empty');
+  const id = 'ev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+  const ts = iso(new Date());
+  db.prepare('INSERT INTO desk_events(id,ts,unit,kind,detail) VALUES(?,?,?,?,?)').run(id, ts, unit, kind, detail);
+  return { id, ts, unit, kind, detail };
+}
+
+/** Best-effort hook logger: the contract forbids an empty detail, so an empty
+ *  computed detail is skipped instead of throwing inside a host write. */
+function logDeskEvent(unit, kind, detail) {
+  const d = String(detail === undefined || detail === null ? '' : detail).trim();
+  if (!d) return null;
+  return createEvent({ unit, kind, detail: d });
 }
 
 /* ---- S4 backup / restore ------------------------------------------------ */
@@ -606,7 +817,11 @@ function snapshot() {
     `Total spend (measured): billed ${billedM} tokens / $${Number(s.totals.cost).toFixed(2)} (meter, read-only)`,
     `Latest round: ${last ? `${last.id} ${last.name} [${last.start} -> ${last.end}]` : 'none'}`,
   ];
-  return { text: lines.join('\n') };
+  const text = lines.join('\n');
+  /* I-019 desk log: generating a snapshot is a user intent act - one
+     command/generate event per call. */
+  logDeskEvent('command', 'generate', String(text).replace(/\s+/g, ' ').slice(0, 120));
+  return { text };
 }
 
 function degradedInfo() {
@@ -616,6 +831,7 @@ function degradedInfo() {
 if (!DEGRADED) {
   seed();
   importAll();
+  seedPolicy();
 } else {
   MEM = buildMemory();
 }
@@ -624,7 +840,10 @@ module.exports = {
   db, state, task, updateTask, createTask, deleteTask,
   createColumn, updateColumn, deleteColumn, moveColumn,
   updateIssue, setCommand, setCharter, snapshot, importHandoff, importAll,
+  plan: readPlan,
   createAck, listAcks, updateAck, backup, restore, degradedInfo,
   listTaskDeps, setTaskDep, deleteTaskDep, snapshotBaseline,
+  listApprovals, listOwnerScopes,
+  listEvents, createEvent,
   DEMO, DEGRADED, DEGRADED_REASON,
 };

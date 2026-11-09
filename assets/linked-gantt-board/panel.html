@@ -17,11 +17,13 @@
           <p>Hour-axis gantt x work-division kanban</p>
         </div>
       </div>
-      <p class="side-purpose unset" id="sidePurpose">Purpose not set.</p>
+      <p class="side-purpose" id="sidePurpose"></p>
+      <p class="side-purpose side-charter-note" id="sideCharter"></p>
 
       <nav class="nav" id="nav">
         <button type="button" data-view="desk" class="active"><span class="nav-dot"></span><span class="nav-label">Command desk</span></button>
         <button type="button" data-view="plan"><span class="nav-dot"></span><span class="nav-label">Plan linkage</span></button>
+        <button type="button" data-view="board"><span class="nav-dot"></span><span class="nav-label">Work division</span></button>
         <button type="button" data-view="ledger"><span class="nav-dot"></span><span class="nav-label">Issue ledger</span></button>
         <button type="button" data-view="meter"><span class="nav-dot"></span><span class="nav-label">Meter</span></button>
       </nav>
@@ -58,15 +60,15 @@
       <div class="charter-grid">
         <div class="charter-cell">
           <h3>Purpose</h3>
-          <p id="charterPurpose" class="charter-text unset">Not set.</p>
+          <p id="charterPurpose" class="charter-text"></p>
         </div>
         <div class="charter-cell">
           <h3>Technical resources</h3>
-          <p id="charterResources" class="charter-text unset">Not set.</p>
+          <p id="charterResources" class="charter-text"></p>
         </div>
         <div class="charter-cell">
           <h3>Evaluation</h3>
-          <p id="charterEval" class="charter-text unset">Not set.</p>
+          <p id="charterEval" class="charter-text"></p>
         </div>
       </div>
     </section>
@@ -82,6 +84,11 @@
           <option value="subagent">Subagent</option>
           <option value="team">Agent team</option>
         </select>
+        <label class="glass-control" title="macOS 27 readability-fixed glass transparency">
+          <span class="glass-control-label">Glass</span>
+          <input id="glassAlpha" type="range" min="10" max="100" step="1" value="80" aria-label="Glass transparency">
+          <output id="glassAlphaOut">80%</output>
+        </label>
         <button id="btnAddTask" class="btn btn-primary">New work unit</button>
         <button id="btnColumns" class="btn">Status settings</button>
         <button id="btnRefresh" class="btn">Refresh</button>
@@ -98,7 +105,18 @@
           <div class="card kpi"><span>Rounds</span><strong id="kpiRounds">-</strong></div>
         </div>
         <p class="data-line" id="deskDataLine">-</p>
-        <div class="desk-grid">
+        <div class="desk-tabs" id="deskTabs" role="tablist" aria-label="Command desk sheets">
+          <button type="button" class="desk-tab active" data-sheet="console" role="tab" aria-selected="true" aria-controls="sheet-console">Command console</button>
+          <button type="button" class="desk-tab" data-sheet="inbox" role="tab" aria-selected="false" aria-controls="sheet-inbox">Notifications</button>
+          <button type="button" class="desk-tab" data-sheet="acks" role="tab" aria-selected="false" aria-controls="sheet-acks">Command ACKs</button>
+          <button type="button" class="desk-tab" data-sheet="signals" role="tab" aria-selected="false" aria-controls="sheet-signals">Human decisions</button>
+        </div>
+
+        <!-- Per-unit sheets (I-019): one visible at a time, but every sheet's
+             lists keep rendering while hidden so the API contracts above hold.
+             The policy tables (#c9PolicyTables) mount AFTER this stack and stay
+             always visible. -->
+        <section class="desk-sheet active" id="sheet-console" role="tabpanel" aria-label="Command console">
           <div class="card">
             <h2>Command console</h2>
             <p class="hint">Human intent travels through the snapshot, not by scrolling chat history. Commands and replies are written to SQLite and survive a reload.</p>
@@ -110,6 +128,18 @@
             <pre id="snapshotOut" class="snapshot">(no snapshot generated yet)</pre>
             <p class="hint">Collaboration rule: the human issues commands only through snapshots; every AI change leaves a PDCA trail; cost figures come only from the read-only meter import.</p>
           </div>
+          <div class="card desk-history" id="history-command">
+            <h3 class="hist-head">History</h3>
+            <div class="hist-tools">
+              <input id="histFilter-command" class="hist-filter" type="search" placeholder="Filter history..." autocomplete="off">
+              <button type="button" id="histRefresh-command" class="btn mini hist-refresh">Refresh</button>
+            </div>
+            <table class="grid-table hist-table"><thead><tr><th>ts</th><th>kind</th><th>detail</th></tr></thead>
+              <tbody id="histBody-command"></tbody></table>
+          </div>
+        </section>
+
+        <section class="desk-sheet" id="sheet-inbox" role="tabpanel" aria-label="Notifications">
           <div class="card">
             <h2>Notification inbox</h2>
             <div id="noticeList" class="notice-list"></div>
@@ -118,24 +148,66 @@
               <tbody id="jobBody"></tbody></table>
             <p class="hint">Scheduling is gated by presence; when absent it silently skips with zero notices and zero spend.</p>
           </div>
+          <div class="card desk-history" id="history-job">
+            <h3 class="hist-head">History</h3>
+            <div class="hist-tools">
+              <input id="histFilter-job" class="hist-filter" type="search" placeholder="Filter history..." autocomplete="off">
+              <button type="button" id="histRefresh-job" class="btn mini hist-refresh">Refresh</button>
+            </div>
+            <table class="grid-table hist-table"><thead><tr><th>ts</th><th>kind</th><th>detail</th></tr></thead>
+              <tbody id="histBody-job"></tbody></table>
+          </div>
+        </section>
+
+        <section class="desk-sheet" id="sheet-acks" role="tabpanel" aria-label="Command ACKs">
           <div class="card">
             <h2>Command ACKs</h2>
             <p class="hint">Copying a snapshot opens an ACK row. Approve to move it in progress; Reject requires a reason and writes a PDCA-style rejections.json entry.</p>
             <ul id="ackList" class="ack-list"></ul>
           </div>
+          <div class="card desk-history" id="history-ack">
+            <h3 class="hist-head">History</h3>
+            <div class="hist-tools">
+              <input id="histFilter-ack" class="hist-filter" type="search" placeholder="Filter history..." autocomplete="off">
+              <button type="button" id="histRefresh-ack" class="btn mini hist-refresh">Refresh</button>
+            </div>
+            <table class="grid-table hist-table"><thead><tr><th>ts</th><th>kind</th><th>detail</th></tr></thead>
+              <tbody id="histBody-ack"></tbody></table>
+          </div>
+        </section>
+
+        <section class="desk-sheet" id="sheet-signals" role="tabpanel" aria-label="Human decisions">
           <div class="card">
             <h2>Needs human decision</h2>
             <p class="hint">Blocking signals (stuck &gt; 24h, dependency unfinished, urgent + overdue). Plain text list, no decorative widgets.</p>
             <ul id="signalList" class="signal-list"></ul>
           </div>
-        </div>
+          <div class="card desk-history" id="history-signal">
+            <h3 class="hist-head">History</h3>
+            <div class="hist-tools">
+              <input id="histFilter-signal" class="hist-filter" type="search" placeholder="Filter history..." autocomplete="off">
+              <button type="button" id="histRefresh-signal" class="btn mini hist-refresh">Refresh</button>
+            </div>
+            <table class="grid-table hist-table"><thead><tr><th>ts</th><th>kind</th><th>detail</th></tr></thead>
+              <tbody id="histBody-signal"></tbody></table>
+          </div>
+        </section>
       </section>
 
-      <!-- Plan linkage: gantt and kanban share one data set -->
+      <!-- Plan linkage: the milestone gantt page. Full height, no split.
+           #view-plan-split / #divider are retained as inert ids so the legacy
+           divider initializer keeps working. -->
       <section class="view" id="view-plan">
-        <div class="split" id="view-plan-split" style="--gantt-h:48%">
+        <div class="plan-stack" id="view-plan-split">
+          <div class="card panel milestone-panel" id="milestonePanel">
+            <div class="panel-head"><h2>Milestone plan</h2>
+              <span class="hint">main line | sub-lines | dependency relations | critical path | charter from the PRD</span>
+            </div>
+            <div id="milestoneLayer" class="milestone-layer"></div>
+          </div>
+          <div class="divider" id="divider" title="Drag to resize"><span></span></div>
           <div class="card panel" id="ganttPanel">
-            <div class="panel-head"><h2>Milestone gantt</h2>
+            <div class="panel-head"><h2>Hour axis (flat work units)</h2>
               <span class="hint">Hour axis | 12h ticks | midnight grid | NOW line | drag snaps to hour | cost label first</span>
               <div class="panel-tools">
                 <button id="btnBaseline" class="btn mini" title="Freeze the current window as the baseline">Freeze baseline</button>
@@ -144,7 +216,12 @@
             </div>
             <div id="ganttScroll" class="gantt-scroll"></div>
           </div>
-          <div class="divider" id="divider" title="Drag to resize"><span></span></div>
+        </div>
+      </section>
+
+      <!-- Work-division kanban: its own page, one shared data set. -->
+      <section class="view" id="view-board">
+        <div class="board-page">
           <div class="card panel">
             <div class="panel-head"><h2>Work-division kanban</h2>
               <span class="hint">Cross-column drag = one move over one data set | double-click a card to edit</span></div>
@@ -222,7 +299,9 @@
   <script defer src="./dist/gantt.js"></script>
   <script defer src="./dist/board.js"></script>
   <script defer src="./dist/desk.js"></script>
+  <script defer src="./dist/policy.js"></script>
   <script defer src="./dist/ledger.js"></script>
+  <script defer src="./dist/milestone.js"></script>
   <script defer src="./dist/app.js"></script>
 </body>
 </html>

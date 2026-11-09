@@ -1,17 +1,27 @@
 /* Apple-style default, full light/dark via prefers-color-scheme */
 :root {
-  --bg: #f5f5f7; --card: rgba(255,255,255,.80); --card-solid: #fff;
-  --text: #1d1d1f; --text2: #6e6e73; --text3: #a1a1a6;
+  /* macOS 27 "Golden Gate": readability-fixed Liquid Glass. --glass-alpha is
+     the signature transparency control; the tint is swapped by the theme so a
+     single slider value drives BOTH light and dark glass surfaces. */
+  --glass-alpha: 0.80;
+  --glass-blur: 26px;
+  --glass-edge: rgba(255,255,255,.72);
+  --glass-border: rgba(255,255,255,.48);
+  --bg: #f5f5f7; --card: rgba(255,255,255, var(--glass-alpha)); --card-solid: #fff;
+  --text: #1d1d1f; --text2: #505057; --text3: #79797f;
   --accent: #0071e3; --accent-soft: rgba(0,113,227,.10);
   --hair: 1px solid rgba(0,0,0,.075); --line: rgba(0,0,0,.07);
-  --radius: 14px; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 26px rgba(0,0,0,.055);
+  --radius: 12px; --radius-sm: 9px; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 26px rgba(0,0,0,.055);
   --soft: rgba(0,0,0,.032); --soft2: rgba(0,0,0,.055);
   --ease: cubic-bezier(.22,.8,.26,1);
   --red: #ff3b30; --amber: #ff9f0a; --green: #34c759;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1c1e; --card: rgba(44,44,46,.78); --card-solid: #2c2c2e;
+    /* --bg / --text stay exactly #1c1c1e / #f5f5f7: the dark-theme selftest
+       asserts body background rgb(28,28,30) and text rgb(245,245,247). */
+    --bg: #1c1c1e; --card: rgba(44,44,46, var(--glass-alpha)); --card-solid: #2c2c2e;
+    --glass-edge: rgba(255,255,255,.14); --glass-border: rgba(255,255,255,.11);
     --text: #f5f5f7; --text2: #a1a1a6; --text3: #8e8e93;
     --accent: #0a84ff; --accent-soft: rgba(10,132,255,.16);
     --hair: 1px solid rgba(255,255,255,.10); --line: rgba(255,255,255,.09);
@@ -494,3 +504,200 @@ body.is-linking .gbar-link { opacity: 1; }
    flush and each level steps in one notch. */
 .kb-card[data-depth] { margin-left: calc(var(--depth, 0) * 14px); }
 .gbar .gbar-label { padding-left: calc(10px + var(--depth, 0) * 9px); }
+
+/* ============================================================
+   G2 / macOS 27 "Golden Gate" - the READABILITY-FIXED evolution of
+   Liquid Glass. Layered translucent surfaces (blur + saturate), edge
+   highlights, uniform tighter radii, stronger text contrast, distinct
+   sidebar icon colours, and a real --glass-alpha transparency control.
+   Appended so every earlier rule keeps working untouched.
+   ============================================================ */
+
+/* (a) Layered glass: one shared treatment over the main surfaces. */
+.card, .charter, .sidebar, .topbar, .modal-sheet, .kb-col,
+.spend, .side-purpose, .charter-cell, .kpi, .panel {
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+  border-radius: var(--radius);
+}
+/* The translucent tint is --card (= rgba(tint, --glass-alpha)); the slider
+   therefore changes every glass surface in BOTH themes. */
+.sidebar, .topbar { background: var(--card); }
+.card, .charter, .kb-col, .spend, .side-purpose, .charter-cell, .kpi, .modal-sheet { background: var(--card); }
+.modal-sheet { background: var(--card-solid); }
+
+/* (d) Uniform, tighter radii across the whole surface family. */
+.search-wrap, .select, .text-input, .btn, .nav button, .kb-card,
+.snapshot, textarea, .chips button, .ack-row, .signal-item, .notice,
+.issue-table textarea, .issue-table input[type=date], .issue-table select,
+.field input, .field select, .mini, .col-row, .col-add input, .cname,
+.kb-add-col, .side-collapse, .charter-cell, .spend, .side-purpose, .kpi {
+  border-radius: var(--radius-sm);
+}
+
+/* (c) macOS 27 brings recognisable, distinct sidebar icon colours back. */
+.nav-dot {
+  width: 15px; height: 15px; border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.55), 0 1px 2px rgba(0,0,0,.18);
+}
+.nav button[data-view="desk"] .nav-dot { background: #0a84ff; }
+.nav button[data-view="plan"] .nav-dot { background: #ff9f0a; }
+.nav button[data-view="board"] .nav-dot { background: #34c759; }
+.nav button[data-view="ledger"] .nav-dot { background: #af52de; }
+.nav button[data-view="meter"] .nav-dot { background: #ff2d55; }
+.nav button.active .nav-dot { box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.55); }
+
+/* (b) The signature transparency slider. */
+.glass-control {
+  display: flex; align-items: center; gap: 7px; height: 31px; padding: 0 10px;
+  border-radius: var(--radius-sm); background: var(--card);
+  border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+}
+.glass-control-label { font-size: 11px; font-weight: 650; color: var(--text2); }
+.glass-control output { font-size: 10.5px; color: var(--text2); font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
+.glass-control input[type=range] { width: 92px; accent-color: var(--accent); cursor: pointer; }
+
+/* ---- Two independent views: plan (stacked) and board (own page) ------ */
+#view-board.active { display: flex; }
+.board-page { flex: 1 1 auto; min-height: 0; display: flex; }
+.board-page > .card.panel { flex: 1 1 auto; }
+
+.plan-stack { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+#divider { display: none; }
+.milestone-panel { flex: 0 0 44%; min-height: 190px; }
+#ganttPanel { flex: 1 1 auto; min-height: 200px; }
+.milestone-layer { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
+
+/* ---- Milestone layer: main line / sub-lines / relations / critical --- */
+.ms-legend { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 9px 14px; border-bottom: var(--hair); flex: 0 0 auto; }
+.ms-legend-item { font-size: 9px; font-weight: 750; letter-spacing: .6px; padding: 3px 8px; border-radius: 6px; background: var(--soft2); color: var(--text2); }
+.ms-legend-main { color: #0a84ff; } .ms-legend-sub { color: #00a6a6; }
+.ms-legend-rel { color: #af52de; } .ms-legend-crit { color: #ff3b30; }
+.ms-legend-state { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.ms-axis { display: flex; flex: 0 0 auto; border-bottom: var(--hair); background: var(--card-solid); position: sticky; top: 0; z-index: 3; }
+.ms-corner { flex: 0 0 252px; width: 252px; padding: 5px 12px; font-size: 10px; color: var(--text3); border-right: var(--hair); }
+.ms-ticks { flex: 0 0 var(--ms-w, 600px); width: var(--ms-w, 600px); position: relative; height: 20px; }
+.ms-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); padding-left: 4px; font-size: 9px; color: var(--text3); font-variant-numeric: tabular-nums; }
+.ms-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.ms-layer-inner { min-width: calc(252px + var(--ms-w, 600px)); }
+.ms-rows { display: flex; flex-direction: column; }
+.ms-group { border-bottom: 1px dashed var(--line); }
+.ms-row { display: flex; min-height: 23px; align-items: stretch; }
+.ms-label { flex: 0 0 252px; width: 252px; padding: 3px 12px; border-right: var(--hair); display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; overflow: hidden; white-space: nowrap; font-size: 10px; color: var(--text2); }
+.ms-sub-label { padding-left: 28px; color: var(--text3); }
+.ms-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--text); }
+.ms-name { font-weight: 650; color: var(--text); }
+.ms-meta { flex: 0 1 auto; min-width: 0; font-size: 9px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; }
+.ms-dep { font-size: 9px; font-weight: 700; color: #af52de; background: var(--soft2); padding: 1px 6px; border-radius: 5px; }
+.ms-track { flex: 0 0 var(--ms-w, 600px); width: var(--ms-w, 600px); position: relative;
+  background-image: repeating-linear-gradient(90deg, transparent 0, transparent 95px, var(--line) 95px, var(--line) 96px); }
+.ms-main { position: absolute; top: 2px; height: 18px; border-radius: 6px; display: flex; align-items: center;
+  background: linear-gradient(180deg, #5aa9ff, #0a84ff); color: #fff; overflow: hidden;
+  box-shadow: 0 2px 8px rgba(10,132,255,.32); }
+.ms-main.ms-critical { background: linear-gradient(180deg, #ffb340, #ff7a00); box-shadow: 0 0 0 2px rgba(255,59,48,.55), 0 2px 10px rgba(255,122,0,.45); }
+.ms-sub { position: absolute; top: 3px; height: 15px; border-radius: 5px; display: flex; align-items: center;
+  background: linear-gradient(180deg, #4fd6d6, #00a6a6); color: #fff; overflow: hidden; opacity: .92; }
+.ms-bar-label { padding: 0 8px; font-size: 9px; font-weight: 650; white-space: nowrap; }
+.ms-subrows { display: flex; flex-direction: column; }
+.ms-sub-row .ms-track { min-height: 21px; }
+.ms-relations { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px 14px; border-top: var(--hair); }
+.ms-rel-title { flex: 1 1 100%; font-size: 9.5px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--text3); margin-bottom: 2px; }
+.ms-rel { display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 7px; background: var(--soft); border: 1px solid var(--hair); font-size: 10px; }
+.ms-rel-from, .ms-rel-to { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--accent); }
+.ms-rel-arrow { color: #af52de; font-weight: 800; }
+.ms-rel-type { color: var(--text); font-weight: 700; }
+.ms-rel-lag { color: var(--text3); font-variant-numeric: tabular-nums; }
+.ms-critical-note { padding: 8px 14px 14px; font-size: 10.5px; color: #ff3b30; font-weight: 650; }
+.ms-empty { margin: 20px; padding: 22px; border-radius: var(--radius); background: var(--card); border: 1px dashed var(--accent); text-align: left; }
+.ms-empty-title { font-size: 15px; font-weight: 720; color: var(--accent); margin-bottom: 8px; }
+.ms-empty-detail { font-size: 11.5px; line-height: 1.55; color: var(--text2); margin: 0 0 12px; }
+.ms-empty-fix { font-size: 11.5px; color: var(--text); }
+.ms-empty-fix code { display: inline-block; padding: 4px 9px; border-radius: 7px; background: var(--soft2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--accent); }
+.ms-empty-hint { font-size: 10.5px; color: var(--text3); margin: 10px 0 0; }
+
+/* ============================================================
+   C9 / B5 - board keyboard model. Appended only; all earlier rules
+   above are untouched. Multi-selection gets a distinct dashed ring
+   so it reads differently from the single-selection box shadow.
+   ============================================================ */
+.kb-card.is-multi-selected {
+  outline: 2px dashed #af52de;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(175,82,222,.35), 0 6px 18px rgba(0,0,0,.14);
+}
+#view-board .panel-head { flex-wrap: wrap; }
+.kb-help {
+  margin-left: auto; font-size: 10px; line-height: 1.4; color: var(--text3);
+}
+
+/* ============================================================
+   I-019 / P-UI - per-unit desk sheets + queryable history.
+   The tab bar is a macOS 27 segmented control (rounded glass track,
+   active pill). Each sheet keeps one unit card plus its History block;
+   only one sheet shows at a time, the policy tables below stay visible.
+   Appended so every earlier rule keeps working untouched.
+   ============================================================ */
+
+/* ---- Segmented tab bar --------------------------------------------- */
+.desk-tabs {
+  display: inline-flex; align-items: center; gap: 3px;
+  margin: 12px 2px 10px; padding: 3px; border-radius: var(--radius-sm);
+  background: var(--card); border: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+}
+.desk-tab {
+  border: 0; background: transparent; border-radius: 7px; padding: 6px 15px;
+  font-size: 12px; color: var(--text2); transition: all .18s var(--ease);
+}
+.desk-tab:hover { background: var(--soft); color: var(--text); }
+.desk-tab.active {
+  background: var(--card-solid); color: var(--text); font-weight: 620;
+  box-shadow: 0 1px 4px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+/* ---- Sheets: one visible at a time, content still rendered ---------- */
+.desk-sheet { display: none; flex-direction: column; gap: 12px; }
+.desk-sheet.active { display: flex; }
+
+/* ---- Per-sheet History block ---------------------------------------- */
+.desk-history { padding-top: 12px; }
+.hist-head { margin: 0 0 2px; font-size: 12px; font-weight: 650; letter-spacing: -.2px; color: var(--text2); }
+.hist-tools { display: flex; align-items: center; gap: 8px; margin: 6px 0 4px; }
+.hist-filter {
+  flex: 1 1 auto; max-width: 320px; height: 28px; padding: 0 9px;
+  border: var(--hair); border-radius: var(--radius-sm);
+  background: var(--card-solid); font-size: 11.5px;
+}
+.hist-refresh {
+  width: auto; height: auto; padding: 4px 10px; font-size: 11px;
+  border: var(--hair); background: var(--card-solid); color: var(--text2);
+}
+.hist-refresh:hover { color: var(--text); }
+.hist-table { margin-top: 2px; }
+.hist-table td { padding: 5px 8px; font-size: 11px; }
+.hist-table .hist-ts {
+  width: 1%; white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums; color: var(--text2);
+}
+.hist-kind {
+  display: inline-block; font-size: 9.5px; font-weight: 700; letter-spacing: .2px;
+  padding: 1px 7px; border-radius: 5px; background: var(--soft2); color: var(--text2);
+  white-space: nowrap;
+}
+.hist-detail { color: var(--text); word-break: break-word; }
+.hist-row.hist-status td { color: var(--text3); text-align: center; padding: 12px 8px; }
+
+/* ACK row creation time (small, tabular). */
+.ack-created {
+  margin-left: auto; font-size: 10px; color: var(--text3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+

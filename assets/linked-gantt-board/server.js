@@ -8,8 +8,7 @@
  * backups under ./data/backups/; POST /shutdown exits 0 after responding.
  * GET /healthz is unauthenticated liveness. Errors surface as HTTP 400 + {error}
  * so callers can see the error code. Exit 1 on unhandled request error.
- * VERSION: 2.0.0 - state/tasks/columns/issues/command/snapshot/import/shutdown
- * plus acks (POST/GET/PUT), /healthz, backup/restore.
+ * VERSION: 2.1.0 - desk_events log + /api/events (queryable history for the desk sheets)
  */
 const http = require('http');
 const fs = require('fs');
@@ -18,7 +17,9 @@ const store = require('./db');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PANEL_PORT || 4174);
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
+/* I-019: the four desk sheets are the allowed desk_events units. */
+const EVENT_UNITS = ['command', 'ack', 'signal', 'job'];
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -60,11 +61,17 @@ const server = http.createServer(async (req, res) => {
       }, store.degradedInfo()));
     }
     if (p === '/api/state' && method === 'GET') return json(res, 200, store.state());
+    /* Read-only milestone plan (PRD ingestion, invariant I9). Never served as
+       a raw /data/ file: the UI consumes this JSON contract only. */
+    if (p === '/api/plan' && method === 'GET') return json(res, 200, store.plan());
     if (p === '/api/snapshot' && method === 'POST') return json(res, 200, store.snapshot());
 
     /* S2 ACK command loop. */
     if (p === '/api/acks' && method === 'GET') return json(res, 200, store.listAcks());
     if (p === '/api/acks' && method === 'POST') return json(res, 200, store.createAck(await body(req)));
+    /* C9 B1/B6: read-only policy reference tables (seeded from ./data JSON). */
+    if (p === '/api/policy/approvals' && method === 'GET') return json(res, 200, store.listApprovals());
+    if (p === '/api/policy/owner-scope' && method === 'GET') return json(res, 200, store.listOwnerScopes());
     if (p === '/api/backup' && method === 'POST') return json(res, 200, store.backup());
     if (p === '/api/restore' && method === 'POST') {
       const data = await body(req);
@@ -97,6 +104,21 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, store.updateIssue(decodeURIComponent(m[1]), await body(req)));
     }
     if (p === '/api/command' && method === 'PUT') return json(res, 200, store.setCommand((await body(req)).text));
+    /* I-019: queryable desk event history for the four desk sheets. */
+    if (p === '/api/events' && method === 'GET') {
+      const unit = url.searchParams.get('unit');
+      if (unit && EVENT_UNITS.indexOf(unit) < 0) {
+        return json(res, 400, { error: 'unknown unit: ' + unit + ' (allowed: ' + EVENT_UNITS.join(', ') + ')' });
+      }
+      return json(res, 200, {
+        events: store.listEvents({
+          unit: unit || undefined,
+          q: url.searchParams.get('q') || undefined,
+          limit: url.searchParams.get('limit') || undefined,
+        }),
+      });
+    }
+    if (p === '/api/events' && method === 'POST') return json(res, 200, store.createEvent(await body(req)));
     /* R20 task relationships. */
     if (p === '/api/task-deps' && method === 'GET') return json(res, 200, store.listTaskDeps());
     if (p === '/api/task-deps' && method === 'PUT') {

@@ -2,10 +2,10 @@
 name: ai-project-ops
 display_name: 'AI Project Ops'
 display_name_en: 'AI Project Ops'
-description: 'Operating discipline for AI-led engineering projects (especially clean-room rewrites and reverse-engineering-driven development) where a human directs and an AI executes. Use when starting or running such a project, or when the user asks about PDCA task logging, subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / linked gantt), presence-gated scheduled jobs, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "is it worth enabling", "rework", "re-planning", "linked gantt board", "day-one bootstrap", "script proposal", "when to script", "ASD-STE100", "simplified technical English", "aircraft maintenance manual style", "short sentences", "80% STE". Not for: pure report or document generation, multi-tenant authentication or authorization systems, 3D or spatial views, cloud file sync, or answering conceptual questions about what skills are or how the skill system works.'
+description: 'Operating discipline for AI-led engineering projects (especially clean-room rewrites and reverse-engineering-driven development) where a human directs and an AI executes. Use when starting or running such a project, or when the user asks about PDCA task logging, subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / linked gantt), presence-gated scheduled jobs, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "is it worth enabling", "rework", "re-planning", "linked gantt board", "day-one bootstrap", "script proposal", "when to script", "ASD-STE100", "simplified technical English", "aircraft maintenance manual style", "short sentences", "80% STE", "discipline gate", "Stop hook", "session start hook", "issue ledger update", "scaffold plan", "task dependency DAG", "PRD to action", "milestone main line", "work breakdown structure", "macOS 27 Golden Gate", "Liquid Glass", "transparency slider", "benchmark adoption", "template registry", "master instance publish", "competitive research landing". Not for: pure report or document generation, multi-tenant authentication or authorization systems, 3D or spatial views, cloud file sync, or answering conceptual questions about what skills are or how the skill system works.'
 description_zh: 'Operating discipline for AI-led engineering projects: PDCA task logs, subagent briefs, token metering, a human-AI command panel, and presence-gated scheduled automation. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or conceptual questions about skills.'
 description_en: 'Apply traceability, cost-control, and safe-automation rules to AI-led engineering projects: a single PDCA ledger, self-contained subagent briefs, measured token metering, a built command panel, and measured on/off switches. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or answering conceptual questions about skills.'
-version: '1.2.0'
+version: '1.8.0'
 author: 'Chiang Chenghsin'
 agent_created: true
 allowed-tools:
@@ -147,7 +147,12 @@ then decide enable / keep-disabled / delete. Deterministic counting and status
 checking is script territory — do not wake an LLM for it.
 Details: [references/metering.md](references/metering.md).
 
-## 7. Structure gates (optional, for codebases)
+## 7. Structure gates (default ON, for codebases)
+
+Default ON, not optional. `scripts/discipline-gate.js` recomputes the
+dependency graph every turn (I4 cycles, I5 dangling ids and orphans) and
+writes `docs/evidence/structure-gate.json`. A cycle or a dangling id
+blocks the turn.
 
 For rewrites: keep a symbol-level code graph (project / type / member + implements /
 references / tests) and 2–3 graph queries as structural acceptance rules (layer
@@ -156,6 +161,12 @@ bans, contract coverage, test wiring). Rebuild at milestone end; red rules block
 source of truth.
 
 ## 8. Day-one bootstrap checklist (new project)
+
+**Templates are mandatory, not optional.** Run `node scripts/scaffold.js`
+before any other bootstrap step. It instantiates `docs/TASK-LOG.md` and
+`docs/PLAN.md` from `templates/` (idempotent, never overwrites). The Stop
+hook checks invariant I3; a hand-written plan without the
+`ai-project-ops.plan/1.0` marker is FAIL.
 
 Create, in order: `docs/TASK-LOG.md` (header block from
 [references/task-log-pdca.md](references/task-log-pdca.md)); `tools/usage_probe.py`
@@ -230,3 +241,82 @@ Provenance is graded in the reference file. The 2026-10 ASD-STE100 suggestion is
 corroborated by secondary reports only. Do not cite an unverified primary post
 or a disputed view count. Chinese has no official ASD-STE100 clause; treat the
 ~20-character sentence as a local approximation.
+
+## 12. Hooks are mandatory (C5 discipline layer)
+
+A human reported from real usage that the AI "refuses to update the issue
+ledger every time". Prose rules were the cause: they are optional at runtime.
+The bottleneck was never model capability. This skill buys management cost to
+compensate for weak project management, weak software engineering and weak
+human command of an AI swarm; that cost is worthless if the AI skips it.
+Discipline is therefore enforced by two hooks plus an agent-side write path.
+Install at PROJECT level only; see `hooks/INSTALL.md`.
+
+- Start of turn: `scripts/session-start.js` (UserPromptSubmit) injects the
+  open-issue count and the three mandatory closing actions, and snapshots the
+  session.
+- Issue ledger: `scripts/issue.js list | add | update | close | no-new --reason`.
+  Every turn either changes an issue or records a deliberate `no-new`. Silence
+  is a FAIL (I1). The complaint that opened this round became entry I-001 in
+  `docs/DISCIPLINE-ISSUES.md`.
+- End of turn: `scripts/discipline-gate.js` (Stop) recomputes eight invariants
+  (`docs/DISCIPLINE-INVARIANTS.md`). Missing I1-I6 -> exit 2; the turn is
+  blocked with a concrete fix hint. I7/I8 are UNCERTAIN and never block.
+- Templates: `scripts/scaffold.js`. Section 7 defaults ON.
+- Negative control: `node scripts/selftest-discipline.js` must print 12/12.
+  A gate that never fires is decoration.
+- Release: `python scripts/package.py --out <zip>` — reproducible exclusions,
+  UTF-8 names, checksum outside the archive.
+
+Do not claim discipline was followed without pasting the gate output. A clean
+sentence is not evidence.
+
+## 13. PRD-to-action is the plan backbone (I9)
+
+A plan with no milestones, no sub-lines and no relations is an empty plan.
+Three files are the single source for milestone structure: `docs/PRD.md`,
+`docs/evidence/milestones.json` and
+`assets/linked-gantt-board/data/milestone-plan.json`. The main line is the
+ordered milestones; sub-lines are the work units per milestone; relations are
+the dependency edges. `scripts/prd-to-action.js` enforces falsifiable
+Completion fields and concrete Verify commands by reusing the adversarial gate
+of the locally installed `prd-to-action` skill (user-level skills directory,
+`prd-to-action/SKILL.md`, Phase 0 INGEST and the Milestone template). A turn
+that edits the plan MUST re-run that gate: invariant I9, HARD/blocking. See
+`docs/DISCIPLINE-INVARIANTS.md`.
+
+## 14. Competitive research is a gate, not a report
+
+R17 researched five competitor groups (Linear + Height, Notion + Monday.com,
+ClickUp + Asana + Motion, Devin + Jules + Copilot, and the China-market group
+Feishu Project / ONES / PingCode / Teambition): 5 reports, 226 sources,
+50 ALIGN / 30 SURPASS / 24 NEVER-COPY items. The promoted conclusion is
+`docs/competitive-synthesis.md` with six ordered "What to build first" items.
+A human later pointed out that none of it had reached `templates/`. That is a
+real failure: research without a landing map and a gate is wasted work.
+
+- `docs/BENCHMARK-ADOPTION.md` maps all six items to IMPLEMENTED / PARTIAL /
+  IMPLEMENTED with `file:line` evidence. After C9 all six items are
+  implemented in code and asserted by 89 CDP cases; I-006 was corrected, not
+  rebuilt.
+- Four templates now carry a `Benchmark:` header naming the report item they
+  came from: template governance (Monday master -> instance -> Publish, A1),
+  agent session (Linear A1/A2), approval matrix (Asana A3), owner scope
+  (synthesis claim 4 + B6).
+- `templates/registry.json` + `scripts/scaffold.js` v2.0.0 make that governance
+  executable: versioned masters, a template lock, role-checked `--publish`,
+  drift `--status`, and a no-overwrite rule for existing instances.
+- `scripts/benchmark-adoption.js` (Stop-hook invariant I10) fails when any
+  landing disappears. `--negative` proves it has discrimination.
+- The Chinese research reports stay in hidden `.research/` directories, are
+  excluded from the release, and are NOT read by the gate. Claims graded
+  UNCERTAIN in the synthesis stay excluded.
+
+Do not write another competitive report without adding its landing row and
+running I10 in the same turn.
+The hooks are INSTALLED at project level in this repository
+(`.workbuddy/settings.json`); they are not merely documented. Never write them
+into a user-global settings file.
+A cold reader (R4) found the first adoption draft overstated drift, publish and
+instance creation; `docs/cold-read/R4-benchmark-adoption.md` is retained. Fix a
+landing claim with code, never with wording.

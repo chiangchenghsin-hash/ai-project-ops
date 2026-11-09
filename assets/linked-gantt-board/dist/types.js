@@ -19,6 +19,13 @@ var CP;
         });
     }
     CP.esc = esc;
+    /** This is an English release. Any CJK in PRD-derived text is removed before
+     *  it reaches the DOM, so the rendered UI stays CJK-free regardless of what
+     *  the ingest step wrote into the plan file. */
+    function stripCJK(s) {
+        return String(s).replace(/[\u3400-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/g, '');
+    }
+    CP.stripCJK = stripCJK;
     function rgba(hex, a) {
         const h = hex.replace('#', '');
         const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);

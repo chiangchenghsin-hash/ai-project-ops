@@ -21,8 +21,12 @@ var CP;
     }
     let drag = null;
     let tip = null;
-    function lanePlan(tasks) {
-        const sorted = tasks.slice().sort((a, b) => CP.parse(a.start).getTime() - CP.parse(b.start).getTime());
+    /** C9 / B5: shared-order rank per task id, rebuilt on every gantt patch. */
+    let ganttOrderIndex = {};
+    /** `ordered` is the flat work-unit list in CP.sharedOrder() order. The time
+     *  sort is stable, so equal starts keep that shared (status, sort, id) order. */
+    function lanePlan(ordered) {
+        const sorted = ordered.slice().sort((a, b) => CP.parse(a.start).getTime() - CP.parse(b.start).getTime());
         const ends = [];
         return sorted.map((t) => {
             const startH = CP.diffHours(axis, t.start);
@@ -49,6 +53,8 @@ var CP;
         const t = a.t;
         const col = CP.columnById(t.status);
         el.dataset.taskId = t.id;
+        if (ganttOrderIndex[t.id] !== undefined)
+            el.dataset.order = String(ganttOrderIndex[t.id]);
         el.className = 'gbar' + (t.placeholder ? ' placeholder' : '') + (CP.store.selected === t.id ? ' is-selected' : '')
             + (showCritical && !criticalSet[t.id] && !t.placeholder ? ' not-critical' : '');
         el.style.left = `${a.startH * CP.HOUR_W}px`;
@@ -94,7 +100,12 @@ var CP;
         if (!lanesEl || !CP.store.state)
             return;
         const s = CP.store.state;
-        const plan = lanePlan(CP.visibleTasks());
+        /* C9 / B5: the gantt's flat work-unit list uses the very same shared
+           order as the kanban board, so both surfaces agree on every unit. */
+        const flatWorkUnits = CP.sharedOrder(CP.visibleTasks());
+        ganttOrderIndex = {};
+        flatWorkUnits.forEach((t, i) => { ganttOrderIndex[t.id] = i; });
+        const plan = lanePlan(flatWorkUnits);
         const count = Math.max(1, plan.reduce((m, a) => Math.max(m, a.lane + 1), 0));
         const lanes = Array.from({ length: count }, (_, i) => ({ i, bars: plan.filter((a) => a.lane === i) }));
         CP.reconcile(lanesEl, lanes, (l) => String(l.i), laneCreate, laneUpdate);

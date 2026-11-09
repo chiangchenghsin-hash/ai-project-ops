@@ -14,7 +14,7 @@ unattended automation. Ships as a Claude Code / WorkBuddy skill.
 
 | File | What it gives you |
 |---|---|
-| `SKILL.md` | The 11 core disciplines, loaded when the skill triggers; 8-field frontmatter |
+| `SKILL.md` | The 12 core disciplines, loaded when the skill triggers; 8-field frontmatter |
 | `references/task-log-pdca.md` | PDCA ledger template + scoring rules (`docs/TASK-LOG.md`) |
 | `references/subagent-brief.md` | Task-brief template for delegating to subagents |
 | `references/metering.md` | Token/cost metering rules + measured on/off protocol |
@@ -22,12 +22,35 @@ unattended automation. Ships as a Claude Code / WorkBuddy skill.
 | `references/linked-board-reference.md` | Spec↔implementation map, run/verify commands, remaining gaps for the shipped panel |
 | `references/packaging-spec.md` | Official 8-field frontmatter, `@references` layout, zip rules, red lines, release checklist |
 | `references/response-style-ste100.md` | 80% ASD-STE100 controlled response style, graded provenance, Chinese adaptation and the mandatory fact-retention gate |
+| `references/effectiveness.md` | C4 confirmatory no-skill round: UNCERTAIN verdict, exact p, failure cells, threat reconciliation and the 18.0/20 caveat |
 | `assets/linked-gantt-board/` | Working TypeScript panel + SQLite service (starter kit): hour-axis gantt, linked drag, custom status columns, command snapshot, issue ledger, metering, CDP verification |
-| `scripts/` | `validate_skill.py`, `verify.js`, `localize_check.py` (validation / E2E / CJK gate) |
-| `templates/` | Blank `TASK-LOG.template.md`, `pdca-entry.template.md`, `subagent-brief.template.md` |
+| `assets/linked-gantt-board/data/milestone-plan.json` | Panel milestone-plan data: main line, sub-lines and relations (one of the three I9 single sources) |
+| `docs/PRD.md` | PRD source for milestone structure; the plan backbone per SKILL.md section 13 |
+| `docs/evidence/milestones.json` | Machine-readable milestone structure (I9 single source) |
+| `references/prd-to-action.md` | PRD-to-action harness map: Phase 0 INGEST, Milestone template and the adversarial gate wiring |
+| `scripts/` | `validate_skill.py`, `verify.js`, `localize_check.py`, `session-start.js`, `discipline-gate.js`, `prd-to-action.js`, `issue.js`, `scaffold.js`, `selftest-discipline.js`, `merge-hooks.py`, `package.py` |
+| `templates/` | Blank `TASK-LOG.template.md`, `PLAN.template.md`, `pdca-entry.template.md`, `subagent-brief.template.md` — instantiate with `node scripts/scaffold.js` |
+| `hooks/` | `settings.fragment.json` + `INSTALL.md`: project-level UserPromptSubmit / Stop hooks, never user-global |
+| `docs/DISCIPLINE-INVARIANTS.md` | The ten machine-checked invariants (I1-I10), fail-open rules, wiring status and the negative control |
+| `docs/competitive-synthesis.md` | R17 competitive synthesis: four claims, never-copy list, six ordered build-first items |
+| `docs/BENCHMARK-ADOPTION.md` | R17 -> shipped landing map; every build-first item has a status and code evidence |
+| `docs/REMEDIATION-PLAN-C9.md` | Pre-registered C9 plan: A1-A8 acceptance, failure cells, mutually exclusive ownership, non-goals |
+| `templates/registry.json` | Versioned master registry with publish roles, instances and benchmark provenance |
+| `docs/DISCIPLINE-ISSUES.md` | Skill's own defect ledger: twelve issues from real usage; I-006 plus I-008..I-012 OPEN pending main-session verification |
 | `docs/RELEASE-CHECKLIST.md` | Pre-publish gates + post-publish trigger-regression reminder |
 | `docs/TRIGGER-REGRESSION.md` | 20 positive / 10 negative trigger phrases + pass rule |
 | `CHANGELOG.md` | Release history |
+
+**New in 1.5.0 (C7).** The PRD-to-action backbone makes `docs/PRD.md`,
+`docs/evidence/milestones.json` and
+`assets/linked-gantt-board/data/milestone-plan.json` the single source for
+milestone structure, enforced by `scripts/prd-to-action.js` (invariant I9).
+The reference panel now ships two standalone views: the Milestone gantt and
+the Work-division kanban on separate pages, with the sidebar/charter
+description (Purpose / Technical resources / Evaluation) filled. The visual
+style is macOS 27 "Golden Gate" (WWDC26): readability-fixed Liquid Glass, a
+transparency slider, and colored sidebar icons. See
+`references/prd-to-action.md` and `CHANGELOG.md`.
 
 ## The disciplines
 

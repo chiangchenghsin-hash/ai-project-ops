@@ -105,40 +105,37 @@ var CP;
         if (!s)
             return;
         const m = s.meta || {};
-        const val = (k) => CP.esc(String(m[k] || ''));
+        const val = (k) => CP.esc(CP.stripCJK(String(m[k] || '')));
         openModal(`<h3>Project charter</h3>
-      <p class="modal-sub">First-principles framing shown on every view. It lives in SQLite, so every fork states its own. The Evaluation field states the method, never a live score.</p>
+      <p class="modal-sub">First-principles framing shown on every view. It lives in SQLite, so every fork states its own. The values originate from the ingested milestone plan. The Evaluation field states the method, never a live score.</p>
       <form id="charterForm"><div class="form-grid">
         <div class="field wide"><label>Purpose - why this project exists</label>
-          <textarea id="cPurpose" rows="3" placeholder="Not set.">${val('project_purpose')}</textarea></div>
+          <textarea id="cPurpose" rows="3" placeholder="Loaded from the milestone plan">${val('project_purpose')}</textarea></div>
         <div class="field wide"><label>Technical resources - what it runs on</label>
-          <textarea id="cResources" rows="3" placeholder="Not set.">${val('project_resources')}</textarea></div>
+          <textarea id="cResources" rows="3" placeholder="Loaded from the milestone plan">${val('project_resources')}</textarea></div>
         <div class="field wide"><label>Evaluation - how it is judged, by PDCA iteration</label>
-          <textarea id="cEval" rows="3" placeholder="Not set.">${val('project_evaluation')}</textarea></div>
+          <textarea id="cEval" rows="3" placeholder="Loaded from the milestone plan">${val('project_evaluation')}</textarea></div>
       </div><div class="modal-actions">
         <button type="button" class="btn" data-action="close">Cancel</button>
         <button type="submit" class="btn btn-primary">Save charter</button></div></form>`);
     }
     CP.openCharterModal = openCharterModal;
-    /** First-principles charter: three labelled fields, explicit when unset. */
+    /** First-principles charter: three labelled fields plus the sidebar purpose.
+     *  Every value arrives through /api/state (seeded from the plan file by the
+     *  service); nothing is hardcoded here and text is kept CJK-free. */
     function patchCharter() {
         const s = CP.store.state;
         if (!s)
             return;
         const m = s.meta || {};
         const put = (id, key) => {
-            const el = byId(id);
-            const text = String(m[key] || '').trim();
-            el.textContent = text || 'Not set.';
-            el.classList.toggle('unset', !text);
+            byId(id).textContent = CP.stripCJK(String(m[key] || '')).trim();
         };
         put('charterPurpose', 'project_purpose');
         put('charterResources', 'project_resources');
         put('charterEval', 'project_evaluation');
-        const side = byId('sidePurpose');
-        const p = String(m.project_purpose || '').trim();
-        side.textContent = p || 'Purpose not set.';
-        side.classList.toggle('unset', !p);
+        byId('sidePurpose').textContent = CP.stripCJK(String(m.project_purpose || '')).trim();
+        byId('sideCharter').textContent = CP.stripCJK(String(m.project_side_purpose || '')).trim();
     }
     /** Sidebar work-division roster plus a measured spend glance. No live counts
      *  on any label; the figures below are measured, not tallied by the UI. */
@@ -325,7 +322,8 @@ var CP;
     }
     function initKeys() {
         document.addEventListener('keydown', (e) => {
-            const typing = e.target.matches('input, textarea, select');
+            const el = e.target;
+            const typing = !!el && typeof el.matches === 'function' && el.matches('input, textarea, select');
             if (e.key === 'Escape') {
                 if (modalOpen)
                     closeModal();
@@ -358,6 +356,7 @@ var CP;
         CP.initBoard();
         CP.initDesk();
         CP.initLedger();
+        CP.initMilestones();
         CP.store.subscribe(paintSelectionFalse);
         CP.store.subscribe(patchCharter);
         CP.store.subscribe(patchSidebar);

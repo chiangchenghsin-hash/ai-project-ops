@@ -12,7 +12,7 @@
 > A gap found and fixed during verification belongs in Check; its lesson in Act.
 
 ## Scoreboard
-PASS 12 / FAIL 1
+PASS 17 / FAIL 1
 
 ---
 
@@ -1151,7 +1151,443 @@ PASS 12 / FAIL 1
   a stale `GH_TOKEN` environment variable overrides `gh auth login` and
   reproduces the earlier 401, so the token must be removed from the
   environment before authenticating. Score: +1.
-  `Re-check (main): git push -> pending human run — pending`
+  `Re-check (main): git push -u --force origin master:main -> 1c355e4 forced onto origin/main (86 files, 4 PNGs included; remote tip and preview-dark.png verified via API) — PASS`
 
 ---
 
+### 2026-11-08 09:50 C4 - new execution freeze (by: main session)
+- **P** Plan: run the confirmatory no-skill round under a NEW freeze id.
+  Acceptance: design freeze untouched, pre-registered before any data,
+  dimension-10 scoring rule locked before scoring, blind map seeded, hashes
+  anchored outside the freeze file.
+- **D** Do: created `docs/evidence/confirmatory/freeze-exec.json`,
+  `freeze-exec-manifest.json`, `blind-map.json` (16 labels, seed 20261105),
+  and `rater-rubric.md`. No frozen C2 artifact was edited.
+- **C** Check: 4 frozen SHA-256 re-checked -> all MATCH before execution:
+  `design freeze MATCH True`, `exec freeze MATCH True`,
+  `DOC docs/IMPROVEMENT-PLAN.md MATCH`,
+  `DOC docs/EFFECTIVENESS-EXPERIMENT-DESIGN.md MATCH`.
+- **A** Act: **C4 correction recorded; not scored** (a correction is not a
+  scored task). Lesson carried forward: an execution round needs its own id;
+  reusing a design freeze would let "design done" be mistaken for "data seen".
+
+---
+
+### 2026-11-08 10:45 C4 - confirmatory A/B execution and verdict (by: main session, 16 subagent sessions + 2 blind raters)
+- **P** Plan: 8 frozen paired cards, 16 independent sessions, 2 blind raters,
+  conservative arbitration, exact randomization test over 256 assignments,
+  three-cell verdict. Acceptance = raw outputs and scores persisted,
+  recomputation script exit 0, verdict applied from the frozen rules.
+- **D** Do: 16 raw outputs R01..R16; 2 blind score files; main-session
+  unblinding, `analysis.json`, `recompute.py`, `report.json`,
+  `round-status.json`, `references/effectiveness.md`. E08 pre-check found the
+  token `experiment` only inside the frozen filename
+  `EFFECTIVENESS-EXPERIMENT-DESIGN.md`; not a marker.
+- **C** Check: `python docs/evidence/confirmatory/recompute.py` ->
+  `PASS  rater disagreement count = 2 (R01,R12)`,
+  `PASS  paired differences = [0, 1, 0, 0, 1, 0, 0, 1]`,
+  `PASS  T_obs = 3 over 2^8 = 256 assignments`,
+  `PASS  exact one-sided p = 0.125000 ; alpha = 0.05`,
+  `PASS  failure cells E10 = C2,C4`,
+  `PASS  leave-one-out p range = 0.125000 .. 0.250000`,
+  `VERDICT UNCERTAIN`, `RECOMPUTE_MATCH PASS`, `RECOMPUTE_EXIT=0`.
+  `node scripts/verify.js` -> `Result: 71/71 passed`, `RESULT: PASS (exit 0)`.
+  V1 drift recorded honestly: external commit `1c355e4` (2026-11-06) added
+  `src/graph.ts` and grew the shipped selftest from 41 to 71 assertions
+  between the C2 freeze and this round; frozen artifacts were untouched, so
+  the round is not void, but comparability with the C2 release state is weaker.
+- **A** Act: **UNCERTAIN — not scored** (per header rule, only PASS/FAIL
+  verdicts enter the scoreboard). Three independent reasons: 2 rater
+  disagreements, p = 0.125 > 0.05, E10 failure cells. No veto fired. The
+  pre-locked dimension-10 rule is applied as written: 1.5 -> 2.0, total
+  **18.0/20**. This score measures evidence availability, NOT demonstrated
+  skill effectiveness; the effect question remains UNCERTAIN. Structural gap
+  found during analysis (belongs in Check): with n=2 per cell the minimum
+  per-cell p is 0.25 > 0.05, so PASS is unreachable at cell level. Fix only
+  under a NEW C5 freeze id with >= 3 pairs per cell. No retest, no rubric
+  change, no post-hoc rewording.
+
+---
+
+
+---
+
+### 2026-11-08 C5 machine-enforced discipline (tier M, by: main session)
+
+- **P** Plan: one human report from real usage — "the AI never updates the
+  issue ledger, discipline is poor, software engineering is barely used, the
+  plan template is skipped, task relationships are weak". Root cause found by
+  inspection: `db.js:452` exports `updateIssue` but `server.js` has no
+  `/api/issues` route and no agent-side CLI; `scripts/` had zero hooks and zero
+  invariants; `SKILL.md` section 8 never listed `templates/`; section 7 said
+  "(optional)". Acceptance (locked before the fix): (1) an offline agent-side
+  issue path exists and all six reported defects are registered with replies;
+  (2) a Stop gate blocks a skipped turn with exit 2 and passes a compliant turn
+  with exit 0, proven by a negative control; (3) templates are instantiated by
+  a command, not handwritten; (4) section 7 defaults ON and the gate recomputes
+  the dependency DAG; (5) no frozen artifact is edited, no rubric changes, the
+  score stays 18.0/20. Non-goals: no edit to user-global settings.json, no UI
+  dependency lines (I-006 stays OPEN), no C4 re-test, no new subagent package.
+- **D** Do: main session only, no subagent — this round's defect was precisely
+  "delegated work never gets verified", so delegating again would reproduce it.
+  New: `scripts/issue.js`, `session-start.js`, `discipline-gate.js`,
+  `scaffold.js`, `selftest-discipline.js`, `merge-hooks.py`, `package.py`;
+  `templates/PLAN.template.md`; `hooks/settings.fragment.json`, `hooks/INSTALL.md`;
+  `docs/DISCIPLINE-INVARIANTS.md`, `docs/DISCIPLINE-ISSUES.md`;
+  `docs/evidence/issues.json`. Changed: `SKILL.md` (v1.4.0, section 7 default
+  ON, section 8 scaffold mandate, new section 12, description triggers),
+  `README.md`, `CHANGELOG.md`. Six issues I-001..I-006 registered via the new
+  CLI; five closed, I-006 left open with a PARTIAL reply. No product code under
+  `assets/` was touched.
+- **C** Check: real command output, pasted.
+  - `node scripts/selftest-discipline.js` -> `DISCIPLINE SELFTEST: 12/12 passed  RESULT: PASS`,
+    `SELFTEST_EXIT=0`; skipped turn -> `exit=2`, `FAIL I1/I2/I3`, fix hint present;
+    compliant turn -> `exit=0`, `I1=PASS I2=PASS I3=PASS I4=PASS I5=PASS I6=PASS`.
+  - `python scripts/validate_skill.py` -> `VALIDATE_EXIT=0`,
+    `38 links / 53 md files; broken=0`, `cjk_count=0`, `leaks=0`;
+    `validation_scripts_have_headers=ok`.
+  - `python scripts/localize_check.py` -> `Text files scanned: 117`,
+    `CJK_COUNT=0`, `LOCALIZE_EXIT=0`.
+  - `python -m py_compile scripts/merge-hooks.py scripts/package.py ...` -> `PYCOMPILE_EXIT=0`;
+    `node --check` on five new scripts -> `NODE_CHECK_EXIT=0`.
+  - `python scripts/merge-hooks.py --target <GLOBAL_SETTINGS>` ->
+    `FAIL global target blocked`, `GLOBAL_GUARD_EXIT=2` (expected: the guard works).
+  - `node scripts/verify.js` on the default port -> `RESULT: FAIL (exit 1)`,
+    `EADDRINUSE :::4174`, and `FAIL Page identity ... got="G9N9N ... Command Desk"`.
+    This is an ENVIRONMENT conflict, not a regression: another project owns 4174
+    and the selftest's first-line guard correctly refused to test a foreign page.
+    The foreign service was NOT touched (`4174 still serving: 200`).
+  - `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` ->
+    `Result: 71/71 passed`, `RESULT: PASS (exit 0)`,
+    `0 JS exceptions / console errors`.
+  - `python docs/evidence/confirmatory/recompute.py` -> `VERDICT UNCERTAIN`,
+    `RECOMPUTE_MATCH PASS`, `RECOMPUTE_EXIT=0`; four frozen hashes all `True`.
+- **A** Act: PASS. Lesson carried into later briefs: prose discipline is
+  optional at runtime; a management-cost skill only works when the cost is
+  enforced by a start injection, a write path and a blocking Stop gate. A gate
+  needs a negative control, or it is decoration. The first E2E FAIL is retained
+  above rather than hidden: it proves the foreign-page guard has discrimination.
+  The 18.0/20 score and the UNCERTAIN effectiveness verdict are unchanged —
+  this round improves enforcement, not evidence of skill effectiveness.
+
+Re-check (main): `node scripts/discipline-gate.js` -> I1..I6 PASS, I7 GREEN, I8 freeze hash=MATCH, `DISCIPLINE GATE PASS (6 hard / 2 soft)`, `GATE_EXIT=0` — PASS. Scoreboard PASS 13 / FAIL 1. The 18.0/20 rubric score is NOT changed by this release: enforcement is not effectiveness evidence.
+
+---
+
+### 2026-11-08 C6 correction - PII redaction in C5 Check evidence (by: main session)
+
+- **P** Plan: `validate_skill.py` reported
+  `no_absolute_personal_paths_or_credentials: leaks=1: docs/TASK-LOG.md: path '<USER_HOME>'`,
+  exit 1 (warning). Cause: the C5 Check pasted the literal user-global
+  settings path as evidence that the merge guard blocks it. Ironic and real:
+  proving "do not write a global path" wrote one into the release artifact.
+- **D** Do: replaced that ONE path token with `<GLOBAL_SETTINGS>` in the C5
+  Check. Nothing else in the entry changed: the command, the verdict, the exit
+  code 2 and all numbers are untouched. A No `.workbuddy` absolute path was ever
+  written. This edit is a SECURITY REDACTION, not an absorption of rework;
+  append-only remains in force for verdicts and evidence.
+- **C** Check: `python scripts/validate_skill.py` -> `VALIDATE_EXIT=0`,
+  `leaks=0`, `broken=0`, `cjk_count=0`; `node scripts/discipline-gate.js` ->
+  `I7 :: validation-report.json status=GREEN`, `DISCIPLINE GATE PASS`,
+  `GATE_EXIT=0`. Both outputs are pasted in the re-check line below.
+- **A** Act: PASS. Lesson: a validator that scans the whole package must also
+  scan pasted evidence, and pasted evidence must be redacted before it is
+  pasted. The gate's I7 correctly reported UNCERTAIN rather than silently
+  promoting a red validator to PASS — that three-state behaviour is now
+  confirmed on real data, not just in the design.
+
+Re-check (main, C6): `VALIDATE_EXIT=0`, `leaks=0`, `I7 :: validation-report.json status=GREEN`, `DISCIPLINE GATE PASS (6 hard / 2 soft)`, `GATE_EXIT=0` — PASS.
+
+C6 addendum: the first redaction attempt re-quoted the sensitive token and used four CJK characters inside the correction text; the validator caught both. A local pre-flight scan now runs before any gate is invoked. Two detections, one root cause: pasted evidence must be sanitised BEFORE it is pasted.
+
+---
+
+### 2026-11-08 C7 - PRD-to-action backbone, standalone views, macOS 27 Golden Gate (tier L, by: main session + G1/G2/G3)
+
+- **P** Plan: second human report from real usage — (1) Work-division kanban
+  needs its own page; (2) the Milestone gantt's "Work units | hour axis" are
+  empty in the sense that NO main line, sub-lines or relationships were
+  planned; (3) the sidebar looks absent, "maybe the description is missing";
+  (4) use the LATEST Apple OS style; (5) "PRD-to-action — use this SKILL" for
+  software engineering. Acceptance locked before work: two standalone views,
+  milestone MAIN LINE / SUB-LINES / RELATIONS rendered from a real PRD,
+  charter fields filled from data (not hardcoded), a real transparency slider,
+  colored sidebar nav icons, an adversarial PRD gate wired into the Stop hook,
+  all prior CDP assertions preserved. Non-goals: no rubric change, no C4
+  re-test, no edit to the user-global settings, no arrow-line overlay (I-006
+  stays OPEN).
+- **D** Do: three mutually exclusive subagent packages, main session owns the
+  ledger. G1 (PRD backbone): `docs/PRD.md`, `docs/evidence/milestones.json`,
+  `assets/linked-gantt-board/data/milestone-plan.json`,
+  `scripts/prd-to-action.js`, `references/prd-to-action.md`,
+  `templates/PRD.template.md`. G2 (UI): `panel.html`, `styles.css`,
+  `src/milestone.ts`, `src/app.ts`, `src/types.ts`, `db.js`, `server.js`,
+  `selftest.js`, rebuilt `dist/`. G3 (docs): `SKILL.md` v1.5.0 + section 13,
+  README, CHANGELOG, PLAN template, invariants, issue snapshot. Main session
+  independently re-verified everything, then CLOSED the two gaps the packages
+  left: redacted 2 personal paths and WIRED I9 into `discipline-gate.js`
+  (G3 had documented I9 as HARD without wiring it — exactly the
+  "spec says it, model does not" defect this project exists to fix).
+- **C** Check: real output, pasted.
+  - `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`,
+    `PRD_GATE_EXIT=0`; `--negative` -> `NEGATIVE CONTROL: PASS`,
+    `PRD_NEG_EXIT=2` (injected "works correctly" detected; discrimination).
+  - `tsc -p tsconfig.json` -> `TSC_EXIT=0`; `grep -nE '^(import|export) ' dist/*.js`
+    -> `OK: no ESM`.
+  - `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` ->
+    `Result: 81/81 passed`, `RESULT: PASS (exit 0)` (10 new assertions, existing
+    ones intact). Port 4174 (a different human-owned project) was never touched.
+  - `node scripts/selftest-discipline.js` -> `14/14 passed  RESULT: PASS`.
+  - `node scripts/discipline-gate.js` -> `PASS I9 :: prd-to-action.js exit 0
+    (10/10 gates)`, `DISCIPLINE GATE PASS (7 hard / 2 soft)`, `GATE_EXIT=0`.
+  - `python scripts/validate_skill.py` -> `VALIDATE_EXIT=0`,
+    `38 links / 60 md files; broken=0`, `cjk_count=0`, `leaks=0`.
+  - `python scripts/localize_check.py` -> `Text files scanned: 131`,
+    `CJK_COUNT=0`.
+  - Screenshot re-check (main session, not a handoff claim): plan page now
+    shows M1 main-line bar, W1/W2 sub-line bars, MAIN LINE / SUB-LINES /
+    RELATIONS / CRITICAL PATH labels; kanban is GONE from that page; sidebar
+    and charter carry real prose; a "Glass ... 80%" transparency slider and
+    colored nav dots are visible.
+  - C4 frozen artifacts: four SHA-256 MATCH, `VERDICT UNCERTAIN`,
+    `RECOMPUTE_MATCH PASS` (re-run below).
+- **A** Act: PASS. Lessons: (1) a plan with bars but no milestone hierarchy is
+  structurally empty — PRD-to-action's `M{N}/Depends on/Completion/Verify`
+  template is the missing backbone, and its adversarial grep is a real gate,
+  not decoration; (2) a subagent that documents an invariant as HARD without
+  wiring it reproduces the original defect, so the main session must re-check
+  claim vs code; (3) subagents paste personal paths unless explicitly told to
+  redact BEFORE pasting. Scoreboard PASS 14 / FAIL 1. **18.0/20 and the C4
+  UNCERTAIN verdict are unchanged**: this release fixes UI structure and
+  engineering method, not evidence of skill effectiveness. I-006 remains OPEN.
+
+---
+
+### 2026-11-08 C7 re-check - the Stop hook blocks the main session (tier S, by: main session)
+
+- **P** Plan: close the C7 turn by running the mandatory loop: session-start ->
+  issue event -> PDCA entry with pasted evidence -> Stop gate. Acceptance: gate
+  exit 0; no rubric change; no silent promotion of a FAIL.
+- **D** Do: ran `node scripts/session-start.js` (injected `OPEN ISSUES: 1`),
+  then `node scripts/issue.js update --id I-006 ...` (kept OPEN), then ran all
+  gates BEFORE appending this entry. The gate blocked as designed.
+- **C** Check: real output.
+  - `node scripts/discipline-gate.js` FIRST RUN -> `FAIL I2 :: PDCA entries
+    now=17, snapshot=17`, `FAIL I6 :: evidence tokens in tail=true, grew=false`,
+    `[DISCIPLINE GATE] BLOCKED. 2 invariant(s) missing`, `GATE_EXIT=2`.
+    This is a TRUE POSITIVE, not a bug: the main session skipped its own PDCA
+    entry. No rule was weakened and no snapshot was edited.
+  - `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`,
+    `PRD_EXIT=0`; `python scripts/validate_skill.py` -> `VALIDATE_EXIT=0`,
+    `leaks=0`, `cjk_count=0`; `python scripts/localize_check.py` ->
+    `131 files / CJK_COUNT=0`; `node scripts/selftest-discipline.js` ->
+    `14/14 passed  RESULT: PASS`.
+  - `python scripts/package.py` -> `129 entries, 1021002 bytes`, `PACKAGE PASS`.
+  - This entry is the fix for I2/I6; the re-run of the gate is recorded in the
+    Re-check line below.
+- **A** Act: PASS after the missing step was performed. Lesson: the hook is
+  symmetric — it blocks subagents AND the main session. A turn is not done
+  until the ledger says it is done. Score stays PASS 14 / FAIL 1; 18.0/20 and
+  the C4 UNCERTAIN verdict are unchanged.
+
+Re-check (main, C7): `node scripts/discipline-gate.js` after this entry -> I2 PASS, I6 PASS, I9 PASS, `DISCIPLINE GATE PASS (7 hard / 2 soft)`, `GATE_EXIT=0` — PASS. The earlier exit 2 is retained above as evidence that the hook has discrimination against the main session too.
+
+---
+
+### 2026-11-08 C8 - competitive research becomes an adoption chain (tier L, by: main session + cold reader R4)
+
+- **P** Plan: the human said the R17 research (Teambition and three others)
+  never reached the templates. Root-cause check before coding: five reports
+  and `docs/competitive-synthesis.md` exist (226 URLs, 50 ALIGN / 30 SURPASS /
+  24 NEVER-COPY, six "What to build first" items), R18 recorded the Linear /
+  Height design target, but `templates/` held 5 self-invented files and ZERO
+  benchmark-derived ones. Acceptance (locked): a B1..B6 landing map with
+  `file:line`, templates carrying benchmark provenance, an executable master
+  -> instance -> Publish registry, and a gate that FAILS if a landing
+  disappears. Non-goals: no rubric change, no C4 re-test, no new competitor
+  report, no edit to the global settings.
+- **D** Do: main session did the implementation in one context; ONE cold reader
+  (R4, no history, mutually exclusive read set) was used only for independent
+  verification. Reason: the defect under repair is "research handed off and
+  then lost", so delegating the landing work again would reproduce it. New:
+  `docs/BENCHMARK-ADOPTION.md`, four templates with `Benchmark:` headers,
+  `templates/registry.json`, `scripts/benchmark-adoption.js`,
+  `docs/evidence/adoption-manifest.json`; revised `scripts/scaffold.js` to
+  v2.1.0, `SKILL.md` v1.6.0 + section 14, README, CHANGELOG, invariants I10,
+  the issue ledger (I-014, I-015). `node scripts/scaffold.js --all` created
+  the four missing template INSTANCES plus a brief.
+- **C** Check: real output, pasted.
+  - `node scripts/benchmark-adoption.js` -> `13/13 passed`, `ADOPT_EXIT=0`.
+    `--negative` -> `NEGATIVE CONTROL A: PASS`, `NEGATIVE CONTROL B: PASS`,
+    `NEG_EXIT=2` (both perturbations detected).
+  - `node scripts/discipline-gate.js` -> `PASS I10`,
+    `DISCIPLINE GATE PASS (8 hard / 2 soft)`, `GATE_EXIT=0`;
+    `node scripts/selftest-discipline.js` -> `15/15 passed  RESULT: PASS`.
+  - `python scripts/validate_skill.py` -> `VALIDATE_EXIT=0`,
+    `broken=0`, `leaks=0`, `cjk_count=0`;
+    `python scripts/localize_check.py` -> `146 files / CJK_COUNT=0`.
+  - `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` ->
+    `Result: 81/81 passed`, `RESULT: PASS (exit 0)` (assets unchanged, re-run
+    anyway). `node scripts/prd-to-action.js` -> `10/10 passed`.
+  - Throwaway sandbox: `AIOPS_ROOT=<tmp> node scripts/scaffold.js --publish plan`
+    -> `PASS published :: plan v1.0.0 -> v1.0.1`, sandbox registry version
+    `1.0.1`; the REAL registry stayed `1.0.0`.
+  - `node scripts/scaffold.js --all` -> `5 newly created`, `8 instances`;
+    `--status` -> `IN-SYNC` for the new instances and
+    `PRE-EXISTING (version assumed, not proven)` for the old ones.
+  - Four C2/C4 frozen hashes: all MATCH, `VERDICT UNCERTAIN`,
+    `RECOMPUTE_MATCH PASS`.
+  - **Cold reader R4** (`docs/cold-read/R4-benchmark-adoption.md`, 30 lines,
+    verdict "needs revision", six defects D1-D6). The main session re-opened
+    `app.ts:305-318`, `gantt.ts:347-355`, `scaffold.js` and the instance
+    directory and CONFIRMED all six. Report retained, not deleted.
+  - Three defects were found BY THE GATES DURING THIS TURN and fixed, not
+    hidden: (1) the B5 landing cell contained a literal `|` from a grep
+    pattern, which split the markdown row, so the per-row landing check
+    reported `B5:NO-REF` and I10 returned exit 2; (2) negative control B
+    inserted a new column instead of flipping B1's status, so it reported
+    `MISSED` — the test was wrong, and was rewritten to a real status flip;
+    (3) every edit to the gate or the ledger required re-signing
+    `adoption-manifest.json` (three versions: 1.0.0 -> 1.0.1 -> 1.0.2),
+    which is the self-integrity check working as designed.
+- **A** Act: PASS. Lessons: (1) research without a landing row and a gate is
+  wasted work, and a human will notice; (2) a cold reader that only reads the
+  artifacts finds overclaimed "wired" features that the author cannot see —
+  fix them with code, never with wording; (3) B5 was downgraded PARTIAL ->
+  NOT IMPLEMENTED after the code showed only Escape and 1-hour arrow shifts;
+  (4) a signed gate must be re-signed when edited, or it fails its own check.
+  Scoreboard PASS 15 / FAIL 1. **18.0/20 and the C4 UNCERTAIN verdict are
+  unchanged**: this release fixes research adoption, not evidence of skill
+  effectiveness. I-006 (dependency arrow lines) remains OPEN; B1, B5, B6
+  remain NOT IMPLEMENTED by design.
+
+---
+
+### 2026-11-08 C9 - pre-registered remediation (tier L, by: main session + C9-P1/P2 + cold reader R5)
+
+- **P** Plan: `docs/REMEDIATION-PLAN-C9.md` was written and locked BEFORE work
+  (A1-A8, failure cells, mutually exclusive file ownership, non-goals).
+  Findings from a read-only re-check: F1 I-006 was a STALE open item (arrow
+  lines already in `gantt.ts:139-154`); F2 B1 approval matrix, F3 B5 board
+  keyboard model, F4 B6 owner scope were genuinely missing; F5 hooks were
+  documented but never installed; F6 (18.0/20 and C4 UNCERTAIN) is a NON-GOAL.
+  Non-goals: no rubric change, no frozen-artifact edit, no user-global
+  settings write, no C5 effectiveness round.
+- **D** Do: two implementation subagents with disjoint ownership (P1: db.js /
+  server.js / policy.ts / desk.ts / two seed JSONs; P2: board.ts / gantt.ts /
+  graph.ts / app.ts / styles.css). Main session: tsc, `panel.html` script tag,
+  8 unified CDP assertions in `selftest.js`, project-level hook install, all
+  docs, the ledger and packaging. Cold reader R5 (no context, fixed read set)
+  verified afterwards.
+- **C** Check: real output, pasted.
+  - `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` ->
+    `Result: 89/89 passed`, `RESULT: PASS (exit 0)`. Eight new C9 cases:
+    `rows=7 enforced=3`; `human,main,subagent,team`; `status=400
+    body={"error":"reject requires a reason"}`; `state=REJECTED reason=C9
+    written reason`; `mount=function tables=3`;
+    `{"n":18,"sorted":true,"board":18,"gantt":18,"boardOk":true,"ganttOk":true}`;
+    `{"ok":true,"ids":["t7","t10"],"painted":true}`;
+    `selected=2 persisted=2 t7:6 t10:9`.
+  - `tsc -p tsconfig.json` -> `TSC_EXIT=0`, dist has NO ESM syntax.
+  - Hook install: `PASS merge computed :: 2 new hook entries,
+    events=UserPromptSubmit, Stop`; second `--apply` -> `0 new hook entries`;
+    both referenced scripts exist. Target is the PROJECT-level
+    `.workbuddy/settings.json`; no user-global file was written.
+  - `node scripts/issue.js list` -> `OPEN=0`.
+  - `node scripts/benchmark-adoption.js` -> `13/13 passed`, `ADOPT_EXIT=0`;
+    `--negative` -> both controls PASS, `NEG_EXIT=2`; manifest re-signed
+    v1.0.4. `node scripts/discipline-gate.js` -> `DISCIPLINE GATE PASS
+    (8 hard / 2 soft)`, `GATE_EXIT=0`; `selftest-discipline.js` -> `15/15`.
+  - `validate_skill.py` -> `VALIDATE_EXIT=0`, `broken=0`, `leaks=0`,
+    `cjk_count=0`; `localize_check.py` -> `156 files / CJK_COUNT=0`;
+    `prd-to-action.js` -> `10/10 passed`; four frozen hashes all MATCH.
+  - `node scripts/scaffold.js --status` -> `DRIFT lock=v1.0.0 master=v1.1.0`
+    for the two edited masters. This is the no-overwrite rule working; the
+    adoption ledger now explains it instead of hiding it.
+  - **Cold reader R5** (`docs/cold-read/R5-C9.md`, 35 lines, "needs revision"):
+    A1-A5 PASS, A6-A8 UNVERIFIABLE from its restricted read set (the main
+    session re-ran those gates above), D1-D6 logged. Its verdict is NOT
+    rewritten.
+  - **C9-1 correction** appended to the plan (append-only, A1-A8 unchanged):
+    D1 stale snapshot narrative, D3 DRIFT explanation, D5 line numbers
+    `130-153/:298` -> `139-154/:308`, and D2 A4 STRENGTHENED from one to two
+    cards. The strengthened suite FAILED first (`selected=2 persisted=1`),
+    which exposed a real `board.ts` bug: new sort values were based on the
+    unselected subset, so `t7` was assigned its own old value. Fixed with
+    whole-column extremes plus serial PUTs, then re-run to `89/89` with
+    `persisted=2`. No failing result was reworded into a pass.
+- **A** Act: PASS. Lessons: (1) re-check the code before asserting an item is
+  still open - a stale OPEN item is itself a defect; (2) an acceptance
+  criterion can be silently weakened by its own test, so a cold reader is
+  worth more than another feature; (3) strengthening a test found a real bug
+  that the weaker test could never see; (4) hooks documented but not
+  installed are decoration. Scoreboard PASS 16 / FAIL 1. **18.0/20 and the C4
+  UNCERTAIN verdict are unchanged**: this round is engineering remediation,
+  not evidence of skill effectiveness.
+
+### 2026-11-08 13:50 C10 - link-audit remediation G2 -> G1 -> G3 (tier L, by: main session + G2/G1/G3/G3-1 subagents)
+- P Plan: fix the three link-audit gaps in order G2 (bug: issue status vocabulary fork) -> G1 (no PDCA-to-plan status write-back) -> G3 (two work-unit ID spaces). Acceptance: one status vocabulary across CLI/panel; a write-back tool with reject-path zero writes and a three-store consistency assertion inside prd-to-action gate X; plan work units visible in SQLite by the SAME id so done/todo travels by id. Non-goals: no UI redesign, no changes to frozen effectiveness artifacts, no demo-seed edits, no user-global settings.
+- D Do: G2 subagent unified issue status to open|done (issue.js:85/:121, session-start.js:33, write-side validation, 15 legacy issues migrated closed->done via CLI, DISCIPLINE-INVARIANTS.md:93 example). G1 subagent built scripts/plan-sync.js --check/--set (three stores: PRD Status line / milestones.json / milestone-plan.json), extended prd-to-action gate X with three-store status equality (gate count stays 10), evidence-backed flips M4/M5/M6 + W10-W18 done, and corrected the stale M6 completion criterion "118 entries" -> "entry count matches the packaged file set of the same run" in all three stores (traced in I-017 reply). G3 subagent added --seed-tasks (W ids materialized into SQLite tasks + task_deps, demo rows untouched), SQLite coherence in --check when panel.db exists (SKIP when absent), and --set propagation by id. G3-1 subagent fixed the done-exit edge: --set takes ID:status:progress; leaving done demands explicit progress; progress=100 reserved for done; all reject paths zero-writes. Issues I-016/I-017/I-018 opened and closed through scripts/issue.js with evidence.
+- C Check: `node scripts/issue.js list` -> OPEN=1 -> 0 after closes; negative control `--status closed` -> exit 1 zero write. `node scripts/plan-sync.js --check` -> PLAN-SYNC CHECK: 25/25 passed (SKIP SQLite coherence :: no panel.db). `--seed-tasks` -> 18 tasks (18 created), 16 relations, `demo rows :: 15 untouched`; re-run -> 0 created / 18 updated (idempotent). Teeth probes: deliberate `updateTask('W10',{status:'pending'})` -> `FAIL W10 coherence :: plan=done task=pending` exit 2, healed by `--set W10:done` -> 44/44; `--set W11:in_progress` on done -> exit 1 (explicit progress required), `--set W11:in_progress:55` -> PASS 25/25; four reject probes (done:55 / in_progress:100 / :120 / M4:done:50) -> exit 1, milestone-plan.json sha256 unchanged. Divergence probe on gate X (ms-only flip) -> 9/10 exit 2. `node scripts/prd-to-action.js` -> PRD-TO-ACTION GATE: 10/10 passed; `--negative` -> exit 2, gate A only. `node scripts/selftest-discipline.js` -> 15/15. `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` -> Result: 89/89 passed. `python scripts/validate_skill.py` -> failed = 0. M6 pre-flip checks: validate_skill 14/14, handoffs/G1.md 39 lines / 4 sections, package.py 153 entries == same-run file set, checksum outside archive.
+- Re-check (main): node scripts/plan-sync.js --check && node scripts/prd-to-action.js && node scripts/selftest-discipline.js -> 25/25, 10/10, 15/15 - PASS
+- A Act: PASS. Lessons: (1) a vocabulary fork is worse than a missing link - both sides were "correct" locally and the mirror silently reversed meaning; audit links by listing writer/reader pairs and comparing semantic fields, not file existence. (2) a stale number inside an acceptance criterion (118 entries) makes the criterion unverifiable as the artifact legitimately grows; rewrite as a self-consistent invariant and keep the correction trace. (3) when two frozen rules can collide (leave-progress-untouched vs progress=100 means done), the tool must refuse with a demanded parameter instead of writing a state its own checker rejects. (4) transient runtime state (panel.db) needs a three-state SKIP, never an implicit create, in read-only modes.
+
+### 2026-11-08 15:20 C11 - desk units become sheets with queryable history (tier L, by: main session + P-SVC/P-UI/P-TEST/P-FIX subagents)
+- P Plan: user asked (a) whether the 4 Command-desk units are actually wired and (b) to split the 2x2 desk-grid into per-unit SHEETs with queryable history. Audit verdict (read-only, before any edit): all 4 units were already wired to SQLite/real computation (command -> meta.next_command + acks; notices/jobs -> importHandoff; ACKs -> acks state machine + rejections.json; signals -> blockingSignals() from tasks/deps/issues) but crammed onto one screen and history-less (signals ephemeral, command/ACK transitions unlogged). Acceptance: 4 sheet tabs with restore, per-sheet History with filter, event stream persistence, signal raise/clear logging, suite grows without touching existing assertions. Non-goals: no redesign of board/gantt/ledger views, no db.js API shape changes beyond the frozen /api/events contract, no user-global settings.
+- D Do: P-SVC added desk_events table + GET/POST /api/events (unit/q/limit contract, validation 400s) and auto-log hooks in db.js (command/save deduped, command/generate, ack/send|approved|done|rejected deduped, job/import per row). P-UI split panel.html desk-grid into #deskTabs + 4 sheets (console/inbox/acks/signals), localStorage('desk.sheet') restore with bogus-value fallback, per-sheet History blocks (histFilter/histRefresh/histBody, 250ms debounce, store-driven refresh), ACK rows gained time.ack-created, board.ts gained the signal transition logger. P-TEST added 22 assertions as section 25 (suite 89 -> 111). P-FIX repaired a real defect P-TEST found: the signal diff key embedded a ticking hour counter, fabricating clear+raise pairs; keys are now stable (kind+entity id) with unchanged human-readable payload, verified across an actual hour-flip reload cycle (1 raise + 1 clear, zero noise).
+- C Check: main-session final battery `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` -> Result: 111/111 passed, exit 0 (P-TEST ran it twice green before the key fix; P-FIX re-ran green after). `node scripts/prd-to-action.js` -> 10/10. `node scripts/selftest-discipline.js` -> 15/15. Contract smokes (P-SVC): GET/POST /api/events 200/400 matrix, q case-insensitive hit, limit clamp, dedup probes (setCommand x2 -> 1 event; updateAck repeat -> 1 event), hook table pasted in I-019 reply. UI smokes (P-UI): 4 tabs/sheets present, exactly-one-active invariant, reload restore, tsc exit 0 / zero ESM in dist, 14 preserved DOM ids, 5 legacy h2 titles intact, zero CJK. Drift probe (P-FIX): open 25h -> 26h across 3 reloads -> signal event count stays 1 (no fabricated pairs), clear only on real deletion.
+- Re-check (main): node scripts/verify.js && node scripts/prd-to-action.js && node scripts/selftest-discipline.js -> 111/111, 10/10, 15/15 - PASS
+- A Act: PASS. Lessons: (1) the honest pre-edit audit matters: the units were already wired, so the real defect was layout + missing history, not dead UI - report what IS true before rebuilding. (2) a state-transition logger keyed on human-readable text drifts whenever the text drifts; keys must be entity identities, text is payload only - the test package earned its keep by catching this in the same round. (3) freeze the API contract before parallel packages (P-SVC/P-UI) and forbid them from touching each other's files; both landed without a single contract violation. (4) growing a frozen test suite is safe ONLY additively: the 22 new assertions never edit the 89, and screenshots stay byte-identical because the new section runs after the screenshot capture.
+
+### 2026-11-09 R24 - release audit for 1.8.0 (tier M, by: main session)
+
+- **P** Plan: a foreign session (C4-C11) changed the tree after the R23 push.
+  Verify the full diff before it enters git. Acceptance: (1) every shipped
+  gate green on the CURRENT tree; (2) the four frozen artifacts and the demo
+  data byte-unchanged; (3) no npm dependency, no ESM in dist; (4) the data
+  contract handoff names unchanged; (5) forbidden runtime state absent from
+  git. Non-goals: no product code change, no rubric change, no re-run of C4.
+- **D** Do: read-only diff review first (26 modified files + imports of
+  scripts/, templates/, hooks/, docs/, references/). Findings fixed in this
+  round, none in product code: (a) `release/` build zip and the per-turn gate
+  evidence (session.json, issue-delta.json, gate-report.json,
+  structure-gate.json) were untracked runtime state -> added to .gitignore;
+  (b) `.workbuddy/` holds a machine-local hook install with an absolute path
+  and a .bak file -> gitignored; the portable fragment in `hooks/` stays;
+  (c) CHANGELOG/SKILL.md stopped at 1.7.0 while C10/C11 changed shipped code
+  -> 1.8.0 entry added, version bumped; (d) three new `data/*.json` spec
+  masters (approval-matrix, milestone-plan, owner-scope) are versioned spec,
+  not demo rows -> kept. The demo set `demo-seed|module-deps|module-notes|
+  notifications|rounds|status.json` has zero diff.
+- **C** Check: real output, pasted.
+  - `PANEL_PORT=4184 CDP_PORT=9234 node scripts/verify.js` -> `Result:
+    111/111 passed`, `RESULT: PASS (exit 0)`, `0 JS exceptions / console
+    errors`, runtime panel.db* removed by the runner.
+  - `node scripts/selftest-discipline.js` -> `DISCIPLINE SELFTEST: 15/15
+    passed  RESULT: PASS`.
+  - `python scripts/validate_skill.py` -> `14/14 checks passed`,
+    `broken=0`, `cjk_count=0`, `leaks=0`.
+  - `python scripts/localize_check.py` -> `Text files scanned: 158`,
+    `CJK_COUNT=0`.
+  - `node scripts/discipline-gate.js` -> `DISCIPLINE GATE PASS (8 hard / 2
+    soft)`, `GATE_EXIT=0` (I1-I10 all PASS).
+  - `python docs/evidence/confirmatory/recompute.py` -> `VERDICT UNCERTAIN`,
+    `RECOMPUTE_MATCH PASS`, four frozen hashes MATCH.
+  - `node scripts/plan-sync.js --check` -> `PLAN-SYNC CHECK: 25/25 passed`.
+  - `node scripts/issue.js list` -> `OPEN=0`.
+  - `npx tsc -p tsconfig.json` -> `TSC_EXIT=0`; `grep -nE '^(import|export) '`
+    over dist/*.js -> empty (no ESM).
+  - Diff audit: `git diff --name-only` over the four frozen docs -> empty;
+    over `data/*.json` -> empty; `git diff` removed lines in TASK-LOG = the
+    scoreboard line + one pending re-check fill, nothing else (append-only
+    holds). `package.json` carries zero dependencies.
+- **A** Act: PASS. Lessons: (1) a foreign session's green claims are a
+  handback, not proof - re-run the battery on the current tree before
+  release; (2) a build zip left in the tree goes stale the moment the next
+  round lands (its TASK-LOG copy lacked C10/C11) - build output is gitignored
+  and rebuilt per release, never committed; (3) a version number that stops
+  while shipped code moves is a silent contract break - the release audit
+  bumps it in the same commit. Scoreboard PASS 17 / FAIL 1. 18.0/20 and the
+  C4 UNCERTAIN verdict unchanged.
+
+Re-check (main): `python scripts/validate_skill.py && python scripts/localize_check.py` after this entry -> `14/14 checks passed`, `leaks=0`, `CJK_COUNT=0` — PASS.
