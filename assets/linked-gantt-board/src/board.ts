@@ -10,6 +10,20 @@
  * logger diffs on, so mutable detail text never drives raise/clear.
  * VERSION: 2.0.0 - per-unit desk sheets + queryable history (I-019);
  * 2.0.1 - stable signal keys (kind + entity id) so hour-counter drift cannot fabricate raise/clear pairs
+ * 2.1.0 - I-029: optional per-card upstream/downstream link row drawn from
+ * task_deps (depends-on / depended-by), toggled per card (localStorage
+ * cp.card-deps), click scrolls to + flashes the linked card; links carry
+ * type + signed lag (FS+2d / SS-2d, lag only when non-zero) and the nature
+ * badge when set (I-030).
+ * 2.2.0 - I-033: every card carries the four AI dimension fields - model /
+ * instance, cost (cost-first, unchanged), confidence (dash when unset) and a
+ * gate badge derived from GET /api/policy/owner-scope for the card's owner
+ * type (never_automatic > needs_ack > may_act_alone, 'n/a' inactive;
+ * confidence below the Settings threshold cp.conf-threshold escalates the
+ * badge to at least needs-ack) - plus a per-card "audit" chip that opens the
+ * task's trail from GET /api/tasks/:id/audit. Red line 1 is a display rule
+ * and a selftest gate: card markup carries model/instance/cost, never
+ * persona wording.
  */
 namespace CP {
   let root: HTMLElement | null = null;
@@ -22,8 +36,209 @@ namespace CP {
   /** Shared-order rank per task id, rebuilt on every board patch. */
   let boardOrderIndex: Record<string, number> = {};
 
+  /* ---- I-029: optional per-card dependency links (task_deps) ------------- */
+  /** localStorage key -> JSON { task id: row visible } map. */
+  const CARD_DEPS_KEY = 'cp.card-deps';
+  let cardDepsOpen: Record<string, boolean> = {};
+
+  function loadCardDeps(): Record<string, boolean> {
+    try {
+      const raw = localStorage.getItem(CARD_DEPS_KEY);
+      const m = raw ? JSON.parse(raw) : {};
+      return m && typeof m === 'object' ? m as Record<string, boolean> : {};
+    } catch (_e) { return {}; }
+  }
+
+  function saveCardDeps(map: Record<string, boolean>): void {
+    try { localStorage.setItem(CARD_DEPS_KEY, JSON.stringify(map)); }
+    catch (_e) { /* private mode: toggle applies for this session only */ }
+  }
+
+  /** Additive row shape: task_deps now carries `nature` (I-030). types.ts is
+   *  owned by another package, so the extra field is widened locally. */
+  interface TaskDepEx extends TaskDep { nature?: string; }
+
+  /** FS+2d / SS-2d / FS: signed lag, shown only when non-zero (I-029/I-030). */
+  function depLagLabel(d: TaskDepEx): string {
+    const lag = Math.round(Number(d.lag) || 0);
+    const type = String(d.type || 'FS');
+    if (!lag) return type;
+    return type + (lag > 0 ? '+' : '') + lag + 'd';
+  }
+
+  /** One link pill: target id + type/signed lag + nature badge when set. */
+  function depLinkHtml(d: TaskDepEx, target: string): string {
+    const nature = d.nature
+      ? `<span class="kb-dep-nature">${esc(d.nature)}</span>` : '';
+    return `<button type="button" class="kb-dep-link" data-target="${esc(target)}">` +
+      `${esc(target)} ${esc(depLagLabel(d))}${nature}</button>`;
+  }
+
+  /** Upstream (depends-on) + downstream (depended-by) groups for one card. */
+  function depRowHtml(t: Task, deps: TaskDepEx[]): string {
+    const group = (label: string, links: string): string =>
+      `<div class="kb-dep-label">${label}</div>` + (links || '<div class="kb-dep-none">none</div>');
+    const up = deps.filter((d) => d.to === t.id).map((d) => depLinkHtml(d, d.from)).join('');
+    const down = deps.filter((d) => d.from === t.id).map((d) => depLinkHtml(d, d.to)).join('');
+    return group('depends-on', up) + group('depended-by', down);
+  }
+
+  /** Show/hide one card's link row; persists the per-card flag. */
+  function toggleCardDeps(card: HTMLElement): void {
+    const id = card.dataset.taskId;
+    if (!id) return;
+    cardDepsOpen[id] = !cardDepsOpen[id];
+    saveCardDeps(cardDepsOpen);
+    const on = cardDepsOpen[id];
+    const toggle = card.querySelector('.kb-dep-toggle') as HTMLElement | null;
+    if (toggle) {
+      toggle.classList.toggle('is-on', on);
+      toggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+    const row = card.querySelector('.kb-dep-row') as HTMLElement | null;
+    if (!row) return;
+    row.classList.toggle('is-on', on);
+    if (!on) { row.innerHTML = ''; return; }
+    const t = taskById(id);
+    const deps = ((store.state && store.state.task_deps) || []) as TaskDepEx[];
+    row.innerHTML = t ? depRowHtml(t, deps) : '';
+  }
+
+  /** Scroll the linked card into view and flash it (it may sit in another
+   *  column, so the lookup spans the whole board). */
+  function gotoCard(taskId: string): void {
+    const el = document.querySelector('.kb-card[data-task-id="' + CSS.escape(taskId) + '"]') as HTMLElement | null;
+    if (!el) { CP.toast('Card not on the board: ' + taskId); return; }
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
+    el.classList.remove('kb-flash');
+    void el.offsetWidth;
+    el.classList.add('kb-flash');
+    window.setTimeout(() => el.classList.remove('kb-flash'), 1600);
+  }
+
   /** S2 blocking signal: fixed stuck threshold N=24 hours (documented, not tunable). */
   export const STUCK_HOURS = 24;
+
+  /* ---- I-033: card AI dimensions (model / confidence / gate / audit) ----- */
+  /** localStorage key of the Settings "Confidence gate" threshold. */
+  const CONF_THRESHOLD_KEY = 'cp.conf-threshold';
+  const CONF_DEFAULT = 0.7;
+
+  /** The Settings threshold: 0..1, default 0.7, persisted in localStorage.
+   *  An invalid stored value falls back to the default, never to a hidden
+   *  card. Pure enough for the selftest to drive through localStorage. */
+  export function confThreshold(): number {
+    try {
+      const raw = localStorage.getItem(CONF_THRESHOLD_KEY);
+      if (raw === null || raw === '') return CONF_DEFAULT;
+      const n = Number(raw);
+      return Number.isFinite(n) && n >= 0 && n <= 1 ? n : CONF_DEFAULT;
+    } catch (_e) { return CONF_DEFAULT; }
+  }
+
+  /** Owner-scope rows from GET /api/policy/owner-scope (the same table the
+   *  desk's Owner scope panel shows). Empty until the fetch lands; badges
+   *  then answer the conservative default until patchBoard runs again. */
+  let ownerScopeRows: OwnerScopeRow[] = [];
+
+  function scopeRow(ownerType: string): OwnerScopeRow | undefined {
+    return ownerScopeRows.filter((r) => r.owner_type === ownerType)[0];
+  }
+
+  /** A scope column counts as active unless it is explicitly "n/a". */
+  function scopeActive(s: string): boolean {
+    return !!s && s.trim().toLowerCase() !== 'n/a';
+  }
+
+  /**
+   * I-033 gate derivation (pure; the selftest calls it directly). The most
+   * restrictive ACTIVE column of the owner-scope row wins -
+   * never_automatic -> never-auto > needs_ack -> needs-ack >
+   * may_act_alone -> autonomous - matched to the card's owner type. Then a
+   * confidence below `thr` escalates the badge to at least needs-ack: an
+   * autonomous card becomes needs-ack; never-auto is already stricter and
+   * stays. Rows not loaded (or unknown owner type) answer needs-ack.
+   */
+  export function gateFromScope(row: OwnerScopeRow | undefined, confidence: number | null, thr: number): string {
+    let base = 'needs-ack';
+    if (row) {
+      if (scopeActive(row.never_automatic)) base = 'never-auto';
+      else if (scopeActive(row.needs_ack)) base = 'needs-ack';
+      else if (scopeActive(row.may_act_alone)) base = 'autonomous';
+    }
+    if (base === 'autonomous' && confidence !== null && Number.isFinite(confidence) && confidence < thr) {
+      return 'needs-ack';
+    }
+    return base;
+  }
+
+  /** The card's badge: owner-scope row for the owner type + the live
+   *  Settings threshold. */
+  export function gateBadge(ownerType: string, confidence: number | null): string {
+    return gateFromScope(scopeRow(ownerType), confidence, confThreshold());
+  }
+
+  /** Which card's audit popover is open (one at a time). */
+  let auditOpenId: string | null = null;
+
+  /**
+   * Toggle one card's audit popover: GET /api/tasks/:id/audit carries the
+   * desk events naming the task plus the TASK-LOG PDCA entry ids naming it.
+   * Rendering is createElement + textContent only - event detail is data.
+   */
+  async function toggleAudit(card: HTMLElement): Promise<void> {
+    const id = card.dataset.taskId;
+    if (!id) return;
+    const pop = card.querySelector('.kb-audit-pop') as HTMLElement | null;
+    const btn = card.querySelector('.kb-audit') as HTMLElement | null;
+    if (!pop) return;
+    const already = !pop.hidden && auditOpenId === id;
+    document.querySelectorAll('.kb-audit-pop').forEach((p) => { (p as HTMLElement).hidden = true; });
+    document.querySelectorAll('.kb-audit').forEach((b) => {
+      b.setAttribute('aria-expanded', 'false');
+      b.classList.remove('is-on');
+    });
+    if (already) { auditOpenId = null; return; }
+    pop.hidden = false;
+    if (btn) { btn.setAttribute('aria-expanded', 'true'); btn.classList.add('is-on'); }
+    auditOpenId = id;
+    pop.textContent = 'Loading audit trail...';
+    try {
+      const r = await fetch('/api/tasks/' + encodeURIComponent(id) + '/audit', { cache: 'no-store' });
+      if (!r.ok) throw new Error('audit HTTP ' + r.status);
+      const data = await r.json() as { events?: DeskEvent[]; pdca?: string[] };
+      const evs = Array.isArray(data.events) ? data.events : [];
+      const pdca = Array.isArray(data.pdca) ? data.pdca : [];
+      pop.textContent = '';
+      const head = document.createElement('div');
+      head.className = 'kb-audit-head';
+      head.textContent = 'Audit trail: ' + id;
+      pop.appendChild(head);
+      const section = (label: string, items: string[]): void => {
+        const sec = document.createElement('div');
+        sec.className = 'kb-audit-sec';
+        sec.textContent = label + ' (' + items.length + ')';
+        pop.appendChild(sec);
+        if (!items.length) {
+          const none = document.createElement('div');
+          none.className = 'kb-audit-none';
+          none.textContent = 'none';
+          pop.appendChild(none);
+          return;
+        }
+        items.forEach((text) => {
+          const li = document.createElement('div');
+          li.className = 'kb-audit-item';
+          li.textContent = text;
+          pop.appendChild(li);
+        });
+      };
+      section('desk events', evs.map((e) => `${e.ts} ${e.kind}: ${e.detail}`));
+      section('PDCA entries', pdca);
+    } catch (e) {
+      pop.textContent = 'Audit unavailable: ' + String(e);
+    }
+  }
 
   export interface Signal {
     kind: 'stuck' | 'dependency' | 'urgent_overdue';
@@ -136,10 +351,14 @@ namespace CP {
     const el = document.createElement('article');
     el.className = 'kb-card';
     el.setAttribute('draggable', 'true');
-    el.innerHTML = `<div class="kb-card-top"><span class="kb-owner-chip"></span><span class="kb-parent"></span><span class="kb-owner"></span></div>
+    el.innerHTML = `<div class="kb-card-top"><span class="kb-owner-chip"></span><span class="kb-parent"></span><span class="kb-owner"></span><button type="button" class="kb-dep-toggle" title="Show dependency links" aria-pressed="false">&#128279;</button></div>
       <h4 class="kb-title"></h4><div class="kb-role"></div>
-      <div class="kb-cost"></div><div class="kb-handoff"></div>
-      <div class="kb-window"></div>`;
+      <div class="kb-cost"></div>
+      <div class="kb-ai"><span class="kb-model" title="Model / instance of the executor"></span><span class="kb-conf" title="Confidence; - when unset"></span><span class="kb-gate" title="Gate from the owner-scope table for this owner type"></span><button type="button" class="kb-audit" title="Open this task's audit trail" aria-expanded="false">audit</button></div>
+      <div class="kb-handoff"></div>
+      <div class="kb-window"></div>
+      <div class="kb-dep-row"></div>
+      <div class="kb-audit-pop" hidden></div>`;
     return el;
   }
 
@@ -169,8 +388,36 @@ namespace CP {
     (el.querySelector('.kb-title') as HTMLElement).textContent = t.title;
     (el.querySelector('.kb-role') as HTMLElement).textContent = t.role;
     (el.querySelector('.kb-cost') as HTMLElement).textContent = t.placeholder ? `placeholder | ${t.tier}` : costShort(t);
+    /* I-033: the four AI dimension fields. Red line 1 is a display rule -
+       model/instance, cost and confidence are observable fields; persona
+       wording never reaches a card (selftest section 32 scans for it). */
+    const modelEl = el.querySelector('.kb-model') as HTMLElement;
+    const modelVal = t.model || '';
+    modelEl.textContent = 'model: ' + (modelVal || 'n/a');
+    modelEl.dataset.model = modelVal;
+    const confRaw = t.confidence;
+    const confNum = confRaw === undefined || confRaw === null ? NaN : Number(confRaw);
+    const confOk = Number.isFinite(confNum);
+    const confEl = el.querySelector('.kb-conf') as HTMLElement;
+    confEl.textContent = 'conf: ' + (confOk ? confNum.toFixed(2) : '-');
+    confEl.dataset.conf = confOk ? String(confNum) : '';
+    const gate = gateBadge(t.owner_type, confOk ? confNum : null);
+    const gateEl = el.querySelector('.kb-gate') as HTMLElement;
+    gateEl.textContent = gate;
+    gateEl.dataset.gate = gate;
+    gateEl.className = 'kb-gate gate-' + gate;
     (el.querySelector('.kb-handoff') as HTMLElement).textContent = t.handoff;
     (el.querySelector('.kb-window') as HTMLElement).textContent = `${tickLabel(t.start)} -> ${tickLabel(t.end)}`;
+    /* I-029: optional link row - closed cards render no link DOM at all. */
+    const depRow = el.querySelector('.kb-dep-row') as HTMLElement;
+    const depToggle = el.querySelector('.kb-dep-toggle') as HTMLElement;
+    const depsOpen = !!cardDepsOpen[t.id];
+    depRow.classList.toggle('is-on', depsOpen);
+    depToggle.classList.toggle('is-on', depsOpen);
+    depToggle.setAttribute('aria-pressed', depsOpen ? 'true' : 'false');
+    depRow.innerHTML = depsOpen
+      ? depRowHtml(t, ((store.state && store.state.task_deps) || []) as TaskDepEx[])
+      : '';
   }
 
   function colCreate(c: Column): HTMLElement {
@@ -209,12 +456,16 @@ namespace CP {
     document.querySelectorAll('.kb-card.is-ghost').forEach((el) => el.classList.remove('is-ghost'));
     dropTarget = null;
     draggingId = null;
+    CP.setLinkHover(null);
   }
 
   function onDragStart(e: DragEvent): void {
     const card = (e.target as HTMLElement).closest('.kb-card') as HTMLElement | null;
     if (!card || !e.dataTransfer || !card.dataset.taskId) return;
     draggingId = card.dataset.taskId;
+    /* I-037: the dragged card lights its hour-axis bar for the whole drag -
+       one dataset, one move, visible on both surfaces. */
+    CP.setLinkHover(draggingId);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', draggingId);
     window.setTimeout(() => card.classList.add('is-ghost'), 0);
@@ -255,6 +506,12 @@ namespace CP {
     suppressClick = true;
     window.setTimeout(() => { suppressClick = false; }, 180);
     cleanup();
+    /* I-037: the pointer rests where the card landed - re-derive the paired
+       highlight from what is actually under it after the drop. */
+    const landed = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const landedNode = landed && typeof landed.closest === 'function'
+      ? landed.closest('[data-task-id]') as HTMLElement | null : null;
+    CP.setLinkHover(landedNode && landedNode.dataset.taskId ? landedNode.dataset.taskId : null);
 
     const ref = info.ref ? taskById(info.ref) : undefined;
     let sort = 0;
@@ -273,6 +530,26 @@ namespace CP {
   function onClick(e: MouseEvent): void {
     const target = e.target as HTMLElement;
     if (target.closest('[data-columns]') || target.closest('#btnAddColumn')) { CP.openColumnManager(); return; }
+    /* I-029: the per-card toggle and a link pill act alone - never select. */
+    const depToggle = target.closest('.kb-dep-toggle') as HTMLElement | null;
+    if (depToggle) {
+      const tc = depToggle.closest('.kb-card') as HTMLElement | null;
+      if (tc) toggleCardDeps(tc);
+      return;
+    }
+    const depLink = target.closest('.kb-dep-link') as HTMLElement | null;
+    if (depLink) {
+      const dest = depLink.dataset.target;
+      if (dest) gotoCard(dest);
+      return;
+    }
+    /* I-033: the audit chip opens the trail in place - never selects. */
+    const auditBtn = target.closest('.kb-audit') as HTMLElement | null;
+    if (auditBtn) {
+      const tc = auditBtn.closest('.kb-card') as HTMLElement | null;
+      if (tc) void toggleAudit(tc);
+      return;
+    }
     const card = target.closest('.kb-card') as HTMLElement | null;
     if (!card || !card.dataset.taskId || suppressClick) return;
     const id = card.dataset.taskId;
@@ -288,7 +565,11 @@ namespace CP {
   }
 
   function onDblClick(e: MouseEvent): void {
-    const card = (e.target as HTMLElement).closest('.kb-card') as HTMLElement | null;
+    const target = e.target as HTMLElement;
+    /* I-029: double-clicking the toggle or a link is not a task edit.
+       I-033: the audit chip is a disclosure, not an edit either. */
+    if (target.closest('.kb-dep-toggle') || target.closest('.kb-dep-link') || target.closest('.kb-audit')) return;
+    const card = target.closest('.kb-card') as HTMLElement | null;
     if (card && card.dataset.taskId) CP.openTaskModal(card.dataset.taskId);
   }
 
@@ -388,6 +669,12 @@ namespace CP {
   export function initBoard(): void {
     root = document.getElementById('boardColumns');
     if (!root) return;
+    cardDepsOpen = loadCardDeps();
+    /* I-033: gate badges read the same owner-scope table the desk shows.
+       Fire-and-forget: a failed fetch leaves the conservative default. */
+    void fetchOwnerScope()
+      .then((rows) => { ownerScopeRows = rows; patchBoard(); })
+      .catch(() => { /* badges stay at needs-ack until a later load */ });
     root.addEventListener('dragstart', onDragStart);
     root.addEventListener('dragover', onDragOver);
     root.addEventListener('drop', onDrop);

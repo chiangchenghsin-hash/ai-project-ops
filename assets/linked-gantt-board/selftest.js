@@ -10,7 +10,12 @@
  * Node >= 22 (global WebSocket + fetch). Every assertion prints
  * "PASS  <english label> :: <evidence>"; a FAIL prints "FAIL" and the script
  * exits non-zero (1 failed assertion, 2 fatal harness error).
- * VERSION: 3.0.0 - English localization, env PANEL_PORT/CDP_PORT, >=30
+ * VERSION: 3.1.0 - R31 section 32 adds the I-032 hour-axis humanization
+ * gates (purpose header, NOW flag, tooltip, past-hours shade, shared status
+ * palette) and the I-033 card AI-field gates (model/confidence/gate badge,
+ * confidence threshold + Settings row, per-card audit popover, red-line-1
+ * anthropomorphism scan); fixture task + desk events provisioned and
+ * restored in finally. 3.0.0 - English localization, env PANEL_PORT/CDP_PORT, >=30
  * assertions covering ACK flow / approve / done / reject-with-reason /
  * rejections.json / error-code visibility / blocking signals / DEMO flag /
  * /healthz / backup / restore / degraded declaration / three-state labels /
@@ -41,6 +46,18 @@ function PASS(name, ok, evidence) { record(name, ok, evidence); }
 let seq = 0;
 const pending = new Map();
 let ws;
+/* R32 allowlist (intent: no UNEXPECTED console errors): section 35 drives the
+   INTENTIONAL refusal paths (progress=100 outside done, the 1-unit delete
+   floor) through the real /api/plan/structure door, so the browser logs the
+   expected "Failed to load resource: 400" line for that exact URL. Only the
+   pair (400 + /api/plan/structure) is exempt; every other error still counts
+   against the section-35 delta and the final runtime gate. */
+function expectedStructure400(e) {
+  return e.indexOf('/api/plan/structure') >= 0 && e.indexOf('400') >= 0;
+}
+function unexpectedErrors() {
+  return errors.filter((e) => !expectedStructure400(e));
+}
 function cmd(method, params = {}) {
   return new Promise((resolve, reject) => {
     const id = ++seq;
@@ -162,8 +179,10 @@ async function main() {
   PASS('UI never reads raw JSON: /data/ returns 403 and no /data/ resources',
     init.handoff === 403 && init.resources === 0, `status=${init.handoff} resources=${init.resources}`);
 
-  /* 2. Hour axis / cost-first / placeholders / lanes */
-  await js(`document.querySelector('[data-view=plan]').click()`);
+  /* 2. Hour axis / cost-first / placeholders / lanes. R32 retarget (I-037):
+     the hour axis moved to the Work board, so the block re-activates that
+     view; every assertion intent below is unchanged. */
+  await js(`document.querySelector('[data-view=board]').click()`);
   await sleep(180);
   const axis = await js(`(() => {
     const bars = Array.from(document.querySelectorAll('.gbar'));
@@ -198,7 +217,7 @@ async function main() {
   PASS('Placeholder bars right of NOW labelled non-commitment',
     axis.placeholders.length === 3 && axis.placeholders.every((p) => p.t.includes('placeholder') && p.t.includes('non-commitment') && p.x + 252 > axis.nowX),
     JSON.stringify(axis.placeholders.map((p) => p.t)));
-  PASS('Plan view auto-scrolls to NOW, time bars in viewport',
+  PASS('Work board auto-scrolls to NOW, time bars in viewport (R32 retarget: axis moved from the Plan view)',
     axis.scrollLeft > 100 && axis.visibleBars > 0, `scrollLeft=${axis.scrollLeft} visibleBars=${axis.visibleBars}`);
 
   /* 3. Incremental update (DOM node identity preserved) */
@@ -824,7 +843,9 @@ async function main() {
   }
   await js(`CP.store.load()`);
   await sleep(500);
-  await js(`document.querySelector('[data-view="plan"]').click()`);
+  /* R32 retarget (I-037): the canvas link authoring runs on the Work board,
+     where the hour axis now lives; the gesture itself is unchanged. */
+  await js(`document.querySelector('[data-view="board"]').click()`);
   await sleep(500);
   /* Show only the probe rows so every bar sits inside the visible slice of
      the gantt, and the pointer coordinates cannot drift off the panel. */
@@ -863,10 +884,21 @@ async function main() {
       if (!dot) return { missing: 'dot' };
       const dr = dot.getBoundingClientRect();
       const tr = t.getBoundingClientRect();
+      const x1 = dr.left + dr.width / 2;
+      const y1 = dr.top + dr.height / 2;
+      const x2 = tr.left + (${JSON.stringify(toSide)} === 'left' ? 4 : tr.width - 4);
+      const y2 = tr.top + tr.height / 2;
+      const under1 = document.elementFromPoint(x1, y1);
+      const fr2 = f.getBoundingClientRect();
+      const sr2 = sc ? sc.getBoundingClientRect() : null;
       return {
-        x1: dr.left + dr.width / 2, y1: dr.top + dr.height / 2,
-        x2: tr.left + (${JSON.stringify(toSide)} === 'left' ? 4 : tr.width - 4),
-        y2: tr.top + tr.height / 2
+        x1, y1, x2, y2,
+        active: (document.querySelector('.view.active') || {}).id || '',
+        win: [window.innerWidth, window.innerHeight],
+        sc: sr2 ? [Math.round(sr2.left), Math.round(sr2.top), Math.round(sr2.width), Math.round(sr2.height)] : null,
+        sl: sc ? [Math.round(sc.scrollLeft), sc.scrollWidth, sc.clientWidth] : null,
+        bar: [Math.round(fr2.left), Math.round(fr2.top), Math.round(fr2.width)],
+        hit1: under1 ? String(under1.className || under1.tagName) : 'null'
       };
     })()`);
     await sleep(250);
@@ -899,7 +931,8 @@ async function main() {
   })()`);
   PASS('Dragging end-to-end authors the edge, and the two ends pick the type',
     JSON.stringify(stored) === '["FF","FS","SF","SS"]',
-    'stored=' + JSON.stringify(stored) + ' xy=' + JSON.stringify(linkResults.map((r) => r.geo && r.geo.x1 !== undefined ? [Math.round(r.geo.x1), Math.round(r.geo.y1), Math.round(r.geo.x2), Math.round(r.geo.y2)] : r.geo)) + ' mid=' + JSON.stringify(linkResults.map((r) => r.mid)));
+    'stored=' + JSON.stringify(stored) + ' xy=' + JSON.stringify(linkResults.map((r) => r.geo && r.geo.x1 !== undefined ? [Math.round(r.geo.x1), Math.round(r.geo.y1), Math.round(r.geo.x2), Math.round(r.geo.y2)] : r.geo)) + ' mid=' + JSON.stringify(linkResults.map((r) => r.mid))
+      + ' diag=' + JSON.stringify(linkResults.map((r) => r.geo && r.geo.active !== undefined ? { a: r.geo.active, win: r.geo.win, sc: r.geo.sc, sl: r.geo.sl, bar: r.geo.bar, hit1: r.geo.hit1 } : r.geo)));
 
   /* Bump cascade on a real drag: the dependant must move and stay moved. */
   const bumpPair = probeIds[0];
@@ -929,7 +962,13 @@ async function main() {
     const y = r.top + r.height / 2;
     const under = document.elementFromPoint(x, y);
     const hit = under && under.closest ? (under.closest('.gbar') || {}).dataset : null;
-    return { x, y, hitId: hit ? hit.taskId : ((under && under.className) || 'none') };
+    const sr2 = sc ? sc.getBoundingClientRect() : null;
+    return { x, y, hitId: hit ? hit.taskId : ((under && under.className) || 'none'),
+      active: (document.querySelector('.view.active') || {}).id || '',
+      win: [window.innerWidth, window.innerHeight],
+      sc: sr2 ? [Math.round(sr2.left), Math.round(sr2.top), Math.round(sr2.width), Math.round(sr2.height)] : null,
+      sl: sc ? [Math.round(sc.scrollLeft), sc.scrollWidth, sc.clientWidth] : null,
+      bar: [Math.round(r.left), Math.round(r.top), Math.round(r.width)] };
   })()`);
   await sleep(250);
   if (bumpGeo && !bumpGeo.missing) {
@@ -950,7 +989,8 @@ async function main() {
   PASS('Dragging a bar slides its dependant along, and the move is persisted',
     !!bumpGeo && afterBump.to !== '' && afterBump.to !== beforeBump.to,
     'from ' + beforeBump.from + ' -> ' + afterBump.from + ' | to ' + beforeBump.to + ' -> ' + afterBump.to
-    + ' | deps=' + beforeBump.deps + ' | toast=' + String(afterBump.toast).slice(0, 40));
+    + ' | deps=' + beforeBump.deps + ' | toast=' + String(afterBump.toast).slice(0, 40)
+    + ' | diag=' + JSON.stringify(bumpGeo));
 
   /* Clean up the probe rows and their edges. */
   for (const pair of probeIds) {
@@ -1033,9 +1073,11 @@ async function main() {
     !modal.missing && modal.hasChild && !modal.hasSelf && setr.set === pC.id && afterSet === pC.id,
     'modal=' + JSON.stringify(modal) + ' set=' + JSON.stringify(setr) + ' stored=' + afterSet);
 
-  /* Depth display: both surfaces show the hierarchy, not just a parent id. */
+  /* Depth display: both surfaces show the hierarchy, not just a parent id.
+     R32 retarget (I-037): card and bar now share the Work board page, so
+     one view activation measures both (the depth assertions are unchanged). */
   await js(`CP.store.query = 'R22'; CP.store.emit();`);
-  await js(`document.querySelector('[data-view="plan"]').click()`);
+  await js(`document.querySelector('[data-view="board"]').click()`);
   await sleep(450);
   const depthUi = await js(`(() => {
     const q = (id) => document.querySelector('.kb-card[data-task-id=' + JSON.stringify(id) + ']');
@@ -1183,7 +1225,9 @@ async function main() {
     charterOk, JSON.stringify(charter));
 
   const glass = await js(`(() => {
-    const el = document.getElementById('glassAlpha');
+    /* I-026 recorded correction: the global #glassAlpha control is gone;
+       the Settings page Glass row (#setGlass) is the single control. */
+    const el = document.getElementById('setGlass');
     const root = document.documentElement;
     const before = getComputedStyle(root).getPropertyValue('--glass-alpha').trim();
     const alphaOf = (s) => {
@@ -1597,7 +1641,2400 @@ async function main() {
   PASS('The desk sheet and history probes added no JS exceptions or console errors',
     errors.length === errBase, 'errors before=' + errBase + ' after=' + errors.length);
 
-  PASS('No JS exceptions / console errors at runtime', errors.length === 0, errors.join(' | ') || '0 errors');
+  /* 26. UI chrome (I-022 / I-023 / I-027): charter fold, sidebar drag width,
+     the R32-retargeted I-027 assertions (the pagination tabs moved to the
+     Work board split with the hour axis), settings page. Synthetic
+     PointerEvents are dispatched on the grips themselves, so no real mouse
+     is needed. */
+  const chFold0 = await js(`(() => {
+    const c = document.getElementById('charter');
+    const b = document.getElementById('btnCharterFold');
+    return { collapsed: c.classList.contains('collapsed'), label: b.textContent.trim() };
+  })()`);
+  PASS('First-principles block starts folded, out of the picture',
+    chFold0.collapsed === true && chFold0.label === 'Unfold', JSON.stringify(chFold0));
+
+  await js(`document.getElementById('btnCharterFold').click()`);
+  const chFold1 = await js(`({
+    open: !document.getElementById('charter').classList.contains('collapsed'),
+    stored: localStorage.getItem('cp.charter-open')
+  })`);
+  PASS('Charter toggle opens the block and persists the state',
+    chFold1.open === true && chFold1.stored === '1', JSON.stringify(chFold1));
+  await js(`document.getElementById('btnCharterFold').click()`);
+
+  const sideDrag = await js(`(() => {
+    const g = document.getElementById('sideResize');
+    const ev = (t, x) => g.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: x, clientY: 300, bubbles: true }));
+    ev('pointerdown', 300); ev('pointermove', 380); ev('pointerup', 380);
+    return {
+      w: document.documentElement.style.getPropertyValue('--side-w'),
+      stored: localStorage.getItem('cp.side-w')
+    };
+  })()`);
+  await sleep(320); /* the sidebar width eases over .22s before it settles */
+  sideDrag.width = await js(`document.getElementById('sidebar').getBoundingClientRect().width`);
+  PASS('Sidebar drag-resize sets --side-w and persists it',
+    !!sideDrag.w && sideDrag.stored === sideDrag.w && sideDrag.width > 300, JSON.stringify(sideDrag));
+
+  await cmd('Page.reload', { ignoreCache: true });
+  await sleep(900);
+  await ready();
+  const sideBack = await js(`({
+    w: document.documentElement.style.getPropertyValue('--side-w'),
+    width: document.getElementById('sidebar').getBoundingClientRect().width
+  })`);
+  PASS('Sidebar width survives a reload',
+    sideBack.w === sideDrag.w && sideBack.width > 300, JSON.stringify(sideBack));
+
+  /* I-027 -> R32 recorded correction (I-037): the pinned two-tab pagination
+     assertions are re-targeted to the moved feature - the Hour axis left the
+     Plan page, so the Plan view shows the goal tree full-pane and the Work
+     board holds kanban + hour axis behind one persisted split. Assertion
+     intents stay identical: exactly one content configuration per view, the
+     layout choice persisting in a cp.* chrome key, no divider/fold chrome,
+     and the goal tree living in the Plan view under a header that stays put
+     while the layer scrolls. */
+  await js(`document.querySelector('[data-view="plan"]').click()`);
+  await sleep(150);
+  const planTab0 = await js(`(() => {
+    const bar = document.getElementById('planTabs');
+    const ms = document.getElementById('milestonePanel');
+    const gt = document.getElementById('ganttPanel');
+    const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+    return {
+      noBar: !bar,
+      msVis: vis(ms),
+      msInPlan: !!(ms && ms.closest('#view-plan')),
+      gtInPlan: !!(gt && gt.closest('#view-plan')),
+      gtInBoard: !!(gt && gt.closest('#view-board')),
+      divider: !!document.getElementById('divider'),
+      foldPlan: !!document.getElementById('btnFoldPlan'),
+      foldGantt: !!document.getElementById('btnFoldGantt')
+    };
+  })()`);
+  PASS('Plan page is one full-pane milestone layer (tab bar retired by R32); divider and Fold buttons still gone (I-027)',
+    planTab0.noBar && planTab0.msVis && planTab0.msInPlan
+      && !planTab0.gtInPlan && planTab0.gtInBoard
+      && !planTab0.divider && !planTab0.foldPlan && !planTab0.foldGantt,
+    JSON.stringify(planTab0));
+
+  const planTab1 = await js(`(() => {
+    document.querySelector('[data-view="board"]').click();
+    const page = document.getElementById('workBoard');
+    const kb = document.querySelector('.wb-kanban');
+    const ax = document.getElementById('ganttPanel');
+    const grip = document.getElementById('wbSplit');
+    const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+    if (!page || !kb || !ax || !grip) return { ok: false, reason: 'missing board chrome' };
+    const before = Math.round(kb.getBoundingClientRect().width);
+    const total = Math.round(page.getBoundingClientRect().width);
+    const gr = grip.getBoundingClientRect();
+    const sx = gr.left + Math.max(2, gr.width / 2);
+    const sy = gr.top + Math.max(2, gr.height / 2);
+    const ev = (t, x) => grip.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: x, clientY: sy, bubbles: true }));
+    ev('pointerdown', sx); ev('pointermove', sx + 46); ev('pointerup', sx + 46);
+    const after = Math.round(kb.getBoundingClientRect().width);
+    const stored = localStorage.getItem('cp.wb-split');
+    return {
+      ok: true, both: vis(kb) && vis(ax), before, after, total, stored,
+      varLeft: page.style.getPropertyValue('--wb-left'),
+      kbPct: total > 0 ? Math.round(after / total * 100) : -1,
+      axPct: total > 0 ? Math.round(ax.getBoundingClientRect().width / total * 100) : -1
+    };
+  })()`);
+  PASS('Work board shows kanban + hour axis side by side; the split drag resizes them and persists cp.wb-split (I-027 retarget -> I-037)',
+    planTab1.ok && planTab1.both
+      && planTab1.before > 0 && planTab1.after - planTab1.before >= 20
+      && /^(2[5-9]|[3-5][0-9])$/.test(planTab1.stored || '')
+      && planTab1.varLeft === planTab1.stored + '%'
+      && planTab1.kbPct >= 25 && planTab1.kbPct <= 52
+      && planTab1.axPct >= 45,
+    JSON.stringify(planTab1));
+
+  const planGoalMini = (() => {
+    /* Tall enough that the Milestone plan pane really scrolls, so the pinned
+       tab bar is proven against actual content movement. */
+    const miniMs = [];
+    for (let i = 0; i < 30; i += 1) {
+      miniMs.push({ id: 'PM' + i, name: 'Holder ' + i, depends_on: i ? ['PM' + (i - 1)] : [],
+        start_offset_h: i * 4, end_offset_h: i * 4 + 4, status: 'todo', completion: 0, verify: 'ok' });
+    }
+    return {
+      available: true, state: 'READY', label: 'Milestone plan ready', detail: '',
+      fix_command: 'node scripts/prd-to-action.js', message: '', schema: 'ai-project-ops.plan/1.0',
+      goals: [{ id: 'PG1', title: 'Pinned tab holder', milestone_ids: miniMs.map((m) => m.id) }],
+      milestones: miniMs, work_units: [], relations: [], main_line: ['PM0'], sub_lines: {},
+      analysis: {}
+    };
+  })();
+  const planTab2 = await js(`(() => {
+    document.querySelector('[data-view="plan"]').click();
+    CP.applyPlan(${JSON.stringify(planGoalMini)});
+    const layer = document.getElementById('milestoneLayer');
+    const head = document.querySelector('#milestonePanel .panel-head');
+    const top0 = head ? head.getBoundingClientRect().top : -1000;
+    if (layer) layer.scrollTop = 140;
+    const top1 = head ? head.getBoundingClientRect().top : -1000;
+    const tree = document.getElementById('msGoalTree');
+    const ms = document.getElementById('milestonePanel');
+    const gt = document.getElementById('ganttPanel');
+    return {
+      scrolled: layer ? layer.scrollTop : -1,
+      pinDrift: Math.abs(top1 - top0),
+      hasTree: !!tree,
+      inMs: !!tree && !!ms && ms.contains(tree),
+      inPlan: !!(tree && tree.closest('#view-plan')),
+      inGt: !!tree && !!gt && gt.contains(tree),
+      msShown: !!ms && getComputedStyle(ms).display !== 'none',
+      gtInBoard: !!(gt && gt.closest('#view-board')),
+      headTop: top1
+    };
+  })()`);
+  PASS('Pane header stays pinned while the Plan view scrolls; goal tree lives full-page in that view (I-027 retarget -> R32)',
+    planTab2.pinDrift <= 1 && planTab2.scrolled > 0 && planTab2.hasTree
+      && planTab2.inMs && planTab2.inPlan && !planTab2.inGt
+      && planTab2.msShown && planTab2.gtInBoard && planTab2.headTop >= 0,
+    JSON.stringify(planTab2));
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+
+  await js(`document.querySelector('#nav button[data-view=settings]').click()`);
+  await sleep(150);
+  const setDom = await js(`(() => {
+    const rows = Array.from(document.querySelectorAll('#view-settings .set-label')).map((r) => r.textContent.trim());
+    document.querySelector('#setTheme [data-theme-val=dark]').click();
+    return {
+      active: document.getElementById('view-settings').classList.contains('active'),
+      rows: rows.join('|'),
+      theme: document.documentElement.getAttribute('data-theme'),
+      port: document.getElementById('setPort').value
+    };
+  })()`);
+  PASS('Settings page opens with theme, port and language rows; theme applies',
+    setDom.active === true && setDom.rows.indexOf('Color scheme') >= 0 && setDom.rows.indexOf('Port') >= 0
+      && setDom.rows.indexOf('Language') >= 0 && setDom.theme === 'dark' && setDom.port !== '',
+    JSON.stringify(setDom));
+
+  const glassState = await js(`(() => {
+    const g = document.getElementById('setGlass');
+    g.value = '55';
+    g.dispatchEvent(new Event('input', { bubbles: true }));
+    return {
+      alpha: document.documentElement.style.getPropertyValue('--glass-alpha'),
+      out: document.getElementById('setGlassOut').textContent.trim(),
+      stored: localStorage.getItem('cp.glass-alpha')
+    };
+  })()`);
+  PASS('Settings glass slider drives --glass-alpha and persists',
+    glassState.alpha === '0.55' && glassState.out === '55%' && glassState.stored === '0.55', JSON.stringify(glassState));
+
+  const resetState = await js(`(() => {
+    document.querySelector('#setTheme [data-theme-val=auto]').click();
+    const realReload = CP.reload;
+    CP.reload = () => {}; /* stub the seam: window.location.* is non-writable */
+    localStorage.setItem('cp.side-w', '300px');
+    document.getElementById('setReset').click();
+    CP.reload = realReload;
+    const left = ['cp.side-w', 'cp.side-collapsed', 'cp.charter-open', 'cp.fold-plan', 'cp.fold-gantt']
+      .filter((k) => localStorage.getItem(k) !== null);
+    return left;
+  })()`);
+  PASS('Settings reset clears saved chrome preferences', Array.isArray(resetState) && resetState.length === 0, 'left=' + JSON.stringify(resetState));
+
+  /* 27. I-020 traceability view: goal tree + analysis columns above the
+     milestone gantt. Additive section - no earlier assertion is edited. The
+     fixture goes through CP.applyPlan exactly like the section 23 plan
+     fixtures; one live assertion reads the real /api/plan; one fixture
+     without goals/analysis proves the old-server degrade path. */
+  const err27 = errors.length;
+  await js(`document.querySelector('#nav [data-view=plan]').click()`);
+
+  const GOAL_FIX = {
+    available: true, state: 'READY', label: 'Milestone plan ready', detail: '',
+    fix_command: 'node scripts/prd-to-action.js', message: '', schema: 'ai-project-ops.plan/1.0',
+    goals: [
+      { id: 'G1', title: 'Release 1.8.x with discipline gates', milestone_ids: ['M6', 'M7'] },
+      { id: 'G2', title: 'Goal-anchored WBS visualization', milestone_ids: ['M8'] },
+    ],
+    analysis: {
+      M6: { status: 'done', progress: 100, cost: 2.1, rounds: ['R24', 'R26'], rework: 0 },
+      M7: { status: 'done', progress: 100, cost: 0.6, rounds: ['R24'], rework: 0 },
+      M8: { status: 'todo', progress: 0, cost: 0, rounds: [], rework: 0 },
+      W14: { status: 'done', progress: 100, cost: 2.1, rounds: ['R24'], rework: 0 },
+      W15: { status: 'done', progress: 100, cost: 0.6, rounds: ['R24'], rework: 0 },
+      W16: { status: 'todo', progress: 0, cost: 0, rounds: ['R99'], rework: 1 },
+    },
+    milestones: [
+      { id: 'M6', name: 'Release gates', depends_on: [], start_offset_h: 0, end_offset_h: 12, status: 'done', completion: 100, verify: 'ok' },
+      { id: 'M7', name: 'Discipline', depends_on: 'M6', start_offset_h: 12, end_offset_h: 24, status: 'done', completion: 100, verify: 'ok' },
+      { id: 'M8', name: 'WBS view', depends_on: 'M6', start_offset_h: 12, end_offset_h: 30, status: 'todo', completion: 0, verify: 'ok' },
+    ],
+    work_units: [
+      { id: 'W14', milestone_id: 'M6', title: 'Gate wiring', owner: 'main', start_offset_h: 0, end_offset_h: 8, progress: 100, cost: 2.1 },
+      { id: 'W15', milestone_id: 'M7', title: 'Ledger parse', owner: 'main', start_offset_h: 12, end_offset_h: 24, progress: 100, cost: 0.6 },
+      { id: 'W16', milestone_id: 'M8', title: 'Tree render', owner: 'subagent', start_offset_h: 12, end_offset_h: 30, progress: 0, cost: 0 },
+    ],
+    relations: [], main_line: ['M6', 'M8'],
+    sub_lines: { M6: ['W14'], M7: ['W15'], M8: ['W16'] },
+  };
+
+  const goalRows = await js(`(() => {
+    CP.applyPlan(${JSON.stringify(GOAL_FIX)});
+    const tree = document.getElementById('msGoalTree');
+    const text = tree ? tree.textContent : '';
+    const g1 = document.querySelector('.ms-goal-group[data-goal=G1] .ms-a-goal');
+    const g2 = document.querySelector('.ms-goal-group[data-goal=G2] .ms-a-goal');
+    const ms = document.querySelector('.ms-goal-row[data-kind=ms][data-node=M6]');
+    return {
+      hasTree: !!tree,
+      goalCount: document.querySelectorAll('.ms-goal-row[data-kind=goal]').length,
+      cols: ['status', 'progress', 'cost', 'rounds', 'rework'].every((w) => text.indexOf(w) >= 0),
+      g1: g1 ? g1.textContent.replace(/\\s+/g, ' ').trim() : '',
+      g2: g2 ? g2.textContent.replace(/\\s+/g, ' ').trim() : '',
+      msDepth: ms ? ms.style.getPropertyValue('--depth') : ''
+    };
+  })()`);
+  PASS('Goal rows render above the gantt with the five analysis columns (I-020)',
+    goalRows.hasTree && goalRows.goalCount >= 2 && goalRows.cols
+      && goalRows.g1.indexOf('[done]') >= 0 && goalRows.g1.indexOf('100%') >= 0
+      && goalRows.g1.indexOf('$2.7k') >= 0 && goalRows.g1.indexOf('rounds: R24 R26') >= 0
+      && goalRows.g1.indexOf('rework: 0') >= 0
+      && goalRows.g2.indexOf('[todo]') >= 0 && goalRows.g2.indexOf('$0') >= 0
+      && goalRows.g2.indexOf('rounds: R99') >= 0 && goalRows.g2.indexOf('rework: 1') >= 0
+      && goalRows.msDepth === '1',
+    JSON.stringify(goalRows));
+
+  const wuRow = await js(`(() => {
+    const el = document.querySelector('.ms-goal-row[data-kind=wu][data-node=W14]');
+    return { text: el ? el.textContent.replace(/\\s+/g, ' ').trim() : '', has: !!el };
+  })()`);
+  PASS('Work-unit row shows its rounds list from the analysis block (I-020)',
+    wuRow.has && wuRow.text.indexOf('[done]') >= 0 && wuRow.text.indexOf('rounds: R24') >= 0
+      && wuRow.text.indexOf('rework: 0') >= 0,
+    wuRow.text);
+
+  const live27 = await js(`(async () => {
+    const r = await fetch('/api/plan', { cache: 'no-store' });
+    let p = null;
+    try { p = await r.json(); } catch (e) { p = null; }
+    p = p || {};
+    CP.applyPlan(p);
+    const tree = document.getElementById('msGoalTree');
+    const firstWu = document.querySelector('.ms-goal-row[data-kind=wu]');
+    return {
+      status: r.status, available: p.available === true,
+      goals: Array.isArray(p.goals) ? p.goals.length : 0,
+      anaKeys: p.analysis ? Object.keys(p.analysis).length : 0,
+      hasTree: !!tree,
+      goalRows: document.querySelectorAll('.ms-goal-row[data-kind=goal]').length,
+      groups: document.querySelectorAll('.ms-group').length,
+      wuText: firstWu ? firstWu.textContent.replace(/\\s+/g, ' ').trim() : ''
+    };
+  })()`);
+  PASS('Live /api/plan renders the goal tree when goals exist and keeps the gantt',
+    live27.status === 200 && (live27.goals > 0) === live27.hasTree
+      && live27.goalRows === live27.goals
+      && (live27.available ? live27.groups > 0 : live27.groups === 0)
+      && (live27.anaKeys > 0 ? live27.wuText.indexOf('rounds:') >= 0 : true),
+    JSON.stringify(live27));
+
+  const degrade27 = await js(`(() => {
+    CP.applyPlan(${JSON.stringify(FIX)});
+    return {
+      tree: !!document.getElementById('msGoalTree'),
+      groups: document.querySelectorAll('.ms-group').length,
+      bars: document.querySelectorAll('.ms-main').length
+    };
+  })()`);
+  PASS('Fixture without goals/analysis degrades to today\'s gantt render',
+    !degrade27.tree && degrade27.groups === FIX.milestones.length
+      && degrade27.bars === FIX.milestones.length,
+    JSON.stringify(degrade27));
+
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+  PASS('Section 27 added no JS exceptions or console errors',
+    errors.length === err27, 'errors before=' + err27 + ' after=' + errors.length);
+
+  /* 28. R28 correction guard: test stubs must use CP seams. window.location.*
+     is non-writable (LegacyUnforgeable), so a stub assignment silently no-ops
+     and the test really navigates mid-suite. Lesson as a gate (I-021). */
+  const r28Src = fs.readFileSync(path.join(OUT, 'selftest.js'), 'utf8');
+  const r28LocWrites = r28Src.match(/window\.location\.[A-Za-z]+\s*=(?!=)/g) || [];
+  PASS('No window.location monkey-patches in selftest; stubs go through CP seams',
+    r28LocWrites.length === 0, 'found=' + JSON.stringify(r28LocWrites));
+
+  /* 29. R29 / P-A (I-025, I-026, I-030): additive gate for this package.
+     Charter only on the Command desk, glass only in Settings, signed lag and
+     nature on plan relation rows, and the nature selector riding the canvas
+     link-authoring write path. */
+  const err29 = errors.length;
+
+  /* I-025: the First-principles block renders on the desk and on no other
+     view; the Edit button still opens the charter modal from the desk. */
+  const i025View = await js(`(() => {
+    const shown = () => {
+      const c = document.getElementById('charter');
+      return !!c && c.hidden === false && getComputedStyle(c).display !== 'none';
+    };
+    const out = { desk: null, others: {}, edit: null, fold: null };
+    document.querySelector('#nav [data-view="desk"]').click();
+    out.desk = shown();
+    ['plan', 'board', 'ledger', 'meter', 'settings'].forEach((v) => {
+      document.querySelector('#nav [data-view="' + v + '"]').click();
+      out.others[v] = shown();
+    });
+    document.querySelector('#nav [data-view="desk"]').click();
+    out.backToDesk = shown();
+    out.edit = !!document.getElementById('btnCharterEdit');
+    out.fold = !!document.getElementById('btnCharterFold');
+    return out;
+  })()`);
+  PASS('Charter block renders only on the Command desk view (I-025)',
+    i025View.desk === true && i025View.backToDesk === true
+      && i025View.edit === true && i025View.fold === true
+      && ['plan', 'board', 'ledger', 'meter', 'settings'].every((v) => i025View.others[v] === false),
+    JSON.stringify(i025View));
+
+  const i025Modal = await js(`(() => {
+    document.querySelector('#nav [data-view="desk"]').click();
+    document.getElementById('btnCharterEdit').click();
+    const open = !document.getElementById('modalLayer').classList.contains('hidden');
+    const form = !!document.getElementById('charterForm');
+    const closeBtn = document.querySelector('#modalSheet [data-action="close"]');
+    if (closeBtn) closeBtn.click();
+    const closed = document.getElementById('modalLayer').classList.contains('hidden');
+    return { open, form, closed };
+  })()`);
+  PASS('Charter modal stays reachable from the Command desk Edit button (I-025)',
+    i025Modal.open === true && i025Modal.form === true && i025Modal.closed === true,
+    JSON.stringify(i025Modal));
+
+  /* I-026: no glass control in the shared chrome; the Settings Glass row is
+     the single --glass-alpha control left in the page. */
+  const i026Glass = await js(`(() => ({
+    globalAlpha: !!document.getElementById('glassAlpha'),
+    globalOut: !!document.getElementById('glassAlphaOut'),
+    glassControl: !!document.querySelector('.glass-control'),
+    topbarRange: !!document.querySelector('.topbar input[type=range]'),
+    settingsGlass: !!document.getElementById('setGlass'),
+    settingsRows: Array.from(document.querySelectorAll('#view-settings .set-label'))
+      .map((r) => r.textContent.trim())
+  }))()`);
+  PASS('Glass control exists only as the Settings row; global slider removed (I-026)',
+    !i026Glass.globalAlpha && !i026Glass.globalOut && !i026Glass.glassControl
+      && !i026Glass.topbarRange && i026Glass.settingsGlass
+      && i026Glass.settingsRows.indexOf('Glass') >= 0,
+    JSON.stringify(i026Glass));
+
+  /* I-030: a negative lag is a lead, and the cascade math keeps its sign. */
+  const i030Lead = await js(`(() => {
+    const T = (id, s, e) => ({ id, title: id, owner: '', owner_type: 'main', role: '', handoff: '',
+      status: 'x', start: s, end: e, progress: 0, placeholder: 0, tier: 'S',
+      billed: 0, cost: 0, sort: 0, parent_id: '', baseline_start: '', baseline_end: '' });
+    /* FS lag -2: the successor may start up to 2h before the predecessor
+       ends. Sitting exactly on that lead bound is legal - no bump. */
+    const tasks = [T('L1', '2026-11-05 00:00', '2026-11-05 04:00'),
+                   T('L2', '2026-11-05 02:00', '2026-11-05 06:00')];
+    const deps = [{ from: 'L1', to: 'L2', type: 'FS', lag: -2 }];
+    const hold = CP.bumpCascade(tasks, deps, 'L1', '2026-11-05 00:00', '2026-11-05 04:00');
+    const moved = CP.bumpCascade(tasks, deps, 'L1', '2026-11-05 02:00', '2026-11-05 06:00');
+    return { hold: hold.length, moved: moved.map((m) => m.id + '@' + m.start) };
+  })()`);
+  PASS('Negative lag (lead) flows through the bump cascade with its sign (I-030)',
+    i030Lead.hold === 0 && i030Lead.moved.length === 1 && i030Lead.moved[0].indexOf('L2@') === 0,
+    JSON.stringify(i030Lead));
+
+  /* I-030 render: signed lag tokens and the nature badge on relation rows. */
+  const i030RelFix = {
+    available: true, state: 'READY', label: 'Milestone plan ready', detail: '',
+    fix_command: 'node scripts/prd-to-action.js', message: '', schema: 'ai-project-ops.plan/1.0',
+    milestones: [
+      { id: 'NR1', name: 'Lead source', depends_on: [], start_offset_h: 0, end_offset_h: 12, status: 'done', completion: 100, verify: 'ok' },
+      { id: 'NR2', name: 'Lead sink', depends_on: 'NR1', start_offset_h: 10, end_offset_h: 24, status: 'todo', completion: 0, verify: 'ok' },
+      { id: 'NR3', name: 'Lagged sink', depends_on: 'NR1', start_offset_h: 12, end_offset_h: 26, status: 'todo', completion: 0, verify: 'ok' }
+    ],
+    work_units: [],
+    relations: [
+      { from: 'NR1', to: 'NR2', type: 'FS', lag: -2, nature: 'mandatory' },
+      { from: 'NR1', to: 'NR3', type: 'FS', lag: 3, nature: 'external' },
+      { from: 'NR2', to: 'NR3', type: 'SS', lag: 0, nature: '' }
+    ],
+    main_line: ['NR1', 'NR2'], sub_lines: {}
+  };
+  const i030RelRows = await js(`(() => {
+    CP.applyPlan(${JSON.stringify(i030RelFix)});
+    return Array.from(document.querySelectorAll('.ms-rel')).map((r) => {
+      const lagEl = r.querySelector('.ms-rel-lag');
+      const natEl = r.querySelector('.ms-rel-nature');
+      return {
+        text: r.textContent.replace(/\\s+/g, ' ').trim(),
+        lag: lagEl ? lagEl.textContent : '',
+        nature: natEl ? natEl.textContent : ''
+      };
+    });
+  })()`);
+  PASS('Relation rows render signed lag and the nature badge; zero lag is silent (I-030)',
+    i030RelRows.length === 3
+      && i030RelRows[0].lag === '-2d' && i030RelRows[0].text.indexOf('FS-2d') >= 0
+      && i030RelRows[0].nature === 'mandatory'
+      && i030RelRows[1].lag === '+3d' && i030RelRows[1].text.indexOf('FS+3d') >= 0
+      && i030RelRows[1].nature === 'external'
+      && i030RelRows[2].lag === '' && i030RelRows[2].nature === '',
+    JSON.stringify(i030RelRows));
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+
+  /* I-030 authoring: the nature selector carries the frozen vocabulary, and
+     the canvas link write path puts the picked value on the PUT body. */
+  const i030Sel = await js(`(() => {
+    const s = document.getElementById('gdepNature');
+    return {
+      present: !!s,
+      options: s ? Array.from(s.options).map((o) => o.value + ':' + o.textContent.trim()) : [],
+      value: s ? s.value : null,
+      helper: typeof CP.linkNature === 'function' ? CP.linkNature() : '(missing)'
+    };
+  })()`);
+  PASS('Link authoring exposes the frozen nature vocabulary selector (I-030)',
+    i030Sel.present === true && i030Sel.value === '' && i030Sel.helper === ''
+      && JSON.stringify(i030Sel.options) === JSON.stringify(
+        ['', 'mandatory', 'discretionary', 'external'].map((v) => v + ':' + (v || 'unspecified'))),
+    JSON.stringify(i030Sel));
+
+  /* One real canvas drag: the drop must PUT nature through the dep write
+     path. The fetch spy only observes; the app code is untouched. */
+  const natFrom = (await api('POST', '/api/tasks', { title: 'NAT lead from', start: at(1), end: at(3) })).body || {};
+  const natTo = (await api('POST', '/api/tasks', { title: 'NAT lead to', start: at(5), end: at(7) })).body || {};
+  await js(`CP.store.load()`);
+  await sleep(450);
+  /* R32 retarget (I-037): the canvas lives on the Work board now; the
+     nature write path assertion below is untouched. */
+  await js(`document.querySelector('[data-view="board"]').click()`);
+  await sleep(300);
+  await js(`CP.store.query = 'NAT '; CP.store.emit();`);
+  await sleep(400);
+  await js(`(() => { const sc = document.getElementById('ganttScroll'); if (sc) { sc.scrollTop = 0; sc.scrollLeft = 0; } return true; })()`);
+  await sleep(250);
+  const natSetup = await js(`(() => {
+    const sel = document.getElementById('gdepNature');
+    if (sel) sel.value = 'mandatory';
+    window.__natBodies = [];
+    if (!window.__natSpyOn) {
+      window.__natSpyOn = true;
+      const real = window.fetch.bind(window);
+      window.__natRealFetch = real;
+      window.fetch = function (input, init) {
+        try {
+          const url = typeof input === 'string' ? input : ((input && input.url) || '');
+          const method = (init && init.method) || (input && input.method) || 'GET';
+          if (url.indexOf('/api/task-deps') >= 0 && method === 'PUT' && init && init.body) {
+            window.__natBodies.push(String(init.body));
+          }
+        } catch (_e) { /* never break the app */ }
+        return real(input, init);
+      };
+    }
+    return { nature: sel ? sel.value : '(missing)', spying: !!window.__natSpyOn };
+  })()`);
+  const natGeo = await js(`(() => {
+    const bars = {};
+    document.querySelectorAll('.gbar').forEach((b) => { if (b.dataset.taskId) bars[b.dataset.taskId] = b; });
+    const f = bars[${JSON.stringify(natFrom.id)}];
+    const t = bars[${JSON.stringify(natTo.id)}];
+    if (!f || !t) return { missing: true, bars: Object.keys(bars).length };
+    const sc = document.getElementById('ganttScroll');
+    if (sc) {
+      for (let k = 0; k < 4; k += 1) {
+        const sr = sc.getBoundingClientRect();
+        const fr = f.getBoundingClientRect();
+        const tr0 = t.getBoundingClientRect();
+        const dy = Math.min(fr.top, tr0.top) - sr.top - 28;
+        const dx = Math.min(fr.left, tr0.left) - sr.left - 260;
+        if (Math.abs(dx) < 2 && Math.abs(dy) < 2) break;
+        sc.scrollTop = Math.max(0, sc.scrollTop + dy);
+        sc.scrollLeft = Math.max(0, sc.scrollLeft + dx);
+      }
+    }
+    const dot = f.querySelector('.gbar-link.right');
+    if (!dot) return { missing: 'dot' };
+    const dr = dot.getBoundingClientRect();
+    const tr = t.getBoundingClientRect();
+    const x1 = dr.left + dr.width / 2;
+    const y1 = dr.top + dr.height / 2;
+    const x2 = tr.left + 4;
+    const y2 = tr.top + tr.height / 2;
+    const under1 = document.elementFromPoint(x1, y1);
+    const fr2 = f.getBoundingClientRect();
+    const sr2 = sc ? sc.getBoundingClientRect() : null;
+    return {
+      x1, y1, x2, y2,
+      active: (document.querySelector('.view.active') || {}).id || '',
+      win: [window.innerWidth, window.innerHeight],
+      sc: sr2 ? [Math.round(sr2.left), Math.round(sr2.top), Math.round(sr2.width), Math.round(sr2.height)] : null,
+      sl: sc ? [Math.round(sc.scrollLeft), sc.scrollWidth, sc.clientWidth] : null,
+      bar: [Math.round(fr2.left), Math.round(fr2.top), Math.round(fr2.width)],
+      hit1: under1 ? String(under1.className || under1.tagName) : 'null'
+    };
+  })()`);
+  await sleep(250);
+  if (natGeo && !natGeo.missing && natGeo.x1 !== undefined) {
+    await cmd('Input.dispatchMouseEvent', { type: 'mousePressed', x: natGeo.x1, y: natGeo.y1, button: 'left', clickCount: 1 });
+    await cmd('Input.dispatchMouseEvent', { type: 'mouseMoved', x: (natGeo.x1 + natGeo.x2) / 2, y: (natGeo.y1 + natGeo.y2) / 2, button: 'left' });
+    await cmd('Input.dispatchMouseEvent', { type: 'mouseReleased', x: natGeo.x2, y: natGeo.y2, button: 'left', clickCount: 1 });
+    await sleep(600);
+  }
+  await js(`CP.store.load()`);
+  await sleep(450);
+  const natBodies = await js(`(() => (window.__natBodies || []).map((b) => {
+    try { return JSON.parse(b); } catch (e) { return { raw: String(b).slice(0, 80) }; }
+  }))()`);
+  PASS('Canvas link authoring PUTs the picked nature through the dep write path (I-030)',
+    natSetup.nature === 'mandatory'
+      && !!natGeo && !natGeo.missing
+      && Array.isArray(natBodies)
+      && natBodies.some((b) => b.from === natFrom.id && b.to === natTo.id
+        && b.type === 'FS' && b.nature === 'mandatory'),
+    'setup=' + JSON.stringify(natSetup) + ' geo=' + JSON.stringify(natGeo)
+      + ' bodies=' + JSON.stringify(natBodies));
+
+  /* Clean up the I-030 probes and leave the page as the suite found it. */
+  for (const natId of [natFrom.id, natTo.id]) {
+    if (natId) await api('DELETE', '/api/tasks/' + encodeURIComponent(natId));
+  }
+  await js(`(() => {
+    if (window.__natRealFetch) { window.fetch = window.__natRealFetch; window.__natSpyOn = false; }
+    const sel = document.getElementById('gdepNature');
+    if (sel) sel.value = '';
+    CP.store.query = ''; CP.store.emit();
+    return true;
+  })()`);
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+
+  PASS('Section 29 added no JS exceptions or console errors',
+    errors.length === err29, 'errors before=' + err29 + ' after=' + errors.length);
+
+  /* 30. R29 / P-B (I-028, I-029, I-030): additive gate for this package.
+     Issue mirror upsert through the real CLI (node-side child process, like the
+     HTTP blocks in 12-14) + evidence derivation + ledger column-width
+     persistence + kanban card link toggle/navigation + task-dep nature
+     validation (DOM checks like section 23). The temp ledger writes are
+     restored in finally, so a mid-block failure cannot leave I-901-TEST or
+     I-028 mutations in docs/evidence or panel.db. */
+  const err30 = errors.length;
+  const pbTmpId = 'I-9' + String(Date.now()).slice(-5) + '-TEST';
+  const { execFileSync: pbExec } = require('child_process');
+  const pbRepo = path.join(OUT, '..', '..');
+  const pbIssueJs = path.join(pbRepo, 'scripts', 'issue.js');
+  const pbLedgerFile = path.join(pbRepo, 'docs', 'evidence', 'issues.json');
+  const pbDeltaFile = path.join(pbRepo, 'docs', 'evidence', 'issue-delta.json');
+  const pbLedgerBak = fs.existsSync(pbLedgerFile) ? fs.readFileSync(pbLedgerFile, 'utf8') : null;
+  const pbDeltaBak = fs.existsSync(pbDeltaFile) ? fs.readFileSync(pbDeltaFile, 'utf8') : null;
+  const pbRun = (argv) => {
+    try {
+      return pbExec(process.execPath, [pbIssueJs].concat(argv),
+        { encoding: 'utf8', env: Object.assign({}, process.env, { AIOPS_SESSION: 'selftest' }) });
+    } catch (e) { return 'ERR ' + String((e && e.stdout) || '') + String((e && e.message) || ''); }
+  };
+  const pbStateOf = async (id) => {
+    const r = await api('GET', '/api/state');
+    return ((r.body && r.body.issues) || []).filter((x) => x.id === id)[0] || null;
+  };
+  /* Battery env carries demo rows only; seed the plan W tasks + task_deps this
+     block needs (integration fix; verify.js wipes panel.db* at run start/end). */
+  try {
+    pbExec(process.execPath, [path.join(pbRepo, 'scripts', 'plan-sync.js'), '--seed-tasks'],
+      { encoding: 'utf8', cwd: pbRepo });
+  } catch (_e) { /* seed failure surfaces in the assertions below */ }
+  try {
+    const pbAddOut = pbRun(['add', '--id', pbTmpId, '--title', 'Selftest mirror probe',
+      '--detail', 'temp row proving mirror upsert', '--source', 'selftest']);
+    PASS('issue.js add INSERTs a new panel row (upsert, no "issue not found")',
+      pbAddOut.indexOf('PASS  issue added :: ' + pbTmpId + ' | mirrored to SQLite') >= 0
+        && pbAddOut.indexOf('mirror failed') < 0,
+      pbAddOut.trim().split('\n').slice(-1)[0] || String(pbAddOut).slice(0, 140));
+    const pbAdded = await pbStateOf(pbTmpId);
+    PASS('Mirrored row carries status/opened/evidence fields on /api/state',
+      !!pbAdded && pbAdded.status === 'open' && !!pbAdded.opened
+        && Array.isArray(pbAdded.evidence) && pbAdded.evidence.length === 0,
+      JSON.stringify(pbAdded && { status: pbAdded.status, opened: !!pbAdded.opened, evidence: pbAdded.evidence }));
+
+    const pbUpdOut = pbRun(['update', '--id', 'I-028', '--reply', 'selftest evidence probe']);
+    PASS('issue.js update INSERTs an existing ledger row the panel never had',
+      /PASS\s+issue update :: I-028 \| mirrored to SQLite/.test(pbUpdOut)
+        && pbUpdOut.indexOf('mirror failed') < 0,
+      pbUpdOut.trim().split('\n').slice(-1)[0] || String(pbUpdOut).slice(0, 140));
+    const pbI028 = await pbStateOf('I-028');
+    PASS('Evidence derives TASK-LOG entry ids naming the issue (I-028 -> R29)',
+      !!pbI028 && Array.isArray(pbI028.evidence) && pbI028.evidence.indexOf('R29') >= 0,
+      JSON.stringify(pbI028 && pbI028.evidence));
+
+    pbRun(['close', '--id', pbTmpId, '--reply', 'mirrored reply']);
+    const pbClosed = await pbStateOf(pbTmpId);
+    PASS('CLI close lands status/reply/updated on the mirrored panel row',
+      !!pbClosed && pbClosed.status === 'done' && pbClosed.reply === 'mirrored reply'
+        && !!pbClosed.updated,
+      JSON.stringify(pbClosed && { status: pbClosed.status, reply: pbClosed.reply, updated: !!pbClosed.updated }));
+  } finally {
+    try {
+      const pbSql = require('node:sqlite');
+      const pbConn = new pbSql.DatabaseSync(path.join(dataDir(), 'panel.db'));
+      pbConn.prepare('DELETE FROM issues WHERE id=?').run(pbTmpId);
+      pbConn.prepare('DELETE FROM issues WHERE id=?').run('I-028');
+      pbConn.close();
+    } catch (_e) { /* restore still runs */ }
+    if (pbLedgerBak !== null) fs.writeFileSync(pbLedgerFile, pbLedgerBak);
+    if (pbDeltaBak !== null) fs.writeFileSync(pbDeltaFile, pbDeltaBak);
+  }
+  const pbRes = await api('GET', '/api/state');
+  const pbLedgerNow = fs.existsSync(pbLedgerFile) ? fs.readFileSync(pbLedgerFile, 'utf8') : '';
+  const pbLeftList = pbRun(['list']);
+  PASS('No I-901 residue: panel rows, issues.json and issue.js list all clean',
+    ((pbRes.body && pbRes.body.issues) || []).length === 5
+      && !((pbRes.body && pbRes.body.issues) || []).some((x) => x.id === pbTmpId)
+      && !((pbRes.body && pbRes.body.issues) || []).some((x) => x.id === 'I-028')
+      && (pbLedgerBak === null || pbLedgerNow === pbLedgerBak)
+      && pbLeftList.indexOf(pbTmpId) < 0,
+    'issues=' + ((pbRes.body && pbRes.body.issues) || []).length
+      + ' ledgerRestored=' + (pbLedgerNow === pbLedgerBak)
+      + ' OPEN=' + (pbLeftList.match(/OPEN=\d+/) || [''])[0]);
+
+  /* Ledger column widths: real grip drag -> cp.issue-cols, then a real reload. */
+  await js(`document.querySelector('[data-view="ledger"]').click()`);
+  await sleep(350);
+  const pbColDrag = await js(`(() => {
+    const th = document.querySelector('.issue-table th[data-col="title"]');
+    const grip = th && th.querySelector('.icgrip');
+    if (!th || !grip) return { ok: false, reason: 'missing th/grip' };
+    const before = Math.round(th.getBoundingClientRect().width);
+    const g = grip.getBoundingClientRect();
+    const sx = g.left + Math.max(3, g.width / 2), sy = g.top + Math.max(3, g.height / 2);
+    grip.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientX: sx, clientY: sy, button: 0 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX: sx + 48, clientY: sy }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientX: sx + 48, clientY: sy }));
+    const stored = JSON.parse(localStorage.getItem('cp.issue-cols') || '{}');
+    return { ok: true, before, after: Math.round(th.getBoundingClientRect().width),
+      style: th.style.width, stored: stored.title };
+  })()`);
+  PASS('Ledger header grip drag resizes the column and writes cp.issue-cols',
+    pbColDrag.ok && typeof pbColDrag.stored === 'number' && pbColDrag.stored >= 48
+      && /px$/.test(pbColDrag.style || '')
+      && Math.abs(pbColDrag.after - pbColDrag.before) >= 20,
+    JSON.stringify(pbColDrag));
+
+  await cmd('Page.reload', { ignoreCache: true });
+  await sleep(900); await ready();
+  await js(`document.querySelector('[data-view="ledger"]').click()`);
+  await sleep(350);
+  const pbColKeep = await js(`(() => {
+    const th = document.querySelector('.issue-table th[data-col="title"]');
+    const stored = JSON.parse(localStorage.getItem('cp.issue-cols') || '{}');
+    return { style: th ? th.style.width : '', w: th ? Math.round(th.getBoundingClientRect().width) : -1,
+      stored: stored.title };
+  })()`);
+  PASS('Column width persists across reload (cp.issue-cols reapplied to the th)',
+    typeof pbColKeep.stored === 'number' && pbColKeep.stored >= 48
+      && pbColKeep.style === pbColKeep.stored + 'px' && pbColKeep.w >= 40,
+    JSON.stringify(pbColKeep));
+
+  /* Kanban card links: toggle, signed lag + nature badge, navigation flash. */
+  await js(`document.querySelector('[data-view="board"]').click()`);
+  await sleep(400);
+  const pbEdgePut = await api('PUT', '/api/task-deps',
+    { from: 'W4', to: 'W6', type: 'SS', lag: -2, nature: 'mandatory' });
+  await js(`CP.store.load()`);
+  await sleep(450);
+  const pbLinkUi = await js(`(() => {
+    const card = document.querySelector('.kb-card[data-task-id="W6"]');
+    if (!card) return { ok: false, reason: 'no W6 card' };
+    const row = card.querySelector('.kb-dep-row');
+    const toggle = card.querySelector('.kb-dep-toggle');
+    if (!row || !toggle) return { ok: false, reason: 'missing row/toggle' };
+    const wasOn = row.classList.contains('is-on');
+    toggle.click();
+    const links = Array.from(row.querySelectorAll('.kb-dep-link')).map((b) => b.textContent.trim());
+    const nature = row.querySelector('.kb-dep-nature');
+    const stored = JSON.parse(localStorage.getItem('cp.card-deps') || '{}');
+    return { ok: true, wasOn, on: row.classList.contains('is-on'), links,
+      nature: nature ? nature.textContent : '', storedW6: stored.W6,
+      pressed: toggle.getAttribute('aria-pressed') };
+  })()`);
+  PASS('Card dep toggle reveals depends-on/depended-by links with signed lag + nature badge',
+    pbEdgePut.status === 200 && pbLinkUi.ok && pbLinkUi.wasOn === false && pbLinkUi.on === true
+      && pbLinkUi.pressed === 'true' && pbLinkUi.storedW6 === true
+      && pbLinkUi.links.some((t) => /^W3 FS\b/.test(t))
+      && pbLinkUi.links.some((t) => t.indexOf('W4 SS-2d') >= 0)
+      && pbLinkUi.links.some((t) => t.indexOf('W8 SS') >= 0)
+      && pbLinkUi.nature === 'mandatory',
+    JSON.stringify(pbLinkUi));
+
+  const pbLinkNav = await js(`(() => {
+    const card = document.querySelector('.kb-card[data-task-id="W6"]');
+    const link = card && Array.from(card.querySelectorAll('.kb-dep-link'))
+      .filter((b) => (b.dataset.target || '') === 'W3')[0];
+    if (!link) return { ok: false, reason: 'no W3 link' };
+    link.click();
+    const target = document.querySelector('.kb-card[data-task-id="W3"]');
+    return { ok: true, flashed: !!(target && target.classList.contains('kb-flash')) };
+  })()`);
+  PASS('Clicking a dep link scrolls to and flashes the linked card',
+    pbLinkNav.ok && pbLinkNav.flashed, JSON.stringify(pbLinkNav));
+
+  const pbLinkOff = await js(`(() => {
+    const card = document.querySelector('.kb-card[data-task-id="W6"]');
+    const toggle = card && card.querySelector('.kb-dep-toggle');
+    if (!toggle) return { ok: false };
+    toggle.click();
+    const row = card.querySelector('.kb-dep-row');
+    return { ok: true, on: row.classList.contains('is-on'),
+      stored: JSON.parse(localStorage.getItem('cp.card-deps') || '{}').W6 };
+  })()`);
+  PASS('Toggling the card links off hides the row and persists false',
+    pbLinkOff.ok && pbLinkOff.on === false && pbLinkOff.stored === false, JSON.stringify(pbLinkOff));
+
+  /* I-030 db half: nature vocab over the HTTP write/read path. */
+  const pbNatBad = await api('PUT', '/api/task-deps',
+    { from: 'W4', to: 'W6', type: 'FS', lag: 0, nature: 'required' });
+  const pbNatOk = await api('PUT', '/api/task-deps',
+    { from: 'W4', to: 'W6', type: 'SS', lag: -2, nature: 'mandatory' });
+  const pbDeps30 = await api('GET', '/api/task-deps');
+  const pbNatRow = ((pbDeps30.body) || []).filter((d) => d.from === 'W4' && d.to === 'W6')[0];
+  const pbNatEmpty = await api('PUT', '/api/task-deps',
+    { from: 'W4', to: 'W6', type: 'FS', lag: 0, nature: '' });
+  const pbDeps30b = await api('GET', '/api/task-deps');
+  const pbNatRow2 = ((pbDeps30b.body) || []).filter((d) => d.from === 'W4' && d.to === 'W6')[0];
+  await api('DELETE', '/api/task-deps/' + encodeURIComponent('W4') + '/' + encodeURIComponent('W6'));
+  PASS('task-dep nature: bad vocab -> 400, mandatory and "" accepted and returned',
+    pbNatBad.status === 400 && /nature/i.test(String(pbNatBad.body && pbNatBad.body.error))
+      && pbNatOk.status === 200 && !!pbNatRow && pbNatRow.nature === 'mandatory' && pbNatRow.lag === -2
+      && pbNatEmpty.status === 200 && !!pbNatRow2 && pbNatRow2.nature === '',
+    JSON.stringify({ bad: pbNatBad.status, err: pbNatBad.body && pbNatBad.body.error,
+      nature: pbNatRow && pbNatRow.nature, lag: pbNatRow && pbNatRow.lag,
+      empty: pbNatRow2 && pbNatRow2.nature }));
+
+  await js(`localStorage.removeItem('cp.card-deps'); localStorage.removeItem('cp.issue-cols');
+    CP.store.load(); true`);
+  await sleep(300);
+
+  PASS('Section 30 added no JS exceptions or console errors',
+    errors.length === err30, 'errors before=' + err30 + ' after=' + errors.length);
+
+  /* 31. R30 / I-031 - goal tree manual control: [+]/[-] fold, drag-move write
+     path, WBS template library, plus the R30 layout fix (the gantt block must
+     keep a real height under a fully expanded goal tree - a DOM-count check
+     cannot see that class of bug, so this block measures layout). Additive
+     section. Structure writes hit PUT /api/plan/structure on the battery's own
+     server, so data/milestone-plan.json AND docs/evidence/milestones.json (the
+     gate-X-pinned sub_lines a cross-parent move re-syncs) are backed up before
+     the first probe and both restored in finally (section 30 pattern); saved
+     template rows (wbs_templates id LIKE 'tpl-%') are deleted in finally;
+     cp.tree-fold is removed in finally; the plan gates re-run after the
+     restore so the battery and the main session inherit pristine stores. */
+  const i31Err = errors.length;
+  const i31PlanFile = path.join(dataDir(), 'milestone-plan.json');
+  const i31PlanBak = fs.readFileSync(i31PlanFile, 'utf8');
+  const i31MsFile = path.join(pbRepo, 'docs', 'evidence', 'milestones.json');
+  const i31MsBak = fs.readFileSync(i31MsFile, 'utf8');
+  const i31Run = (argv) => {
+    try {
+      return { code: 0, out: pbExec(process.execPath, argv, { cwd: pbRepo, encoding: 'utf8' }) };
+    } catch (e) {
+      return { code: e && typeof e.status === 'number' ? e.status : -1,
+        out: String((e && e.stdout) || '') + String((e && e.stderr) || '') };
+    }
+  };
+  const i31Seed = () => {
+    try {
+      pbExec(process.execPath, [path.join(pbRepo, 'scripts', 'plan-sync.js'), '--seed-tasks'],
+        { cwd: pbRepo, encoding: 'utf8' });
+    } catch (_e) { /* a seed failure surfaces as a gate FAIL line below */ }
+  };
+
+  try {
+    /* Re-activate the plan view; section 30 left the board on screen. */
+    await js(`document.querySelector('#nav [data-view="plan"]').click()`);
+    await sleep(250);
+    /* Fully expanded tree first: clear fold state, re-read the real plan. */
+    await js(`(() => { localStorage.removeItem('cp.tree-fold'); return true; })()`);
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(300);
+    /* R32 retarget (I-037): the tab bar is gone - the Plan view IS the tree,
+       which the click above re-activated before measuring layout. */
+    await sleep(250);
+
+    /* Layout gate (live-review defect): with the tree fully expanded the
+       gantt block must keep height > 0 and be reachable by scrolling the
+       layer - one vertical scroll over [goal tree, legend, axis, gantt]. */
+    const i31Layout = await js(`(() => {
+      const lay = document.getElementById('milestoneLayer');
+      const tree = document.getElementById('msGoalTree');
+      const sc = document.querySelector('.ms-scroll');
+      const out = {
+        treeH: tree ? Math.round(tree.getBoundingClientRect().height) : -1,
+        scrollH: sc ? sc.offsetHeight : -1,
+        groups: document.querySelectorAll('.ms-group').length,
+        folded: document.querySelectorAll('.ms-goal-children.is-folded, .ms-goal-sub.is-folded').length,
+        layerScrollable: lay ? lay.scrollHeight > lay.clientHeight + 40 : false
+      };
+      if (lay) lay.scrollTop = lay.scrollHeight;
+      const r = sc ? sc.getBoundingClientRect() : null;
+      const lr = lay ? lay.getBoundingClientRect() : null;
+      out.reachable = !!(r && lr && r.height > 0 && r.top < lr.bottom && r.bottom > lr.top + 10);
+      if (lay) lay.scrollTop = 0;
+      return out;
+    })()`);
+    PASS('Gantt block keeps a real height and is reachable by scrolling with the goal tree fully expanded (R30 layout fix)',
+      i31Layout.treeH > 200 && i31Layout.scrollH > 0 && i31Layout.folded === 0
+        && i31Layout.groups >= 7 && i31Layout.layerScrollable && i31Layout.reachable,
+      JSON.stringify(i31Layout));
+
+    /* Fold controls on a deterministic fixture (own precondition, not the
+       live plan's state). */
+    const i31Fix = {
+      available: true, state: 'READY', label: 'Milestone plan ready', detail: '',
+      fix_command: 'node scripts/prd-to-action.js', message: '', schema: 'ai-project-ops.plan/1.0',
+      goals: [
+        { id: 'G1', title: 'Fixture goal one', milestone_ids: ['M1', 'M2'] },
+        { id: 'G2', title: 'Fixture goal two', milestone_ids: ['M3'] },
+      ],
+      milestones: [
+        { id: 'M1', name: 'Fixture alpha', depends_on: [], start_offset_h: 0, end_offset_h: 12, status: 'done', completion: 100, cost: 2, verify: 'node scripts/prd-to-action.js' },
+        { id: 'M2', name: 'Fixture beta', depends_on: ['M1'], start_offset_h: 12, end_offset_h: 24, status: 'in_progress', completion: 50, cost: 1, verify: 'node scripts/prd-to-action.js' },
+        { id: 'M3', name: 'Fixture gamma', depends_on: ['M1'], start_offset_h: 12, end_offset_h: 30, status: 'todo', completion: 0, cost: 0, verify: 'node scripts/prd-to-action.js' },
+      ],
+      work_units: [
+        { id: 'W1', milestone_id: 'M1', title: 'Fixture task one', owner: 'main', owner_type: 'main', start_offset_h: 0, end_offset_h: 6, status: 'done', progress: 100, cost: 1.2, billed: 0, tier: 'S' },
+        { id: 'W2', milestone_id: 'M1', title: 'Fixture task two', owner: 'main', owner_type: 'main', start_offset_h: 6, end_offset_h: 12, status: 'done', progress: 100, cost: 0.8, billed: 0, tier: 'S' },
+        { id: 'W3', milestone_id: 'M2', title: 'Fixture task three', owner: 'main', owner_type: 'main', start_offset_h: 12, end_offset_h: 24, status: 'in_progress', progress: 50, cost: 0.5, billed: 0, tier: 'S' },
+        { id: 'W4', milestone_id: 'M3', title: 'Fixture task four', owner: 'main', owner_type: 'main', start_offset_h: 12, end_offset_h: 30, status: 'todo', progress: 0, cost: 0, billed: 0, tier: 'S' },
+      ],
+      relations: [], main_line: ['M1', 'M2', 'M3'],
+      sub_lines: { M1: ['W1', 'W2'], M2: ['W3'], M3: ['W4'] },
+    };
+    await js(`CP.applyPlan(${JSON.stringify(i31Fix)})`);
+
+    const i31FoldCtl = await js(`(() => {
+      const g = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] [data-fold]');
+      const m = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"] [data-fold]');
+      const w = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W1"] [data-fold]');
+      const head = document.querySelector('.ms-a-head .ms-a-fold');
+      const tplG = document.querySelector('.ms-goal-row[data-node="G1"] .ms-tpl-btn');
+      const tplW = document.querySelector('.ms-goal-row[data-kind=wu] .ms-tpl-btn');
+      const mRow = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"]');
+      const wRow = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W1"]');
+      const gRow = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"]');
+      return {
+        g: g ? g.textContent : '', m: m ? m.textContent : '', wHas: !!w,
+        headHas: !!head, tplText: tplG ? tplG.textContent : '', wTpl: !!tplW,
+        draggable: { m: !!mRow && mRow.draggable, w: !!wRow && wRow.draggable, g: !!gRow && gRow.draggable }
+      };
+    })()`);
+    PASS('G/M rows carry [-] fold toggles and [+ from template]; W rows are leaves; only M/W rows drag',
+      i31FoldCtl.g === '[-]' && i31FoldCtl.m === '[-]' && !i31FoldCtl.wHas && i31FoldCtl.headHas
+        && i31FoldCtl.tplText === '[+ from template]' && !i31FoldCtl.wTpl
+        && i31FoldCtl.draggable.m && i31FoldCtl.draggable.w && !i31FoldCtl.draggable.g,
+      JSON.stringify(i31FoldCtl));
+
+    const i31FoldG = await js(`(() => {
+      const btn = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] [data-fold]');
+      if (!btn) return { ok: false };
+      btn.click();
+      const box = document.querySelector('.ms-goal-group[data-goal="G1"] > .ms-goal-children');
+      const row = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"]');
+      const sub = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W1"]');
+      const stored = JSON.parse(localStorage.getItem('cp.tree-fold') || '{}');
+      return {
+        ok: true,
+        folded: !!box && box.classList.contains('is-folded'),
+        display: box ? getComputedStyle(box).display : '',
+        btn: btn.textContent,
+        expanded: btn.getAttribute('aria-expanded'),
+        rollup: row ? row.textContent.replace(/\\s+/g, ' ').trim() : '',
+        wuHidden: !!sub && sub.offsetParent === null,
+        stored
+      };
+    })()`);
+    PASS('Collapsing a goal hides its children but keeps the rolled-up numbers on the parent row; state persists in cp.tree-fold',
+      i31FoldG.ok && i31FoldG.folded && i31FoldG.display === 'none' && i31FoldG.btn === '[+]'
+        && i31FoldG.expanded === 'false' && i31FoldG.rollup.indexOf('75%') >= 0
+        && i31FoldG.rollup.indexOf('$3k') >= 0 && i31FoldG.wuHidden
+        && i31FoldG.stored.G1 === true,
+      JSON.stringify({ folded: i31FoldG.folded, btn: i31FoldG.btn, rollup: i31FoldG.rollup, stored: i31FoldG.stored }));
+
+    const i31FoldM = await js(`(() => {
+      const gBtn = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] [data-fold]');
+      if (gBtn) gBtn.click();
+      const mBtn = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"] [data-fold]');
+      if (!mBtn) return { ok: false };
+      mBtn.click();
+      const mRow = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"]');
+      const sub = mRow ? mRow.nextElementSibling : null;
+      const wu = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W1"]');
+      const stored = JSON.parse(localStorage.getItem('cp.tree-fold') || '{}');
+      return {
+        ok: true,
+        subFolded: !!sub && sub.classList.contains('is-folded'),
+        subDisplay: sub ? getComputedStyle(sub).display : '',
+        wuGone: !!wu && wu.offsetParent === null,
+        mVisible: !!mRow && mRow.offsetParent !== null,
+        mText: mRow ? mRow.textContent.replace(/\\s+/g, ' ').trim() : '',
+        stored, gOpen: stored.G1 === false
+      };
+    })()`);
+    PASS('Collapsing a milestone hides only its work units; the parent row stays visible with its rollup; both ids stay in the map',
+      i31FoldM.ok && i31FoldM.subFolded && i31FoldM.subDisplay === 'none' && i31FoldM.wuGone
+        && i31FoldM.mVisible && i31FoldM.mText.indexOf('100%') >= 0
+        && i31FoldM.stored.M1 === true && i31FoldM.gOpen,
+      JSON.stringify({ sub: i31FoldM.subFolded, text: i31FoldM.mText, stored: i31FoldM.stored }));
+
+    await cmd('Page.reload', { ignoreCache: true });
+    await sleep(900);
+    await ready();
+    /* R29 lesson (a): re-activate the plan view after a reload BEFORE
+       measuring anything. R32 retarget (I-037): no ms tab any more - the
+       Plan view itself is the full-page tree. */
+    await js(`document.querySelector('#nav [data-view="plan"]').click()`);
+    await sleep(200);
+    await js(`CP.applyPlan(${JSON.stringify(i31Fix)})`);
+    const i31FoldKeep = await js(`(() => {
+      const gBox = document.querySelector('.ms-goal-group[data-goal="G1"] > .ms-goal-children');
+      const mRow = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"]');
+      const mSub = mRow ? mRow.nextElementSibling : null;
+      const gBtn = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] [data-fold]');
+      const mBtn = mRow ? mRow.querySelector('[data-fold]') : null;
+      return {
+        gFolded: !!gBox && gBox.classList.contains('is-folded'),
+        mFolded: !!mSub && mSub.classList.contains('is-folded'),
+        gBtn: gBtn ? gBtn.textContent : '', mBtn: mBtn ? mBtn.textContent : '',
+        stored: JSON.parse(localStorage.getItem('cp.tree-fold') || '{}')
+      };
+    })()`);
+    PASS('Fold state survives a reload and is re-applied on render (cp.tree-fold id -> bool map)',
+      i31FoldKeep.gFolded === false && i31FoldKeep.mFolded && i31FoldKeep.gBtn === '[-]'
+        && i31FoldKeep.mBtn === '[+]' && i31FoldKeep.stored.G1 === false
+        && i31FoldKeep.stored.M1 === true,
+      JSON.stringify(i31FoldKeep));
+
+    await js(`(() => {
+      const gBtn = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] [data-fold]');
+      if (gBtn) gBtn.click();
+      const mBtn = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"] [data-fold]');
+      if (mBtn) mBtn.click();
+      return true;
+    })()`);
+
+    /* Drag highlighting through the real handlers (synthetic DragEvent with a
+       constructed DataTransfer - no window.location stubbing, R28 rule). */
+    const i31DragHi = await js(`(() => {
+      const m2 = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M2"]');
+      if (!m2) return { ok: false };
+      const dt = new DataTransfer();
+      m2.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      const hi = Array.from(document.querySelectorAll('.ms-goal-row.is-drop-ok'))
+        .map((r) => (r.dataset.kind || '') + ':' + (r.dataset.node || ''));
+      const gRow = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"]');
+      const wRow = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W1"]');
+      const gAccepts = !!gRow && !gRow.dispatchEvent(new DragEvent('dragover',
+        { bubbles: true, cancelable: true, dataTransfer: dt }));
+      const wAccepts = !!wRow && !wRow.dispatchEvent(new DragEvent('dragover',
+        { bubbles: true, cancelable: true, dataTransfer: dt }));
+      m2.dispatchEvent(new DragEvent('dragend', { bubbles: true, dataTransfer: dt }));
+      return {
+        ok: true, hi, gAccepts, wAccepts, dtText: dt.types.indexOf('text/plain') >= 0,
+        after: document.querySelectorAll('.ms-goal-row.is-drop-ok').length
+      };
+    })()`);
+    PASS('Dragstart highlights only valid drop targets (goals + other milestones for an M drag); W rows refuse the drop',
+      i31DragHi.ok && i31DragHi.hi.length === 4 && i31DragHi.hi.every((t) => t.indexOf('wu:') !== 0)
+        && i31DragHi.gAccepts && !i31DragHi.wAccepts && i31DragHi.after === 0 && i31DragHi.dtText,
+      JSON.stringify(i31DragHi));
+
+    /* Invalid structure ops: 400 + zero writes (file stays byte-identical). */
+    const i31Inv = [];
+    const i31InvBodies = [
+      { kind: 'move', id: 'W3', new_parent: 'G1', index: 0 },
+      { kind: 'move', id: 'M1', new_parent: 'M3', index: 0 },
+      { kind: 'move', id: 'NOPE', new_parent: 'G1', index: 0 },
+      { kind: 'move', id: 'M7', new_parent: 'G1', index: 0 },
+      { kind: 'move', id: 'W3', new_parent: 'M1', index: 99 },
+      { kind: 'nonsense', id: 'M1', new_parent: 'G1', index: 0 },
+    ];
+    for (const i31Body of i31InvBodies) {
+      const i31Res = await api('PUT', '/api/plan/structure', i31Body);
+      i31Inv.push({
+        op: i31Body.kind + ':' + i31Body.id + '->' + i31Body.new_parent + '@' + i31Body.index,
+        status: i31Res.status,
+        unchanged: fs.readFileSync(i31PlanFile, 'utf8') === i31PlanBak
+          && fs.readFileSync(i31MsFile, 'utf8') === i31MsBak,
+        err: !!(i31Res.body && i31Res.body.error),
+      });
+    }
+    PASS('Invalid structure ops answer 400 with zero writes (type rules, unknown ids, emptying a goal, bad index, unknown op)',
+      i31Inv.length === 6 && i31Inv.every((x) => x.status === 400 && x.unchanged && x.err),
+      JSON.stringify(i31Inv));
+
+    /* A real successful M move through the client seam (the path a drop
+       takes): M6 from G1 to the end of G2. */
+    const i31MoveM = await js(`(async () => {
+      const ok = await CP.planMove('M6', 'G2', 1);
+      const g1 = document.querySelector('.ms-goal-group[data-goal="G1"]');
+      const g2 = document.querySelector('.ms-goal-group[data-goal="G2"]');
+      return {
+        ok,
+        g1HasM6: !!(g1 && g1.querySelector('.ms-goal-row[data-node="M6"]')),
+        g2Order: g2 ? Array.from(g2.querySelectorAll('.ms-goal-row[data-kind=ms]')).map((r) => r.dataset.node) : [],
+        tree: !!document.getElementById('msGoalTree')
+      };
+    })()`);
+    const i31MoveFile = JSON.parse(fs.readFileSync(i31PlanFile, 'utf8'));
+    PASS('M move persists through PUT /api/plan/structure: file and DOM agree, ids unchanged',
+      i31MoveM.ok && i31MoveM.tree && !i31MoveM.g1HasM6
+        && JSON.stringify(i31MoveFile.goals[0].milestone_ids) === JSON.stringify(['M1', 'M2', 'M3', 'M4', 'M5'])
+        && JSON.stringify(i31MoveFile.goals[1].milestone_ids) === JSON.stringify(['M7', 'M6'])
+        && JSON.stringify(i31MoveM.g2Order) === JSON.stringify(['M7', 'M6']),
+      JSON.stringify({ ok: i31MoveM.ok, g1: i31MoveFile.goals[0].milestone_ids, g2: i31MoveM.g2Order }));
+
+    /* R30 line 2: gates green AFTER a successful move. */
+    i31Seed();
+    const i31GateA = i31Run([path.join(pbRepo, 'scripts', 'prd-to-action.js')]);
+    const i31GateB = i31Run([path.join(pbRepo, 'scripts', 'plan-sync.js'), '--check']);
+    const i31GateALine = (i31GateA.out.split('\n').filter((l) => l.indexOf('PRD-TO-ACTION GATE') >= 0)[0] || '').trim();
+    const i31GateBLine = (i31GateB.out.split('\n').filter((l) => l.indexOf('PLAN-SYNC CHECK') >= 0)[0] || '').trim();
+    PASS('After a successful move prd-to-action 10/10 and plan-sync --check stay green (R30 line 2)',
+      i31GateA.code === 0 && i31GateALine === 'PRD-TO-ACTION GATE: 10/10 passed'
+        && i31GateB.code === 0 && /^PLAN-SYNC CHECK: \d+\/\d+ passed$/.test(i31GateBLine),
+      i31GateALine + ' (exit ' + i31GateA.code + ') | ' + i31GateBLine + ' (exit ' + i31GateB.code + ')');
+
+    /* W move: cross-parent, sub_lines + milestone_id stay consistent. */
+    const i31MoveW = await js(`(async () => {
+      const ok = await CP.planMove('W3', 'M2', 3);
+      const row = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W3"]');
+      const sub = row ? row.closest('.ms-goal-sub') : null;
+      const msRow = sub ? sub.previousElementSibling : null;
+      return { ok, has: !!row, under: msRow ? msRow.dataset.node : '' };
+    })()`);
+    const i31WFile = JSON.parse(fs.readFileSync(i31PlanFile, 'utf8'));
+    const i31WSub1 = i31WFile.sub_lines.M1 || [];
+    const i31WSub2 = i31WFile.sub_lines.M2 || [];
+    const i31WObj = i31WFile.work_units.filter((w) => w.id === 'W3')[0];
+    const i31MIds = i31WFile.milestones.map((m) => String(m.id));
+    const i31WIds = i31WFile.work_units.map((w) => String(w.id));
+    const i31MStable = i31MIds.length === 7
+      && ['M1', 'M2', 'M3', 'M4', 'M5', 'M6', 'M7'].every((id) => i31MIds.indexOf(id) >= 0);
+    const i31WStable = i31WIds.length === 18
+      && Array.from({ length: 18 }, (_v, i) => 'W' + (i + 1)).every((id) => i31WIds.indexOf(id) >= 0);
+    PASS('W move relocates W3 under M2: sub_lines membership and milestone_id stay consistent, existing ids never change',
+      i31MoveW.ok && i31MoveW.has && i31MoveW.under === 'M2'
+        && i31WSub1.indexOf('W3') < 0 && i31WSub2.join(',') === 'W4,W5,W6,W3'
+        && !!i31WObj && i31WObj.milestone_id === 'M2' && i31MStable && i31WStable,
+      JSON.stringify({ dom: i31MoveW, sub1: i31WSub1, sub2: i31WSub2,
+        w3: i31WObj ? { m: i31WObj.milestone_id, s: i31WObj.status, p: i31WObj.progress } : null }));
+
+    /* R30 line 2 (resolution): a W cross-parent move re-syncs the gate-X-
+       pinned docs/evidence/milestones.json sub_lines through the same write,
+       so BOTH gates stay green for every accepted move kind. */
+    i31Seed();
+    const i31GateE = i31Run([path.join(pbRepo, 'scripts', 'prd-to-action.js')]);
+    const i31GateF = i31Run([path.join(pbRepo, 'scripts', 'plan-sync.js'), '--check']);
+    const i31GateELine = (i31GateE.out.split('\n').filter((l) => l.indexOf('PRD-TO-ACTION GATE') >= 0)[0] || '').trim();
+    const i31GateFLine = (i31GateF.out.split('\n').filter((l) => l.indexOf('PLAN-SYNC CHECK') >= 0)[0] || '').trim();
+    const i31MsNow = JSON.parse(fs.readFileSync(i31MsFile, 'utf8'));
+    PASS('W cross-parent move keeps prd-to-action 10/10 and plan-sync green (evidence sub_lines re-synced)',
+      i31GateE.code === 0 && i31GateELine === 'PRD-TO-ACTION GATE: 10/10 passed'
+        && i31GateF.code === 0 && /^PLAN-SYNC CHECK: \d+\/\d+ passed$/.test(i31GateFLine)
+        && (i31MsNow.sub_lines.M2 || []).join(',') === 'W4,W5,W6,W3'
+        && (i31MsNow.sub_lines.M1 || []).indexOf('W3') < 0,
+      i31GateELine + ' (exit ' + i31GateE.code + ') | ' + i31GateFLine + ' (exit ' + i31GateF.code
+        + ') | ms.sub_lines.M2=' + JSON.stringify(i31MsNow.sub_lines.M2));
+
+    /* Template library: built-ins + subtree save + invalid saves. */
+    const i31Prov = 'inspired by Teambition public template categories; content authored fresh';
+    const i31Tpl1 = await api('GET', '/api/templates');
+    const i31TplList1 = (i31Tpl1.body && i31Tpl1.body.templates) || [];
+    const i31Built1 = i31TplList1.filter((t) => t.kind === 'builtin');
+    const i31Save = await api('POST', '/api/templates', { name: 'I31 probe subtree', source_node: 'M1' });
+    const i31Tpl2 = await api('GET', '/api/templates');
+    const i31TplList2 = (i31Tpl2.body && i31Tpl2.body.templates) || [];
+    const i31Saved = i31TplList2.filter((t) => t.id === (i31Save.body && i31Save.body.id));
+    const i31SaveBad = await api('POST', '/api/templates', { name: '', source_node: 'M1' });
+    const i31SaveBad2 = await api('POST', '/api/templates', { name: 'x', source_node: 'G999' });
+    PASS('GET /api/templates lists 4-6 built-ins with the exact provenance line; POST saves the M1 subtree; bad saves are 400',
+      i31Tpl1.status === 200 && i31Built1.length >= 4 && i31Built1.length <= 6
+        && i31Built1.every((t) => t.provenance === i31Prov)
+        && i31Built1.some((t) => t.name === 'Product launch')
+        && i31Built1.some((t) => t.name === 'Software release')
+        && i31Save.status === 200 && /^tpl-/.test(String(i31Save.body && i31Save.body.id))
+        && i31Saved.length === 1 && i31Saved[0].provenance === 'saved from plan subtree M1'
+        && i31Saved[0].n_work_units === 2
+        && i31SaveBad.status === 400 && i31SaveBad2.status === 400,
+      JSON.stringify({ builtins: i31Built1.map((t) => t.name), save: i31Save.status,
+        n: i31Saved[0] && i31Saved[0].n_work_units, bad: [i31SaveBad.status, i31SaveBad2.status] }));
+
+    /* Template modal UI: open from a G row, save through the form, apply a
+       built-in through the modal button (the human path). */
+    await js(`(() => {
+      const btn = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"] .ms-tpl-btn');
+      if (btn) btn.click();
+      return true;
+    })()`);
+    await sleep(500);
+    const i31Modal = await js(`(() => {
+      const layer = document.getElementById('modalLayer');
+      const sheet = document.getElementById('modalSheet');
+      const text = sheet ? sheet.textContent : '';
+      return {
+        open: !!layer && !layer.classList.contains('hidden'),
+        hasLaunch: text.indexOf('Product launch') >= 0,
+        hasProv: text.indexOf('inspired by Teambition public template categories; content authored fresh') >= 0,
+        applyBtns: sheet ? sheet.querySelectorAll('[data-tpl-apply]').length : 0,
+        saveBtn: !!(sheet && sheet.querySelector('[data-tpl-save]')),
+        input: !!(sheet && sheet.querySelector('#tplSaveName'))
+      };
+    })()`);
+    PASS('[+ from template] opens the library modal with built-ins, the provenance line, Apply and Save controls',
+      i31Modal.open && i31Modal.hasLaunch && i31Modal.hasProv && i31Modal.applyBtns >= 4
+        && i31Modal.saveBtn && i31Modal.input,
+      JSON.stringify(i31Modal));
+
+    await js(`(() => {
+      const input = document.getElementById('tplSaveName');
+      if (input) input.value = 'I31 UI subtree';
+      const btn = document.querySelector('#modalSheet [data-tpl-save]');
+      if (btn) btn.click();
+      return true;
+    })()`);
+    await sleep(500);
+    const i31UiSave = await api('GET', '/api/templates');
+    const i31UiSaved = ((i31UiSave.body && i31UiSave.body.templates) || [])
+      .filter((t) => t.name === 'I31 UI subtree');
+
+    await js(`(() => {
+      const btn = document.querySelector('#modalSheet [data-tpl-apply="builtin-launch"]');
+      if (btn) btn.click();
+      return true;
+    })()`);
+    await sleep(700);
+    const i31UiApply = await js(`(() => {
+      const layer = document.getElementById('modalLayer');
+      const m8 = document.querySelector('.ms-goal-row[data-node="M8"]');
+      const g1 = document.querySelector('.ms-goal-group[data-goal="G1"]');
+      return {
+        closed: !!layer && layer.classList.contains('hidden'),
+        m8: !!m8,
+        inG1: !!(g1 && g1.querySelector('.ms-goal-row[data-node="M8"]')),
+        w19: !!document.querySelector('.ms-goal-row[data-node="W19"]'),
+        m8Text: m8 ? m8.textContent.replace(/\\s+/g, ' ').trim() : ''
+      };
+    })()`);
+    PASS('Modal save records the UI subtree; modal Apply instantiates M8/W19 under G1 with todo / 0 placeholders',
+      i31UiSaved.length === 1 && i31UiApply.closed && i31UiApply.m8 && i31UiApply.inG1
+        && i31UiApply.w19 && i31UiApply.m8Text.indexOf('[todo]') >= 0
+        && i31UiApply.m8Text.indexOf('$0') >= 0,
+      JSON.stringify({ saved: i31UiSaved.length, apply: i31UiApply }));
+
+    /* Two more applies prove the id series continues and never collides. */
+    const i31TplSavedId = i31Save.body && i31Save.body.id;
+    const i31Apply2 = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'G2', template_id: 'builtin-campaign' });
+    const i31Apply3 = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'M7', template_id: i31TplSavedId });
+    const i31FinalPlan = JSON.parse(fs.readFileSync(i31PlanFile, 'utf8'));
+    const i31NewM = i31FinalPlan.milestones.filter((m) => {
+      const n = Number(String(m.id).slice(1));
+      return /^M\d+$/.test(String(m.id)) && n >= 8 && n <= 13;
+    });
+    const i31NewW = i31FinalPlan.work_units.filter((w) => {
+      const n = Number(String(w.id).slice(1));
+      return /^W\d+$/.test(String(w.id)) && n >= 19;
+    });
+    const i31AllIds = i31FinalPlan.milestones.map((m) => String(m.id))
+      .concat(i31FinalPlan.work_units.map((w) => String(w.id)));
+    PASS('Further applies continue the series (M11+, W25+) with no id collisions; every new node is todo / 0',
+      i31Apply2.status === 200 && i31Apply3.status === 200
+        && JSON.stringify(i31Apply2.body && i31Apply2.body.added_milestones) === JSON.stringify(['M11', 'M12', 'M13'])
+        && (i31Apply3.body && i31Apply3.body.added_work_units || []).length === 2
+        && i31NewM.length === 6 && i31NewW.length === 14
+        && new Set(i31AllIds).size === i31AllIds.length
+        && i31NewM.every((m) => m.status === 'todo')
+        && i31NewW.every((w) => w.status === 'todo' && w.cost === 0 && w.progress === 0)
+        && i31FinalPlan.main_line.length === 13
+        && Array.isArray(i31FinalPlan.sub_lines.M8) && Array.isArray(i31FinalPlan.sub_lines.M13),
+      JSON.stringify({ m: i31NewM.map((x) => x.id), w: i31NewW.length,
+        a2: i31Apply2.status, a3: i31Apply3.status }));
+
+    /* Invalid applies: 400 with zero writes. */
+    const i31ApplyBadFile = fs.readFileSync(i31PlanFile, 'utf8');
+    const i31ApplyBad = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'G1', template_id: 'builtin-missing' });
+    const i31ApplyBad2 = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'ZZ9', template_id: 'builtin-launch' });
+    PASS('Unknown template and unknown apply target answer 400 with zero writes',
+      i31ApplyBad.status === 400 && i31ApplyBad2.status === 400
+        && fs.readFileSync(i31PlanFile, 'utf8') === i31ApplyBadFile,
+      JSON.stringify({ missing: i31ApplyBad.status, target: i31ApplyBad2.status }));
+  } finally {
+    fs.writeFileSync(i31PlanFile, i31PlanBak);
+    fs.writeFileSync(i31MsFile, i31MsBak);
+    try {
+      const i31Sql = require('node:sqlite');
+      const i31Conn = new i31Sql.DatabaseSync(path.join(dataDir(), 'panel.db'));
+      i31Conn.prepare("DELETE FROM wbs_templates WHERE id LIKE 'tpl-%'").run();
+      i31Conn.close();
+    } catch (_e) { /* restore still runs */ }
+    try {
+      await js(`(() => {
+        localStorage.removeItem('cp.tree-fold');
+        const layer = document.getElementById('modalLayer');
+        if (layer && !layer.classList.contains('hidden')) {
+          const close = document.querySelector('#modalSheet [data-action="close"]');
+          if (close) close.click();
+        }
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  const i31PlanNow = fs.readFileSync(i31PlanFile, 'utf8');
+  const i31MsAfter = fs.readFileSync(i31MsFile, 'utf8');
+  PASS('milestone-plan.json and docs/evidence/milestones.json restored byte-identical (finally block)',
+    i31PlanNow === i31PlanBak && i31MsAfter === i31MsBak,
+    'plan identical=' + (i31PlanNow === i31PlanBak) + ' (' + i31PlanNow.length + ' bytes)'
+      + ' evidence identical=' + (i31MsAfter === i31MsBak) + ' (' + i31MsAfter.length + ' bytes)');
+
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+  i31Seed();
+  const i31GateC = i31Run([path.join(pbRepo, 'scripts', 'prd-to-action.js')]);
+  const i31GateD = i31Run([path.join(pbRepo, 'scripts', 'plan-sync.js'), '--check']);
+  const i31GateCLine = (i31GateC.out.split('\n').filter((l) => l.indexOf('PRD-TO-ACTION GATE') >= 0)[0] || '').trim();
+  const i31GateDLine = (i31GateD.out.split('\n').filter((l) => l.indexOf('PLAN-SYNC CHECK') >= 0)[0] || '').trim();
+  PASS('Gates green on the restored plan: prd-to-action 10/10 and plan-sync --check exit 0',
+    i31GateC.code === 0 && i31GateCLine === 'PRD-TO-ACTION GATE: 10/10 passed'
+      && i31GateD.code === 0 && /^PLAN-SYNC CHECK: \d+\/\d+ passed$/.test(i31GateDLine),
+    i31GateCLine + ' (exit ' + i31GateC.code + ') | ' + i31GateDLine + ' (exit ' + i31GateD.code + ')');
+
+  PASS('Section 31 added no JS exceptions or console errors',
+    errors.length === i31Err, 'errors before=' + i31Err + ' after=' + errors.length);
+
+  /* 32. R31 / I-032 + I-033: additive gate for this package. Hour-axis
+     humanization (one-line purpose header, labelled NOW flag on the axis,
+     hover tooltip with start/end/duration/cost/owner, past-hours shade,
+     status palette shared with the kanban) + card AI dimension fields
+     (model/instance, cost, confidence dash, owner-scope gate badge), the
+     Settings confidence gate (cp.conf-threshold), the per-card audit
+     popover (GET /api/tasks/:id/audit) and the red-line-1 scan. Lessons
+     obeyed: the block provisions its own task + desk-event rows with a
+     server-random id (evidence derivation reads the ledger, so the id must
+     be random), re-activates views after Page.reload before measuring,
+     restores every mutation in finally and proves the demo old fields
+     byte-identical, and layout checks measure heights/visibility - never
+     DOM counts. */
+  const r32Err = errors.length;
+  const r32State0 = (await api('GET', '/api/state')).body;
+  const r32PickOld = (t) => (t ? JSON.stringify([
+    t.id, t.title, t.owner, t.owner_type, t.role, t.handoff, t.status, t.start, t.end,
+    t.progress, t.placeholder, t.tier, t.billed, t.cost, t.sort, t.parent_id,
+    t.baseline_start, t.baseline_end,
+  ]) : '');
+  const r32Old = {};
+  ['t1', 't3', 't5'].forEach((id) => {
+    r32Old[id] = r32PickOld(((r32State0 && r32State0.tasks) || []).filter((t) => t.id === id)[0]);
+  });
+
+  /* --- I-032: purpose header, NOW flag, past shade, tooltip, palette.
+     R32 retarget (I-037): the hour axis panel moved to the Work board; every
+     I-032 measurement below stays byte-identical. --- */
+  await js(`document.querySelector('[data-view="board"]').click()`);
+  await sleep(300);
+  const r32Head = await js(`(() => {
+    const hint = document.querySelector('#ganttPanel .panel-head .hint');
+    const corner = document.querySelector('.gantt-corner');
+    const flag = document.querySelector('.gnow-flag');
+    const nowLine = document.querySelector('.now-line');
+    const shade = document.querySelector('.past-shade');
+    const body = document.getElementById('ganttBody');
+    const bar = document.querySelector('.gbar[data-task-id="t3"]');
+    return {
+      hint: hint ? hint.textContent.trim() : '',
+      corner: corner ? corner.textContent.trim() : '',
+      flag: flag ? flag.textContent.trim() : '',
+      flagLeft: flag ? flag.offsetLeft : -1,
+      nowLeft: nowLine ? parseFloat(nowLine.style.left) : -1,
+      nowCount: document.querySelectorAll('.now-line').length,
+      shadeW: shade ? shade.offsetWidth : -1,
+      shadeH: shade ? shade.offsetHeight : -1,
+      shadePE: shade ? getComputedStyle(shade).pointerEvents : '',
+      bodyH: body ? body.offsetHeight : 0,
+      title: bar ? bar.title : '',
+      cursor: bar ? getComputedStyle(bar).cursor : ''
+    };
+  })()`);
+  PASS('I-032: one-line purpose header on the Hour axis panel (old hint prose gone)',
+    r32Head.hint === 'drag bars to reschedule (hour-snapped) - cost first'
+      && r32Head.hint.indexOf('12h ticks') < 0,
+    JSON.stringify(r32Head.hint));
+  PASS('I-032: labelled NOW flag rides the axis beside the pinned corner name',
+    r32Head.corner === 'Work units | hour axis (day/night)'
+      && r32Head.flag === 'NOW' && r32Head.nowCount === 1
+      && r32Head.flagLeft >= 0
+      && Math.abs(r32Head.flagLeft + 252 - r32Head.nowLeft) < 12,
+    JSON.stringify({ corner: r32Head.corner, flag: r32Head.flag,
+      flagLeft: r32Head.flagLeft, nowLeft: r32Head.nowLeft }));
+  PASS('I-032: past hours shaded under the lanes, pointer-transparent, full body height',
+    r32Head.shadeW > 0 && r32Head.shadeH > 0 && r32Head.bodyH > 0
+      && r32Head.shadeH >= r32Head.bodyH - 2 && r32Head.shadePE === 'none',
+    JSON.stringify({ w: r32Head.shadeW, h: r32Head.shadeH,
+      body: r32Head.bodyH, pe: r32Head.shadePE }));
+  PASS('I-032: bar tooltip carries cost, start->end hours, duration and owner; grab cursor',
+    r32Head.title.indexOf('103.7M/$2.24') >= 0 && r32Head.title.indexOf('->') >= 0
+      && / \| \d+(\.\d+)?h \| /.test(r32Head.title)
+      && r32Head.title.indexOf('AI main session') >= 0
+      && r32Head.cursor === 'grab',
+    r32Head.title + ' | cursor=' + r32Head.cursor);
+  const r32Pal = await js(`(() => {
+    const bar = document.querySelector('.gbar[data-task-id="t3"]');
+    const col = CP.columnById('in_progress');
+    const h = col.color.replace('#', '');
+    const n = parseInt(h, 16);
+    const want = 'rgb(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ')';
+    return { bg: bar ? bar.style.background : '', want, col: col.color };
+  })()`);
+  PASS('I-032: bar status color equals the kanban column color (one dataset, one palette)',
+    r32Pal.bg.replace(/\s/g, '') === r32Pal.want.replace(/\s/g, ''),
+    JSON.stringify(r32Pal));
+  const r32Css = fs.readFileSync(path.join(OUT, 'styles.css'), 'utf8');
+  PASS('I-032: hover lift + grab/grabbing cursors live in the stylesheet',
+    /\.gbar:hover\s*\{[^}]*translateY\(-1px\)/.test(r32Css)
+      && /\.gbar\s*\{[^}]*cursor:\s*grab/.test(r32Css)
+      && /\.gbar\.is-dragging\s*\{[^}]*cursor:\s*grabbing/.test(r32Css),
+    'lift=' + /\.gbar:hover\s*\{[^}]*translateY\(-1px\)/.test(r32Css)
+      + ' grab=' + /\.gbar\s*\{[^}]*cursor:\s*grab/.test(r32Css)
+      + ' grabbing=' + /\.gbar\.is-dragging\s*\{[^}]*cursor:\s*grabbing/.test(r32Css));
+
+  /* Pinned literals (R31 lock) + red line 1 as a gate. The detector is
+     proven on a synthetic sample so a broken regex cannot pass green. */
+  const r32PanelSrc = fs.readFileSync(path.join(OUT, 'panel.html'), 'utf8');
+  const r32TypesSrc = fs.readFileSync(path.join(OUT, 'src', 'types.ts'), 'utf8');
+  const r32BoardSrc = fs.readFileSync(path.join(OUT, 'src', 'board.ts'), 'utf8');
+  const r32DistBoard = fs.readFileSync(path.join(OUT, 'dist', 'board.js'), 'utf8');
+  PASS('Pinned literals survive byte-identical (DEMO banner, Needs human decision, cost-first line)',
+    r32PanelSrc.indexOf('DEMO build: seeded sample data only. SQLite state is disposable; do not enter real project data.') >= 0
+      && r32PanelSrc.indexOf('Needs human decision') >= 0
+      && r32TypesSrc.indexOf('cost-first: spend never hidden by truncation') >= 0
+      && r32Head.corner === 'Work units | hour axis (day/night)',
+    'panel/types/corner hits verified');
+  const r32Banned = ['teammate', 'colleague', 'buddy', 'coworker', 'co-worker', 'workmate', 'friend', 'pal'];
+  const r32BanRe = new RegExp('\\b(' + r32Banned.join('|') + ')\\b', 'i');
+  const r32SrcHit = (r32BoardSrc.match(r32BanRe) || [''])[0];
+  const r32DistHit = (r32DistBoard.match(r32BanRe) || [''])[0];
+  const r32Control = r32BanRe.test('a teammate and a colleague') && r32BanRe.test('my buddy');
+  PASS('Red line 1: no anthropomorphic labels in card markup (src + dist scan, detector proven)',
+    r32SrcHit === '' && r32DistHit === '' && r32Control === true,
+    'src=' + JSON.stringify(r32SrcHit) + ' dist=' + JSON.stringify(r32DistHit)
+      + ' control=' + r32Control);
+
+  /* --- I-033: Settings confidence gate row --- */
+  await js(`document.querySelector('[data-view="settings"]').click()`);
+  await sleep(250);
+  const r32Set = await js(`(() => {
+    const rows = Array.from(document.querySelectorAll('.set-row'));
+    const row = rows.filter((r) => {
+      const l = r.querySelector('.set-label');
+      return l && l.textContent.trim() === 'Confidence gate';
+    })[0];
+    const inp = document.getElementById('setConfGate');
+    const note = document.getElementById('setConfGateNote');
+    return { hasRow: !!row, type: inp ? inp.type : '', min: inp ? inp.min : '',
+      max: inp ? inp.max : '', step: inp ? inp.step : '',
+      value: inp ? inp.value : '', note: note ? note.textContent.trim() : '' };
+  })()`);
+  PASS('I-033: Settings has the Confidence gate row (0..1, step 0.05, default 0.7)',
+    r32Set.hasRow && r32Set.type === 'number' && r32Set.min === '0' && r32Set.max === '1'
+      && r32Set.step === '0.05' && r32Set.value === '0.7',
+    JSON.stringify(r32Set));
+
+  /* --- I-033: the four fields on every card + gate derivation --- */
+  await js(`document.querySelector('[data-view="board"]').click()`);
+  await sleep(300);
+  await js(`(() => {
+    const s = document.getElementById('globalSearch');
+    if (s && s.value) { s.value = ''; s.dispatchEvent(new Event('input', { bubbles: true })); }
+    const o = document.getElementById('ownerFilter');
+    if (o && o.value !== 'all') { o.value = 'all'; o.dispatchEvent(new Event('change', { bubbles: true })); }
+    return true;
+  })()`);
+  await sleep(250);
+  const r32Cards = await js(`(() => Array.from(document.querySelectorAll('.kb-card')).map((c) => {
+    const m = c.querySelector('.kb-model');
+    const f = c.querySelector('.kb-conf');
+    const g = c.querySelector('.kb-gate');
+    const cost = c.querySelector('.kb-cost');
+    return { id: c.dataset.taskId,
+      modelText: m ? m.textContent : '', confText: f ? f.textContent : '',
+      gate: g ? g.dataset.gate : '', cost: cost ? cost.textContent : '',
+      audit: !!c.querySelector('.kb-audit') };
+  }))()`);
+  const r32GateOk = (g) => g === 'autonomous' || g === 'needs-ack' || g === 'never-auto';
+  PASS('I-033: every card shows model/instance, cost, confidence and a gate badge',
+    r32Cards.length > 0 && r32Cards.every((c) =>
+      c.modelText.indexOf('model:') === 0 && c.confText.indexOf('conf:') === 0
+        && r32GateOk(c.gate) && c.cost.length > 0 && c.audit),
+    'n=' + r32Cards.length + ' sample=' + JSON.stringify(r32Cards[0]));
+  const r32Gate = await js(`(() => {
+    const pure = {
+      human: CP.gateFromScope({ owner_type: 'human', may_act_alone: 'all human decisions', needs_ack: 'n/a', never_automatic: 'n/a' }, null, 0.7),
+      main: CP.gateFromScope({ owner_type: 'main', may_act_alone: 'plan', needs_ack: 'change', never_automatic: 'approve' }, null, 0.7),
+      subagent: CP.gateFromScope({ owner_type: 'subagent', may_act_alone: 'files', needs_ack: 'verdict', never_automatic: 'log' }, null, 0.7),
+      team: CP.gateFromScope({ owner_type: 'team', may_act_alone: 'disjoint', needs_ack: 'cross', never_automatic: 'merge' }, null, 0.7)
+    };
+    const esc = CP.gateFromScope({ owner_type: 'human', may_act_alone: 'all', needs_ack: 'n/a', never_automatic: 'n/a' }, 0.4, 0.7);
+    const noEsc = CP.gateFromScope({ owner_type: 'human', may_act_alone: 'all', needs_ack: 'n/a', never_automatic: 'n/a' }, 0.9, 0.7);
+    const neverStays = CP.gateFromScope({ owner_type: 'main', may_act_alone: 'p', needs_ack: 'c', never_automatic: 'a' }, 0.1, 0.7);
+    const dom = Array.from(document.querySelectorAll('.kb-card')).map((c) => {
+      const t = (CP.store.state.tasks.filter((x) => x.id === c.dataset.taskId)[0]) || {};
+      const g = c.querySelector('.kb-gate');
+      const conf = (t.confidence === undefined || t.confidence === null) ? null : Number(t.confidence);
+      return { id: t.id, ot: t.owner_type, gate: g ? g.dataset.gate : '',
+        want: CP.gateBadge(t.owner_type, conf),
+        demo: ['t1', 't2', 't7', 't12'].indexOf(t.id) >= 0 };
+    });
+    const pick = (id) => CP.store.state.tasks.filter((t) => t.id === id)[0];
+    const t1 = pick('t1'); const t3 = pick('t3'); const t5 = pick('t5');
+    return { pure, esc, noEsc, neverStays, dom, thr: CP.confThreshold(),
+      mig: { t1: t1 && { model: t1.model, conf: t1.confidence, title: t1.title,
+          owner: t1.owner, role: t1.role, cost: t1.cost },
+        t3: t3 && { model: t3.model, conf: t3.confidence },
+        t5: t5 && { model: t5.model, conf: t5.confidence } } };
+  })()`);
+  PASS('I-033: gate derivation pins human=autonomous, AI types=never-auto, low conf escalates',
+    r32Gate.pure.human === 'autonomous' && r32Gate.pure.main === 'never-auto'
+      && r32Gate.pure.subagent === 'never-auto' && r32Gate.pure.team === 'never-auto'
+      && r32Gate.esc === 'needs-ack' && r32Gate.noEsc === 'autonomous'
+      && r32Gate.neverStays === 'never-auto'
+      && r32Gate.dom.length > 0 && r32Gate.dom.every((d) => d.gate === d.want && r32GateOk(d.gate))
+      && r32Gate.dom.filter((d) => d.demo).every((d) => d.gate === 'autonomous')
+      && r32Gate.thr === 0.7,
+    JSON.stringify({ pure: r32Gate.pure, esc: r32Gate.esc, thr: r32Gate.thr,
+      dom: r32Gate.dom.slice(0, 5) }));
+  PASS('I-033: migration filled only the new columns; demo model/confidence pinned',
+    !!r32Gate.mig.t1 && r32Gate.mig.t1.model === 'human' && r32Gate.mig.t1.conf === 0.95
+      && r32Gate.mig.t1.title === 'Kickoff & goal breakdown' && r32Gate.mig.t1.owner === 'Lin Che'
+      && r32Gate.mig.t1.role === 'Project lead' && r32Gate.mig.t1.cost === 0.31
+      && !!r32Gate.mig.t3 && r32Gate.mig.t3.model === 'claude' && r32Gate.mig.t3.conf === 0.9
+      && !!r32Gate.mig.t5 && r32Gate.mig.t5.model === 'claude' && r32Gate.mig.t5.conf === 0.8,
+    JSON.stringify(r32Gate.mig));
+
+  /* --- I-033: provision one random-id task + one desk event; both restored in finally --- */
+  let r32Id = '';
+  let r32EvId = '';
+  try {
+    const r32Created = await api('POST', '/api/tasks', {
+      title: 'R31 audit probe', owner: 'R31 probe', owner_type: 'human',
+      role: 'probe', handoff: 'selftest fixture', cost: 0, billed: 0,
+    });
+    r32Id = (r32Created.body && r32Created.body.id) || '';
+    PASS('I-033: fixture task provisioned with a server-random id (confidence/model unset)',
+      r32Created.status === 200 && /^t_[a-z0-9]+$/.test(r32Id)
+        && !!r32Created.body && r32Created.body.confidence === null
+        && r32Created.body.model === '',
+      JSON.stringify({ status: r32Created.status, id: r32Id,
+        conf: r32Created.body && r32Created.body.confidence,
+        model: r32Created.body && r32Created.body.model }));
+
+    const r32Ev = await api('POST', '/api/events', {
+      unit: 'command', kind: 'probe',
+      detail: 'R31 audit probe trail for ' + r32Id,
+    });
+    r32EvId = (r32Ev.body && r32Ev.body.id) || '';
+    PASS('I-033: desk event provisioned naming the fixture id',
+      r32Ev.status === 200 && !!r32EvId,
+      JSON.stringify({ status: r32Ev.status, id: r32EvId }));
+
+    const r32Aud = await api('GET', '/api/tasks/' + encodeURIComponent(r32Id) + '/audit');
+    PASS('I-033: GET /api/tasks/:id/audit returns the event and a PDCA id array',
+      r32Aud.status === 200 && Array.isArray(r32Aud.body && r32Aud.body.events)
+        && r32Aud.body.events.length === 1
+        && r32Aud.body.events[0].detail.indexOf(r32Id) >= 0
+        && Array.isArray(r32Aud.body && r32Aud.body.pdca)
+        && r32Aud.body.pdca.length === 0,
+      JSON.stringify({ status: r32Aud.status,
+        events: r32Aud.body && r32Aud.body.events && r32Aud.body.events.length,
+        pdca: r32Aud.body && r32Aud.body.pdca }));
+
+    await js(`CP.store.load()`);
+    await sleep(300);
+    const r32FixCard = await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      if (!c) return null;
+      const m = c.querySelector('.kb-model');
+      const f = c.querySelector('.kb-conf');
+      const g = c.querySelector('.kb-gate');
+      return { model: m ? m.textContent : '', conf: f ? f.textContent : '',
+        confData: f ? f.dataset.conf : null, gate: g ? g.dataset.gate : '',
+        cost: !!c.querySelector('.kb-cost'), audit: !!c.querySelector('.kb-audit') };
+    })()`);
+    PASS('I-033: unset confidence renders a dash; human fixture card starts autonomous',
+      !!r32FixCard && r32FixCard.conf === 'conf: -' && r32FixCard.confData === ''
+        && r32FixCard.model === 'model: n/a' && r32FixCard.gate === 'autonomous'
+        && r32FixCard.cost && r32FixCard.audit,
+      JSON.stringify(r32FixCard));
+
+    const r32PutConf = await api('PUT', '/api/tasks/' + encodeURIComponent(r32Id), { confidence: 0.4 });
+    await js(`CP.store.load()`);
+    await sleep(250);
+    const r32Low = await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const f = c && c.querySelector('.kb-conf');
+      const g = c && c.querySelector('.kb-gate');
+      return { conf: f ? f.textContent : '', gate: g ? g.dataset.gate : '' };
+    })()`);
+    PASS('I-033: confidence 0.40 below the 0.7 gate auto-escalates the card to needs-ack',
+      r32PutConf.status === 200 && r32Low.conf === 'conf: 0.40' && r32Low.gate === 'needs-ack',
+      JSON.stringify({ put: r32PutConf.status, conf: r32Low.conf, gate: r32Low.gate }));
+
+    const r32ThrUp = await js(`(() => {
+      localStorage.setItem('cp.conf-threshold', '0.3');
+      CP.patchBoard();
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const g = c && c.querySelector('.kb-gate');
+      return { thr: CP.confThreshold(), gate: g ? g.dataset.gate : '' };
+    })()`);
+    PASS('I-033: threshold 0.3 lifts the escalation (0.4 >= 0.3 -> autonomous again)',
+      r32ThrUp.thr === 0.3 && r32ThrUp.gate === 'autonomous', JSON.stringify(r32ThrUp));
+
+    const r32BadConf = await api('PUT', '/api/tasks/' + encodeURIComponent(r32Id), { confidence: 1.5 });
+    PASS('I-033: confidence outside 0..1 answers 400 and writes nothing',
+      r32BadConf.status === 400 && /confidence/i.test(JSON.stringify(r32BadConf.body || {})),
+      JSON.stringify(r32BadConf));
+
+    /* The Settings row drives the same key; 0.96 escalates the demo t1 card
+       (0.95) too, proving the threshold is live and not fixture-only. */
+    await js(`document.querySelector('[data-view="settings"]').click()`);
+    await sleep(250);
+    const r32SetChange = await js(`(() => {
+      const i = document.getElementById('setConfGate');
+      i.value = '0.96';
+      i.dispatchEvent(new Event('change', { bubbles: true }));
+      return { stored: localStorage.getItem('cp.conf-threshold'),
+        note: (document.getElementById('setConfGateNote') || {}).textContent || '' };
+    })()`);
+    await js(`document.querySelector('[data-view="board"]').click()`);
+    await sleep(300);
+    const r32EscDemo = await js(`(() => {
+      const t1 = document.querySelector('.kb-card[data-task-id="t1"]');
+      const g1 = t1 && t1.querySelector('.kb-gate');
+      const fx = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const gf = fx && fx.querySelector('.kb-gate');
+      return { t1: g1 ? g1.dataset.gate : '', fixture: gf ? gf.dataset.gate : '',
+        thr: CP.confThreshold() };
+    })()`);
+    PASS('I-033: Settings change persists cp.conf-threshold and escalates demo t1 (0.95 < 0.96)',
+      r32SetChange.stored === '0.96' && r32SetChange.note.indexOf('0.96') >= 0
+        && r32EscDemo.thr === 0.96 && r32EscDemo.t1 === 'needs-ack'
+        && r32EscDemo.fixture === 'needs-ack',
+      JSON.stringify({ set: r32SetChange, esc: r32EscDemo }));
+
+    /* Real reload; re-activate the board view before measuring (R29 lesson). */
+    await cmd('Page.reload', { ignoreCache: true });
+    await sleep(950);
+    await ready();
+    await js(`document.querySelector('[data-view="board"]').click()`);
+    await sleep(350);
+    const r32Reload = await js(`(() => {
+      const t1 = document.querySelector('.kb-card[data-task-id="t1"]');
+      const g = t1 && t1.querySelector('.kb-gate');
+      const i = document.getElementById('setConfGate');
+      return { thr: CP.confThreshold(), stored: localStorage.getItem('cp.conf-threshold'),
+        t1: g ? g.dataset.gate : '', input: i ? i.value : '' };
+    })()`);
+    PASS('I-033: confidence gate survives a reload; board view re-activated before measuring',
+      r32Reload.thr === 0.96 && r32Reload.stored === '0.96'
+        && r32Reload.t1 === 'needs-ack' && r32Reload.input === '0.96',
+      JSON.stringify(r32Reload));
+
+    /* Audit popover on the fixture card, after the reload. */
+    const r32PopOpen = await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      if (!c) return null;
+      c.scrollIntoView({ block: 'center' });
+      const b = c.querySelector('.kb-audit');
+      if (!b) return null;
+      b.click();
+      return true;
+    })()`);
+    await sleep(700);
+    const r32Pop = await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const p = c && c.querySelector('.kb-audit-pop');
+      const b = c && c.querySelector('.kb-audit');
+      return { open: !!p && p.hidden === false,
+        display: p ? getComputedStyle(p).display : 'none',
+        text: p ? p.textContent : '',
+        expanded: b ? b.getAttribute('aria-expanded') : '' };
+    })()`);
+    PASS('I-033: audit chip opens the trail popover (event row + PDCA section visible)',
+      r32PopOpen === true && !!r32Pop && r32Pop.open && r32Pop.display !== 'none'
+        && r32Pop.text.indexOf('Audit trail: ' + r32Id) >= 0
+        && r32Pop.text.indexOf('desk events (1)') >= 0
+        && r32Pop.text.indexOf('R31 audit probe trail') >= 0
+        && r32Pop.text.indexOf('PDCA entries (0)') >= 0
+        && r32Pop.expanded === 'true',
+      JSON.stringify({ open: r32Pop && r32Pop.open, display: r32Pop && r32Pop.display,
+        expanded: r32Pop && r32Pop.expanded,
+        head: r32Pop ? r32Pop.text.slice(0, 140) : '' }));
+
+    await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const b = c && c.querySelector('.kb-audit');
+      if (b) b.click();
+      return true;
+    })()`);
+    const r32PopClosed = await js(`(() => {
+      const c = document.querySelector('.kb-card[data-task-id=${JSON.stringify(r32Id)}]');
+      const p = c && c.querySelector('.kb-audit-pop');
+      return p ? p.hidden : null;
+    })()`);
+    PASS('I-033: second audit click collapses the popover',
+      r32PopClosed === true, String(r32PopClosed));
+  } finally {
+    /* Restore every mutation: fixture task, its desk events, and the
+       confidence-threshold chrome key. Nothing else is touched. */
+    if (r32Id) {
+      try { await api('DELETE', '/api/tasks/' + encodeURIComponent(r32Id)); }
+      catch (_e) { /* restore still runs */ }
+    }
+    try {
+      const r32Sql = require('node:sqlite');
+      const r32Conn = new r32Sql.DatabaseSync(path.join(dataDir(), 'panel.db'));
+      if (r32EvId) r32Conn.prepare('DELETE FROM desk_events WHERE id=?').run(r32EvId);
+      if (r32Id) r32Conn.prepare('DELETE FROM desk_events WHERE detail LIKE ?').run('%' + r32Id + '%');
+      r32Conn.close();
+    } catch (_e) { /* restore still runs */ }
+    try {
+      await js(`(() => {
+        localStorage.removeItem('cp.conf-threshold');
+        const i = document.getElementById('setConfGate');
+        if (i) i.value = '0.7';
+        const n = document.getElementById('setConfGateNote');
+        if (n) n.textContent = 'cards below this confidence show needs-ack';
+        CP.patchBoard();
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  /* Post-restore proof: no fixture residue, demo old fields byte-identical
+     to the snapshot taken at the top of this section, threshold back home. */
+  const r32After = await api('GET', '/api/state');
+  const r32AudAfter = r32Id
+    ? await api('GET', '/api/tasks/' + encodeURIComponent(r32Id) + '/audit')
+    : { status: 0, body: null };
+  const r32OldSame = ['t1', 't3', 't5'].every((id) => {
+    const t = ((r32After.body && r32After.body.tasks) || []).filter((x) => x.id === id)[0];
+    return r32PickOld(t) === r32Old[id];
+  });
+  const r32Chrome = await js(`(() => ({ thr: localStorage.getItem('cp.conf-threshold'),
+    thrNow: CP.confThreshold(),
+    input: (document.getElementById('setConfGate') || {}).value || '',
+    t1: (() => { const c = document.querySelector('.kb-card[data-task-id="t1"]');
+      const g = c && c.querySelector('.kb-gate'); return g ? g.dataset.gate : ''; })() }))()`);
+  PASS('Section 32 restored: fixture + events gone, demo old fields byte-identical, threshold home',
+    !((r32After.body && r32After.body.tasks) || []).some((t) => t.id === r32Id)
+      && (!r32Id || (r32AudAfter.body && Array.isArray(r32AudAfter.body.events)
+        && r32AudAfter.body.events.length === 0))
+      && r32OldSame
+      && r32Chrome.thr === null && r32Chrome.thrNow === 0.7
+      && r32Chrome.input === '0.7' && r32Chrome.t1 === 'autonomous',
+    JSON.stringify({ oldSame: r32OldSame, chrome: r32Chrome,
+      audEvents: r32AudAfter.body && r32AudAfter.body.events && r32AudAfter.body.events.length }));
+
+  PASS('Section 32 added no JS exceptions or console errors',
+    errors.length === r32Err, 'errors before=' + r32Err + ' after=' + errors.length);
+
+  /* 33. R32 / I-037 - the Work board merge: kanban + hour axis on ONE page
+     behind one persisted split, stacked fallback on narrow viewports, and
+     the cross-surface hover/select highlight over one dataset. Additive
+     section (assertions 33+). Lessons obeyed: re-activate the board view
+     after any Page.reload before measuring, layout checks measure heights
+     and visibility (never DOM counts), unique r33* locals, and cp.wb-split
+     is removed in finally so the battery and the next run start pristine. */
+  const r33Err = errors.length;
+  try {
+    await js(`document.querySelector('[data-view="board"]').click()`);
+    await sleep(300);
+    const r33Merge = await js(`(() => {
+      const page = document.getElementById('workBoard');
+      const kb = document.querySelector('.wb-kanban');
+      const ax = document.getElementById('ganttPanel');
+      const sc = document.getElementById('ganttScroll');
+      const grip = document.getElementById('wbSplit');
+      const board = document.getElementById('view-board');
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+      const r = (el) => el ? el.getBoundingClientRect() : null;
+      const pr = r(page); const kr = r(kb); const ar = r(ax);
+      const stored = localStorage.getItem('cp.wb-split');
+      return {
+        onBoard: !!(board && board.classList.contains('active')),
+        kbVis: vis(kb), axVis: vis(ax), gripVis: vis(grip),
+        bothInBoard: !!(kb && kb.closest('#view-board')) && !!(ax && ax.closest('#view-board')),
+        ganttNotInPlan: !!(sc && sc.closest('#view-plan') === null && sc.closest('#view-board')),
+        kbH: kr ? Math.round(kr.height) : -1,
+        axH: ar ? Math.round(ar.height) : -1,
+        pageH: pr ? Math.round(pr.height) : -1,
+        kbPct: pr && kr ? Math.round(kr.width / pr.width * 100) : -1,
+        axPct: pr && ar ? Math.round(ar.width / pr.width * 100) : -1,
+        stored
+      };
+    })()`);
+    PASS('I-037: Work board holds kanban + hour axis side by side (both real heights, gantt not in the Plan view)',
+      r33Merge.onBoard && r33Merge.kbVis && r33Merge.axVis && r33Merge.gripVis
+        && r33Merge.bothInBoard && r33Merge.ganttNotInPlan
+        && r33Merge.kbH > 100 && r33Merge.axH > 100 && r33Merge.pageH > 150
+        && r33Merge.kbPct >= 30 && r33Merge.kbPct <= 52
+        && r33Merge.axPct >= r33Merge.kbPct,
+      JSON.stringify(r33Merge));
+
+    /* Cross-surface highlight: hover card <-> hover bar, select lights both,
+       mouseout clears - the same [data-task-id] the selection paint uses. */
+    const r33Hov = await js(`(() => {
+      const card = document.querySelector('.kb-card[data-task-id="t3"]');
+      const bar = document.querySelector('.gbar[data-task-id="t3"]');
+      if (!card || !bar) return { ok: false, reason: 'missing t3 card/bar' };
+      card.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      const cardOn = card.classList.contains('is-link-hover');
+      const barOn = bar.classList.contains('is-link-hover');
+      card.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+      const clearAfterCard = !card.classList.contains('is-link-hover') && !bar.classList.contains('is-link-hover');
+      bar.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+      const barOn2 = bar.classList.contains('is-link-hover');
+      const cardOn2 = card.classList.contains('is-link-hover');
+      CP.select('t3', false);
+      const selCard = card.classList.contains('is-selected');
+      const selBar = bar.classList.contains('is-selected');
+      bar.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
+      const cleared = !bar.classList.contains('is-link-hover');
+      CP.select(null, false);
+      return { ok: true, cardOn, barOn, clearAfterCard, barOn2, cardOn2, selCard, selBar, cleared };
+    })()`);
+    PASS('I-037: hover a card lights its bar and vice versa; selection lights both surfaces; mouseout clears',
+      r33Hov.ok && r33Hov.cardOn && r33Hov.barOn && r33Hov.clearAfterCard
+        && r33Hov.barOn2 && r33Hov.cardOn2 && r33Hov.selCard && r33Hov.selBar && r33Hov.cleared,
+      JSON.stringify(r33Hov));
+
+    /* Linked drag keeps the pair lit for the whole drag (dragstart sets it;
+       no drop runs here, so no task row is mutated). The dragstart ghost is
+       scheduled on a timer, so the dragend lands after it and cleanup()
+       clears both the ghost and the pair highlight. */
+    const r33DragStart = await js(`(() => {
+      const card = document.querySelector('.kb-card[data-task-id="t6"]');
+      const bar = document.querySelector('.gbar[data-task-id="t6"]');
+      if (!card || !bar) return { ok: false, reason: 'missing t6 card/bar' };
+      const dt = new DataTransfer();
+      card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      return { ok: true,
+        hoverDuring: card.classList.contains('is-link-hover') && bar.classList.contains('is-link-hover') };
+    })()`);
+    await sleep(40);
+    const r33DragEnd = await js(`(() => {
+      const card = document.querySelector('.kb-card[data-task-id="t6"]');
+      const bar = document.querySelector('.gbar[data-task-id="t6"]');
+      if (!card || !bar) return { ok: false };
+      const dt = new DataTransfer();
+      card.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      CP.patchBoard();
+      return { ok: true,
+        after: !card.classList.contains('is-link-hover') && !bar.classList.contains('is-link-hover'),
+        ghostGone: !card.classList.contains('is-ghost') };
+    })()`);
+    PASS('I-037: dragging a card lights its bar for the whole drag, then clears (one dataset, one move)',
+      r33DragStart.ok && r33DragStart.hoverDuring && r33DragEnd.ok
+        && r33DragEnd.after && r33DragEnd.ghostGone,
+      JSON.stringify({ start: r33DragStart, end: r33DragEnd }));
+
+    /* Stacked fallback: narrow the viewport, the page becomes a column, the
+       split handle retires, both panes keep real heights. */
+    await cmd('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
+    await sleep(350);
+    const r33Stack = await js(`(() => {
+      const page = document.getElementById('workBoard');
+      const kb = document.querySelector('.wb-kanban');
+      const ax = document.getElementById('ganttPanel');
+      const grip = document.getElementById('wbSplit');
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
+      const kr = kb ? kb.getBoundingClientRect() : null;
+      const ar = ax ? ax.getBoundingClientRect() : null;
+      return {
+        dir: page ? getComputedStyle(page).flexDirection : '',
+        gripHidden: !!grip && getComputedStyle(grip).display === 'none',
+        kbH: kr ? Math.round(kr.height) : -1,
+        axH: ar ? Math.round(ar.height) : -1,
+        kbAbove: !!(kr && ar) && ar.top >= kr.top + kr.height - 2,
+        axVis: vis(ax)
+      };
+    })()`);
+    await cmd('Emulation.clearDeviceMetricsOverride');
+    await sleep(350);
+    PASS('I-037: narrow viewport stacks the two panes vertically and hides the split handle',
+      r33Stack.dir === 'column' && r33Stack.gripHidden && r33Stack.kbH > 50
+        && r33Stack.axH > 50 && r33Stack.kbAbove && r33Stack.axVis,
+      JSON.stringify(r33Stack));
+
+    /* Reload persistence: cp.wb-split comes back; the board view is
+       re-activated after the reload BEFORE any measurement (R29 lesson). */
+    await js(`localStorage.setItem('cp.wb-split', '47'); true`);
+    await cmd('Page.reload', { ignoreCache: true });
+    await sleep(950);
+    await ready();
+    await js(`document.querySelector('[data-view="board"]').click()`);
+    await sleep(320);
+    const r33Keep = await js(`(() => {
+      const page = document.getElementById('workBoard');
+      const kb = document.querySelector('.wb-kanban');
+      const total = page ? Math.round(page.getBoundingClientRect().width) : -1;
+      return {
+        stored: localStorage.getItem('cp.wb-split'),
+        varLeft: page ? page.style.getPropertyValue('--wb-left') : '',
+        kbPct: total > 0 && kb ? Math.round(kb.getBoundingClientRect().width / total * 100) : -1
+      };
+    })()`);
+    PASS('I-037: split width survives a reload (cp.wb-split re-applied, board view re-activated before measuring)',
+      r33Keep.stored === '47' && r33Keep.varLeft === '47%' && Math.abs(r33Keep.kbPct - 47) <= 2,
+      JSON.stringify(r33Keep));
+  } finally {
+    try {
+      await js(`(() => {
+        localStorage.removeItem('cp.wb-split');
+        const page = document.getElementById('workBoard');
+        if (page) page.style.setProperty('--wb-left', '40%');
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  PASS('Section 33 added no JS exceptions or console errors',
+    errors.length === r33Err, 'errors before=' + r33Err + ' after=' + errors.length);
+
+  /* 34. R32 / I-038 - detail drawer read side: a G/M/W row click opens it
+     with the locked field set, relations carry type + signed lag (+ nature
+     on a provisioned plan relation), the audit sections load from
+     GET /api/tasks/:id/audit, and the additive notes field is on screen.
+     Additive section. The nature pill needs plan.relations to carry one, so
+     the block PROVISIONS it by direct file write under a byte snapshot and
+     restores the exact bytes in finally - the drawer itself never writes
+     (proved by the byte-identical close-out). */
+  const r34Err = errors.length;
+  const r34PlanFile = path.join(dataDir(), 'milestone-plan.json');
+  const r34MsFile = path.join(pbRepo, 'docs', 'evidence', 'milestones.json');
+  const r34PrdFile = path.join(pbRepo, 'docs', 'PRD.md');
+  const r34PlanBak = fs.readFileSync(r34PlanFile, 'utf8');
+  const r34MsBak = fs.readFileSync(r34MsFile, 'utf8');
+  const r34PrdBak = fs.readFileSync(r34PrdFile, 'utf8');
+  try {
+    await js(`document.querySelector('#nav [data-view="plan"]').click()`);
+    await sleep(250);
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(350);
+
+    /* Provision: give the W6 -> W8 plan relation a nature so the pill can be
+       asserted; the bytes go back to the snapshot in finally. */
+    const r34Prov = JSON.parse(fs.readFileSync(r34PlanFile, 'utf8'));
+    const r34Edge = (r34Prov.relations || []).filter((r) => r.from === 'W6' && r.to === 'W8')[0];
+    if (r34Edge) { r34Edge.nature = 'mandatory'; fs.writeFileSync(r34PlanFile, JSON.stringify(r34Prov, null, 2) + '\n'); }
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(300);
+
+    const r34M = await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"]');
+      if (!row) return { ok: false, reason: 'no M1 row' };
+      row.click();
+      const panel = document.getElementById('nodeDrawer');
+      const v = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+      const ro = (id) => { const el = document.getElementById(id); return el ? !!el.readOnly : null; };
+      const sel = CP.openNode ? CP.openNode() : null;
+      const notes = document.getElementById('ndNotes');
+      return {
+        ok: true,
+        open: !!panel && getComputedStyle(panel).display !== 'none',
+        sel: sel ? sel.kind + ':' + sel.id : '',
+        kind: (document.getElementById('ndKind') || {}).textContent || '',
+        name: v('ndName'), status: v('ndStatus'), owner: v('ndOwner'),
+        start: v('ndStart'), end: v('ndEnd'),
+        costRO: ro('ndCost'), progRO: ro('ndProgress'), statusRO: ro('ndStatus'),
+        notes: notes ? { present: true, value: notes.value, max: notes.maxLength } : { present: false },
+        hasSave: !!document.getElementById('ndSave'),
+        hasDelete: !!document.getElementById('ndDelete'),
+        rel: (document.querySelector('#ndBody .nd-section') || {}).textContent || '',
+        m2Down: (document.querySelector('#ndBody .nd-section') || {}).textContent.indexOf('M2 (milestone)') >= 0
+      };
+    })()`);
+    PASS('I-038: clicking a milestone row opens the right-side drawer with the locked field set + notes',
+      r34M.ok && r34M.open && r34M.sel === 'ms:M1' && r34M.kind === 'M1'
+        && r34M.name && r34M.status === 'done' && r34M.owner !== null
+        && r34M.start === '-96' && r34M.end === '-72'
+        && r34M.costRO === true && r34M.progRO === true && r34M.statusRO === false
+        && r34M.notes.present && r34M.notes.max === 500
+        && r34M.hasSave && r34M.hasDelete && r34M.rel.indexOf('upstream') >= 0
+        && r34M.m2Down,
+      JSON.stringify(r34M));
+
+    const r34W = await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W8"]');
+      if (!row) return { ok: false, reason: 'no W8 row' };
+      row.click();
+      const v = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+      const ro = (id) => { const el = document.getElementById(id); return el ? !!el.readOnly : null; };
+      const pills = Array.from(document.querySelectorAll('#ndBody .nd-rel')).map((p) => p.textContent.trim());
+      const sel = CP.openNode ? CP.openNode() : null;
+      const groups = Array.from(document.querySelectorAll('#ndGroup, .nd-group-label')).map((g) => g.textContent.trim());
+      const sections = Array.from(document.querySelectorAll('#ndBody .nd-group')).map((g) => g.textContent.trim());
+      return {
+        ok: true, sel: sel ? sel.kind + ':' + sel.id : '',
+        name: v('ndName'), status: v('ndStatus'), owner: v('ndOwner'),
+        cost: v('ndCost'), progress: v('ndProgress'),
+        costRO: ro('ndCost'), progRO: ro('ndProgress'), statusRO: ro('ndStatus'),
+        pills,
+        /* R8 recorded retarget: the pill text is built inside a js() template
+           literal, where a regex \+ would cook down to a bare + (quantifier)
+           and never match the literal plus sign - indexOf keeps the assertion
+           intent (downstream pill shows type + signed lag) byte-for-byte. */
+        hasUpW6: pills.some((t) => t.indexOf('W6 SS') === 0
+          && (t === 'W6 SS' || t === 'W6 SS mandatory')),
+        hasDownW11: pills.some((t) => t.indexOf('W11 SS+2d') === 0),
+        hasNature: pills.some((t) => t.indexOf('mandatory') >= 0),
+        groups: sections.join(' | ')
+      };
+    })()`);
+    await sleep(700);
+    const r34Audit = await js(`(() => {
+      const b = document.getElementById('ndAudit');
+      return b ? b.textContent : '';
+    })()`);
+    PASS('I-038: work-unit drawer carries editable fields + upstream/downstream pills (type, signed lag, nature) and the audit trail loads',
+      r34W.ok && r34W.sel === 'wu:W8' && r34W.name && r34W.status === 'done'
+        && r34W.costRO === false && r34W.progRO === false && r34W.statusRO === false
+        && r34W.owner !== null && r34W.cost !== null && r34W.progress !== null
+        && r34W.hasUpW6 && r34W.hasDownW11 && r34W.hasNature
+        && r34Audit.indexOf('Audit trail: W8') >= 0
+        && r34Audit.indexOf('desk events') >= 0
+        && r34Audit.indexOf('PDCA entries') >= 0
+        && r34Audit.indexOf('Loading audit') < 0,
+      JSON.stringify({ w: r34W, auditHead: r34Audit.slice(0, 160) }));
+
+    /* Goal drawer: derived rollup fields read-only + the member list; the
+       fold toggle must not open the drawer (it returns before the row
+       branch); Close hides it. */
+    const r34G = await js(`(() => {
+      const gRow = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G1"]');
+      if (!gRow) return { ok: false, reason: 'no G1 row' };
+      gRow.click();
+      const ro = (id) => { const el = document.getElementById(id); return el ? !!el.readOnly : null; };
+      const v = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+      const sel1 = CP.openNode ? CP.openNode() : null;
+      const members = (document.querySelector('#ndBody .nd-kids') || {}).textContent || '';
+      document.getElementById('ndClose').click();
+      const closed = !CP.openNode()
+        && document.getElementById('nodeDrawer').classList.contains('hidden');
+      const fold = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M1"] [data-fold]');
+      const foldBefore = fold ? fold.textContent : '';
+      if (fold) fold.click();
+      const stillClosed = document.getElementById('nodeDrawer').classList.contains('hidden')
+        && !CP.openNode();
+      if (fold) fold.click();
+      return {
+        ok: true, sel: sel1 ? sel1.kind + ':' + sel1.id : '',
+        statusRO: ro('ndStatus'), costRO: ro('ndCost'), progRO: ro('ndProgress'),
+        status: v('ndStatus'), members,
+        membersOk: ['M1', 'M2', 'M3', 'M4', 'M5', 'M6'].every((m) => members.indexOf(m) >= 0),
+        closed, stillClosed, foldBefore,
+        foldRestored: fold ? fold.textContent === foldBefore : false
+      };
+    })()`);
+    PASS('I-038: goal drawer shows the derived rollup read-only + members; fold toggle never opens it; Close hides it',
+      r34G.ok && r34G.sel === 'goal:G1' && r34G.statusRO === true
+        && r34G.costRO === true && r34G.progRO === true && r34G.status === 'done'
+        && r34G.membersOk && r34G.closed && r34G.stillClosed
+        && r34G.foldBefore === '[-]' && r34G.foldRestored,
+      JSON.stringify(r34G));
+
+    await js(`(() => { try { localStorage.removeItem('cp.tree-fold'); } catch (e) {} return true; })()`);
+  } finally {
+    fs.writeFileSync(r34PlanFile, r34PlanBak);
+    fs.writeFileSync(r34MsFile, r34MsBak);
+    fs.writeFileSync(r34PrdFile, r34PrdBak);
+    try {
+      await js(`(() => {
+        CP.closeNodeDrawer();
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  const r34PlanNow = fs.readFileSync(r34PlanFile, 'utf8');
+  const r34MsNow = fs.readFileSync(r34MsFile, 'utf8');
+  const r34PrdNow = fs.readFileSync(r34PrdFile, 'utf8');
+  PASS('I-038: opening, switching and closing the drawer writes nothing (plan / evidence / PRD bytes identical)',
+    r34PlanNow === r34PlanBak && r34MsNow === r34MsBak && r34PrdNow === r34PrdBak,
+    'plan=' + (r34PlanNow === r34PlanBak) + ' evidence=' + (r34MsNow === r34MsBak)
+      + ' prd=' + (r34PrdNow === r34PrdBak));
+
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+  await sleep(250);
+  PASS('Section 34 added no JS exceptions or console errors',
+    errors.length === r34Err, 'errors before=' + r34Err + ' after=' + errors.length);
+
+  /* 35. R32 / I-038 - tree CRUD through the plan-sync-class four-store
+     commit (milestone-plan.json + docs/evidence/milestones.json + the PRD
+     Status registry + the SQLite task rows, one commit with rollback).
+     Additive section. Every operation class - create, update, delete -
+     ends with BOTH gates re-run and asserted green (prd-to-action 10/10 +
+     plan-sync --check), the lock's per-class assertion; the delete confirm
+     dialog is driven end to end on the human path, and Cancel is proved
+     with byte-identical stores. Lessons obeyed: plan/evidence/PRD byte
+     snapshots restored in finally, SQLite mutations restored with ROW-LEVEL
+     DML only (never a file copy of panel.db or its wal/shm), views
+     re-activated after anything that could re-render, the relation the
+     dialog lists is test-provisioned into the plan files under the same
+     byte snapshot, and the drawer/modal are closed in finally. Gate runs
+     require db.js inside plan-sync, which logs job/import events at boot -
+     section 31 established that class of run as suite-neutral (no
+     assertion counts desk_events), so they are left alone here too. */
+  const r35Err = errors.length;
+  const r35PlanFile = path.join(dataDir(), 'milestone-plan.json');
+  const r35MsFile = path.join(pbRepo, 'docs', 'evidence', 'milestones.json');
+  const r35PrdFile = path.join(pbRepo, 'docs', 'PRD.md');
+  const r35PlanBak = fs.readFileSync(r35PlanFile, 'utf8');
+  const r35MsBak = fs.readFileSync(r35MsFile, 'utf8');
+  const r35PrdBak = fs.readFileSync(r35PrdFile, 'utf8');
+  const r35Read = () => ({
+    plan: JSON.parse(fs.readFileSync(r35PlanFile, 'utf8')),
+    ms: JSON.parse(fs.readFileSync(r35MsFile, 'utf8')),
+    prd: fs.readFileSync(r35PrdFile, 'utf8'),
+  });
+  /* Node-side file poll: the browser write path is async (fetch -> commit ->
+     refreshPlan), so the assertions wait for the STORE, not a clock alone. */
+  const r35Poll = async (pred) => {
+    for (let i = 0; i < 40; i += 1) {
+      try { if (pred(r35Read())) return true; } catch (_e) { /* mid-write */ }
+      await sleep(150);
+    }
+    return false;
+  };
+  const r35Gate = () => {
+    i31Seed();
+    const a = i31Run([path.join(pbRepo, 'scripts', 'prd-to-action.js')]);
+    const b = i31Run([path.join(pbRepo, 'scripts', 'plan-sync.js'), '--check']);
+    const al = (a.out.split('\n').filter((l) => l.indexOf('PRD-TO-ACTION GATE') >= 0)[0] || '').trim();
+    const bl = (b.out.split('\n').filter((l) => l.indexOf('PLAN-SYNC CHECK') >= 0)[0] || '').trim();
+    return {
+      ok: a.code === 0 && al === 'PRD-TO-ACTION GATE: 10/10 passed'
+        && b.code === 0 && /^PLAN-SYNC CHECK: \d+\/\d+ passed$/.test(bl),
+      al: al + ' (exit ' + a.code + ')',
+      bl: bl + ' (exit ' + b.code + ')',
+    };
+  };
+  const r35PrdBlock = (prd, id) => {
+    const at0 = prd.indexOf('### ' + id + ':');
+    if (at0 < 0) return '';
+    let end = prd.indexOf('### M', at0 + 5);
+    if (end < 0) end = prd.indexOf('\n## ', at0);
+    if (end < 0) end = prd.length;
+    return prd.slice(at0, end);
+  };
+  let r35Conn = null;
+  try {
+    r35Conn = new (require('node:sqlite').DatabaseSync)(path.join(dataDir(), 'panel.db'));
+    /* Re-activate the plan view, clear folds, re-read the real plan (R29
+       lesson) so the fresh M8 row is on screen before the clicks. */
+    await js(`document.querySelector('#nav [data-view="plan"]').click()`);
+    await sleep(250);
+    await js(`(() => { try { localStorage.removeItem('cp.tree-fold'); } catch (e) {} return true; })()`);
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(400);
+
+    const r35Btns = await js(`(() => {
+      const g = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G2"] [data-add="ms"]');
+      const m = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M7"] [data-add="wu"]');
+      const w = document.querySelector('.ms-goal-row[data-kind=wu] [data-add]');
+      return { g: !!g, m: !!m, w: !!w,
+        gt: g ? g.textContent.trim() : '', mt: m ? m.textContent.trim() : '' };
+    })()`);
+    PASS('I-038: G rows carry [+ new milestone] and M rows carry [+ new work unit]; W rows carry none',
+      r35Btns.g && r35Btns.m && !r35Btns.w && r35Btns.gt === '[+]' && r35Btns.mt === '[+]',
+      JSON.stringify(r35Btns));
+
+    /* ---- CREATE class (human path: the G2 [+] button) ---- */
+    await js(`(() => {
+      const b = document.querySelector('.ms-goal-row[data-kind=goal][data-node="G2"] [data-add="ms"]');
+      if (b) b.click();
+      return true;
+    })()`);
+    const r35C1 = await r35Poll((s) => s.plan.milestones.some((m) => String(m.id) === 'M8'));
+    const r35S1 = r35Read();
+    const r35Blk1 = r35PrdBlock(r35S1.prd, 'M8');
+    const r35GateC1 = r35Gate();
+    PASS('CREATE class: G2 [+] lands M8 across plan + evidence + PRD block in one commit; both gates green after the class',
+      r35C1 && Array.isArray(r35S1.plan.sub_lines.M8)
+        && r35S1.plan.main_line[r35S1.plan.main_line.length - 1] === 'M8'
+        && (r35S1.plan.goals || []).some((g) => Array.isArray(g.milestone_ids)
+          && g.milestone_ids.map(String).indexOf('M8') >= 0)
+        && r35S1.plan.milestones.some((m) => m.id === 'M8' && m.status === 'pending')
+        && r35S1.ms.milestones.some((m) => m.id === 'M8' && m.status === 'pending')
+        && r35Blk1.indexOf('### M8:') === 0
+        && ['- Status: pending', 'Depends on:', 'Type:', 'Has external deps:',
+          'Files:', 'Completion:', 'Verify:'].every((f) => r35Blk1.indexOf(f) >= 0)
+        && r35GateC1.ok,
+      'created=' + r35C1 + ' blockLines=' + r35Blk1.split('\n').length
+        + ' | ' + r35GateC1.al + ' | ' + r35GateC1.bl);
+
+    /* ---- CREATE class, part 2: [+] on the empty M8 ships the gate-X pair ---- */
+    await until(`!!document.querySelector('.ms-goal-row[data-kind=ms][data-node="M8"] [data-add="wu"]')`,
+      (v) => v === true, 4000);
+    await js(`(() => {
+      const b = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M8"] [data-add="wu"]');
+      if (b) b.click();
+      return true;
+    })()`);
+    const r35C2 = await r35Poll((s) => s.plan.work_units.some((w) => w.id === 'W19')
+      && s.plan.work_units.some((w) => w.id === 'W20'));
+    let r35Rows = [];
+    try {
+      r35Rows = r35Conn.prepare(
+        "SELECT id, status, progress FROM tasks WHERE id IN ('W19','W20') ORDER BY id")
+        .all().map((r) => ({ id: String(r.id), status: String(r.status), progress: Number(r.progress) }));
+    } catch (e) {
+      r35Rows = [{ id: 'ERR', status: String(e), progress: -1 }];
+    }
+    const r35GateC2 = r35Gate();
+    PASS('CREATE class: M8 [+] ships the gate-X pair W19+W20 (pending / 0 placeholders), task rows land, both gates green',
+      r35C2 && r35Rows.length === 2
+        && r35Rows.every((r) => r.status === 'pending' && r.progress === 0)
+        && r35GateC2.ok,
+      JSON.stringify(r35Rows) + ' | ' + r35GateC2.al + ' | ' + r35GateC2.bl);
+
+    /* ---- UPDATE class (human path: the drawer's Save) ---- */
+    await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M8"]');
+      if (!row) return false;
+      row.click();
+      const st = document.getElementById('ndStatus');
+      if (st) st.value = 'in_progress';
+      const owner = document.getElementById('ndOwner');
+      if (owner) owner.value = 'main';
+      const notes = document.getElementById('ndNotes');
+      if (notes) notes.value = 'R32 update probe';
+      const save = document.getElementById('ndSave');
+      if (save) save.click();
+      return true;
+    })()`);
+    const r35U1 = await r35Poll((s) => {
+      const m = s.plan.milestones.filter((x) => x.id === 'M8')[0];
+      return !!m && m.status === 'in_progress' && m.notes === 'R32 update probe';
+    });
+    const r35S2 = r35Read();
+    const r35Blk2 = r35PrdBlock(r35S2.prd, 'M8');
+    const r35M8Ev = r35S2.ms.milestones.filter((m) => m.id === 'M8')[0];
+    await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W19"]');
+      if (!row) return false;
+      row.click();
+      const st = document.getElementById('ndStatus');
+      if (st) st.value = 'in_progress';
+      const prog = document.getElementById('ndProgress');
+      if (prog) prog.value = '40';
+      const notes = document.getElementById('ndNotes');
+      if (notes) notes.value = 'R32 unit probe';
+      const save = document.getElementById('ndSave');
+      if (save) save.click();
+      return true;
+    })()`);
+    const r35U2 = await r35Poll((s) => {
+      const w = s.plan.work_units.filter((x) => x.id === 'W19')[0];
+      return !!w && w.status === 'in_progress' && Number(w.progress) === 40
+        && w.notes === 'R32 unit probe';
+    });
+    let r35W19 = null;
+    try { r35W19 = r35Conn.prepare("SELECT status, progress FROM tasks WHERE id='W19'").get(); }
+    catch (_e) { r35W19 = null; }
+    const r35PreBad = fs.readFileSync(r35PlanFile, 'utf8');
+    const r35UBad = await api('PUT', '/api/plan/structure',
+      { kind: 'update-node', id: 'W19', patch: { progress: 100 } });
+    const r35PostBad = fs.readFileSync(r35PlanFile, 'utf8');
+    const r35GateU = r35Gate();
+    PASS('UPDATE class: Save moves M8 status to PRD+evidence+plan and W19 to plan+task row; progress=100 refused 400 zero-write; both gates green',
+      r35U1 && r35U2
+        && !!r35M8Ev && r35M8Ev.status === 'in_progress'
+        && r35Blk2.indexOf('- Status: in_progress') >= 0
+        && !!r35W19 && String(r35W19.status) === 'in_progress' && Number(r35W19.progress) === 40
+        && r35UBad.status === 400 && /progress/i.test(JSON.stringify(r35UBad.body || {}))
+        && r35PostBad === r35PreBad
+        && r35GateU.ok,
+      JSON.stringify({ w19: r35W19 ? { status: r35W19.status, progress: r35W19.progress } : null,
+        bad: r35UBad.status })
+        + ' | ' + r35GateU.al + ' | ' + r35GateU.bl);
+
+    /* Test provisioning: a plan-level W19 -> W20 relation so the confirm
+       dialog has a real edge to list and the cascade a real edge to remove.
+       Written into BOTH stores (gate X pins them equal) under the block-start
+       byte snapshot; the finally block restores the exact original bytes, so
+       the relation never exists at rest. */
+    const r35ProvPlan = JSON.parse(fs.readFileSync(r35PlanFile, 'utf8'));
+    (Array.isArray(r35ProvPlan.relations) ? r35ProvPlan.relations : (r35ProvPlan.relations = []))
+      .push({ from: 'W19', to: 'W20', type: 'FS', lag: 0 });
+    fs.writeFileSync(r35PlanFile, JSON.stringify(r35ProvPlan, null, 2) + '\n');
+    const r35ProvMs = JSON.parse(fs.readFileSync(r35MsFile, 'utf8'));
+    (Array.isArray(r35ProvMs.relations) ? r35ProvMs.relations : (r35ProvMs.relations = []))
+      .push({ from: 'W19', to: 'W20', type: 'FS', lag: 0 });
+    fs.writeFileSync(r35MsFile, JSON.stringify(r35ProvMs, null, 2) + '\n');
+    const r35EdgePut = await api('PUT', '/api/task-deps', { from: 'W19', to: 'W20', type: 'FS', lag: 0 });
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(350);
+
+    /* ---- DELETE: the confirm dialog lists dependents; Cancel = zero writes ---- */
+    const r35PreD = fs.readFileSync(r35PlanFile, 'utf8');
+    const r35PreDMs = fs.readFileSync(r35MsFile, 'utf8');
+    const r35PreDPrd = fs.readFileSync(r35PrdFile, 'utf8');
+    const r35Dlg1 = await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=wu][data-node="W19"]');
+      if (!row) return { ok: false, reason: 'no W19 row' };
+      row.click();
+      const del = document.getElementById('ndDelete');
+      if (!del) return { ok: false, reason: 'no delete button' };
+      del.click();
+      const layer = document.getElementById('modalLayer');
+      const sheet = document.getElementById('modalSheet');
+      const text = sheet ? sheet.textContent : '';
+      const open = !!layer && !layer.classList.contains('hidden');
+      const cancel = sheet ? sheet.querySelector('[data-action="close"]') : null;
+      if (cancel) cancel.click();
+      const closed = !!layer && layer.classList.contains('hidden');
+      return { ok: true, open, closed,
+        rel: text.indexOf('1 relation(s)') >= 0 && text.indexOf('W19 -> W20 (FS)') >= 0,
+        childLine: text.indexOf('no child rows') >= 0,
+        cancelLine: text.indexOf('Cancel writes nothing') >= 0,
+        drawerStill: !!CP.openNode() };
+    })()`);
+    const r35PostCancelP = fs.readFileSync(r35PlanFile, 'utf8');
+    const r35PostCancelM = fs.readFileSync(r35MsFile, 'utf8');
+    const r35PostCancelPrd = fs.readFileSync(r35PrdFile, 'utf8');
+    PASS('DELETE dialog lists the dependents (1 relation + child-row line + Cancel note); Cancel writes nothing (bytes identical)',
+      r35Dlg1.ok && r35Dlg1.open && r35Dlg1.closed && r35Dlg1.rel
+        && r35Dlg1.childLine && r35Dlg1.cancelLine && r35Dlg1.drawerStill
+        && r35PostCancelP === r35PreD && r35PostCancelM === r35PreDMs
+        && r35PostCancelPrd === r35PreDPrd,
+      JSON.stringify(r35Dlg1));
+
+    /* Confirming on W19 would orphan M8 at exactly 1 unit - PRD gate X
+       floor: the server refuses with 400 and zero writes; the toast carries
+       the reason and the drawer stays open on the refused node. */
+    const r35Dlg2 = await js(`(async () => {
+      const del = document.getElementById('ndDelete');
+      if (del) del.click();
+      const sheet = document.getElementById('modalSheet');
+      const go = sheet ? sheet.querySelector('#ndDoDelete') : null;
+      if (go) go.click();
+      await new Promise((r) => setTimeout(r, 900));
+      return { toast: (document.getElementById('toast') || {}).textContent || '',
+        drawer: !!CP.openNode(),
+        modalClosed: document.getElementById('modalLayer').classList.contains('hidden') };
+    })()`);
+    const r35PostD0P = fs.readFileSync(r35PlanFile, 'utf8');
+    const r35PostD0M = fs.readFileSync(r35MsFile, 'utf8');
+    PASS('DELETE refuses to orphan M8 at 1 work unit (PRD gate X floor): refusal toast, drawer stays open, zero writes',
+      /would keep 1 work unit/.test(r35Dlg2.toast) && r35Dlg2.drawer && r35Dlg2.modalClosed
+        && r35PostD0P === r35PreD && r35PostD0M === r35PreDMs
+        && fs.readFileSync(r35PrdFile, 'utf8') === r35PreDPrd,
+      JSON.stringify(r35Dlg2));
+
+    /* Confirm on M8: the dialog lists both lines (relation + child rows),
+       the cascade button runs the four-store delete, and the gates go green
+       again - the DELETE class assertion. */
+    const r35Dlg3 = await js(`(() => {
+      const row = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M8"]');
+      if (!row) return { ok: false, reason: 'no M8 row' };
+      row.click();
+      const del = document.getElementById('ndDelete');
+      if (!del) return { ok: false, reason: 'no delete button' };
+      del.click();
+      const sheet = document.getElementById('modalSheet');
+      const text = sheet ? sheet.textContent : '';
+      const go = sheet ? sheet.querySelector('#ndDoDelete') : null;
+      if (go) go.click();
+      return { ok: true,
+        kids: text.indexOf('2 child row(s)') >= 0 && text.indexOf('W19, W20') >= 0,
+        rel: text.indexOf('1 relation(s)') >= 0 && text.indexOf('W19 -> W20 (FS)') >= 0 };
+    })()`);
+    const r35D1 = await r35Poll((s) => !s.plan.milestones.some((m) => m.id === 'M8')
+      && !s.plan.work_units.some((w) => w.id === 'W19')
+      && !s.plan.work_units.some((w) => w.id === 'W20'));
+    const r35S3 = r35Read();
+    let r35RowsGone = false;
+    let r35EdgeGone = false;
+    try {
+      r35RowsGone = r35Conn.prepare("SELECT COUNT(*) AS n FROM tasks WHERE id IN ('W19','W20')").get().n === 0;
+      r35EdgeGone = r35Conn.prepare(
+        "SELECT COUNT(*) AS n FROM task_deps WHERE (from_id='W19' AND to_id='W20') OR (from_id='W20' AND to_id='W19')")
+        .get().n === 0;
+    } catch (_e) { /* surfaced as false below */ }
+    const r35GateD = r35Gate();
+    PASS('DELETE class (confirm): cascade removes M8 + W19/W20 + the relation + PRD block + evidence membership + task rows together; both gates green after the class',
+      r35Dlg3.ok && r35Dlg3.kids && r35Dlg3.rel && r35D1
+        && r35PrdBlock(r35S3.prd, 'M8') === ''
+        && !r35S3.ms.milestones.some((m) => m.id === 'M8')
+        && (r35S3.plan.relations || []).length === 16
+        && !r35S3.plan.goals.some((g) => Array.isArray(g.milestone_ids)
+          && g.milestone_ids.map(String).indexOf('M8') >= 0)
+        && r35RowsGone && r35EdgeGone && r35GateD.ok,
+      JSON.stringify({ dialog: r35Dlg3, rowsGone: r35RowsGone, edgeGone: r35EdgeGone,
+        relations: (r35S3.plan.relations || []).length })
+        + ' | ' + r35GateD.al + ' | ' + r35GateD.bl);
+  } finally {
+    fs.writeFileSync(r35PlanFile, r35PlanBak);
+    fs.writeFileSync(r35MsFile, r35MsBak);
+    fs.writeFileSync(r35PrdFile, r35PrdBak);
+    if (r35Conn) {
+      try {
+        /* Row-level DML only - the panel.db trio is never file-copied. */
+        r35Conn.prepare("DELETE FROM tasks WHERE id IN ('W19','W20')").run();
+        r35Conn.prepare(
+          "DELETE FROM task_deps WHERE from_id IN ('W19','W20') OR to_id IN ('W19','W20')").run();
+      } catch (_e) { /* restore still runs */ }
+      try { r35Conn.close(); } catch (_e) { /* already closed */ }
+      r35Conn = null;
+    }
+    try {
+      await js(`(() => {
+        CP.closeNodeDrawer();
+        const layer = document.getElementById('modalLayer');
+        if (layer && !layer.classList.contains('hidden')) {
+          const close = document.querySelector('#modalSheet [data-action="close"]');
+          if (close) close.click();
+        }
+        try { localStorage.removeItem('cp.tree-fold'); } catch (e) { /* storage blocked */ }
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  const r35PlanAfter = fs.readFileSync(r35PlanFile, 'utf8');
+  const r35MsAfter = fs.readFileSync(r35MsFile, 'utf8');
+  const r35PrdAfter = fs.readFileSync(r35PrdFile, 'utf8');
+  PASS('Section 35 restored: plan / evidence / PRD bytes identical (finally block, row-level DML for SQLite)',
+    r35PlanAfter === r35PlanBak && r35MsAfter === r35MsBak && r35PrdAfter === r35PrdBak,
+    'plan=' + (r35PlanAfter === r35PlanBak) + ' evidence=' + (r35MsAfter === r35MsBak)
+      + ' prd=' + (r35PrdAfter === r35PrdBak));
+
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+  await sleep(250);
+  const r35EndGate = r35Gate();
+  PASS('Gates green on the restored stores after section 35: prd-to-action 10/10 + plan-sync --check',
+    r35EndGate.ok, r35EndGate.al + ' | ' + r35EndGate.bl);
+
+  PASS('Section 35 added no JS exceptions or console errors (expected structure-400 refusals allowlisted)',
+    unexpectedErrors().length === r35Err,
+    'unexpected=' + unexpectedErrors().length + ' (raw=' + errors.length + ', before=' + r35Err
+      + ', allowlisted=' + (errors.length - unexpectedErrors().length) + ')');
+
+  PASS('No JS exceptions / console errors at runtime (expected structure-400 refusals allowlisted)',
+    unexpectedErrors().length === 0,
+    unexpectedErrors().join(' | ') || ('0 unexpected; allowlisted expected 400s='
+      + (errors.length - unexpectedErrors().length)));
   const failed = results.filter((r) => !r.ok).length;
   console.log(`\nResult: ${results.length - failed}/${results.length} passed; screenshots preview-desk.png / preview-plan.png / preview-ledger.png / preview-dark.png`);
   ws.close();

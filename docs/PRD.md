@@ -10,9 +10,12 @@ truth, not prose.
 A human reported a concrete defect on the Milestone gantt page: it renders a
 flat list of work units with no main line, no sub-lines and no relationships.
 The plan, in other words, has no milestone structure. This PRD fixes the input
-contract behind that page. It defines six milestones (M1..M6) on one dependency
+contract behind that page. It defines seven milestones (M1..M7) on one dependency
 main line, groups work units into per-milestone sub-lines, and declares explicit
-FS/SS/FF/SF dependency edges. The panel reads
+FS/SS/FF/SF dependency edges. A goal layer (I-020) sits above the main line:
+G1 "Release 1.8.x with discipline gates" covers M1..M6 and G2 "Goal-anchored
+WBS visualization" covers M7, and the plan service derives one analysis row
+(status, progress, cost, rounds, rework) per milestone and work unit. The panel reads
 assets/linked-gantt-board/data/milestone-plan.json and draws milestone lanes
 beside the existing t1..t15 demo tasks. Work units here use W-prefixed ids so
 they never collide with the 15 demo tasks.
@@ -51,18 +54,33 @@ they never collide with the 15 demo tasks.
 ## 5. Data contract
 
 - docs/PRD.md - this document, the source of truth for the plan.
-- docs/evidence/milestones.json - machine-readable mirror: 6 milestones, the
+- docs/evidence/milestones.json - machine-readable mirror: 7 milestones, the
   main line, sub-lines and dependency edges.
 - assets/linked-gantt-board/data/milestone-plan.json - the file the panel
-  reads (schema ai-project-ops.milestone-plan/1.0): charter, 6 milestones, at
-  least 14 W-prefixed work units, at least 10 acyclic relations, main_line and
-  sub_lines.
+  reads (schema ai-project-ops.milestone-plan/1.0): charter, goals (G1, G2),
+  7 milestones, at least 14 W-prefixed work units, at least 10 acyclic
+  relations, main_line and sub_lines.
+- Goal layer and analysis (I-020): milestone-plan.json carries goals[] of
+  {id, title, milestone_ids}, and GET /api/plan adds `goals` plus `analysis`,
+  an object keyed by every milestone id and every work-unit id with the
+  columns status | progress | cost | rounds | rework. Derivation is
+  deterministic, never a manual map: status/progress/cost come from the plan
+  file (a milestone cost is the sum of its sub-line work-unit costs and its
+  progress the mean of them; a milestone with an empty sub-line reports
+  progress 100 when done, 50 when in_progress, 0 otherwise); rounds are the
+  docs/TASK-LOG.md PDCA entry ids whose entry text names the node as a whole
+  token; rework counts those rounds entries that contain the substring
+  "rework". Goal rows are summed in the UI, not in the payload. If
+  docs/TASK-LOG.md is unreadable the payload keeps empty rounds and explains
+  why in analysis_note instead of failing.
 - scripts/prd-to-action.js - the adversarial gate described in section 7.
 
 ## 6. Milestones
 
-The dependency chain M1 to M6 is the MAIN LINE. Each milestone carries the
-eight fields from the installed prd-to-action skill's .memory/project.md
+The dependency chain M1 to M7 is the MAIN LINE. Goal layer: G1 "Release 1.8.x
+with discipline gates" groups M1..M6, G2 "Goal-anchored WBS visualization"
+groups M7; every milestone belongs to exactly one goal. Each milestone carries
+the eight fields from the installed prd-to-action skill's .memory/project.md
 template. Completion lines are falsifiable: each names files, counts or a
 concrete command with an exit code.
 
@@ -118,6 +136,15 @@ concrete command with an exit code.
 - Files: scripts/package.py, scripts/validate_skill.py, scripts/localize_check.py, docs/handoffs/G1.md
 - Completion: python scripts/validate_skill.py reports failed = 0; python scripts/package.py --out ai-project-ops.zip builds a zip whose entry count matches the packaged file set of the same run and a checksum outside the archive; a CJK scan over the owned files prints 0; docs/handoffs/G1.md has the four required sections and stays under 40 lines.
 - Verify: python scripts/validate_skill.py
+- Status: done
+
+### M7: Traceability view (I-020)
+- Depends on: M6
+- Type: code
+- Has external deps: no
+- Files: assets/linked-gantt-board/db.js, assets/linked-gantt-board/data/milestone-plan.json, docs/evidence/milestones.json, scripts/prd-to-action.js
+- Completion: /api/plan returns goals[] (G1 covers M1-M6, G2 covers M7) and an analysis object keyed by all 7 milestone ids and 18 work-unit ids with status/progress/cost/rounds/rework derived from data/milestone-plan.json and docs/TASK-LOG.md; milestone-plan.json main_line lists M1..M7, sub_lines keeps M7: [] with 18 work units unchanged; docs/PRD.md carries a 7-field M7 block with Status in_progress equal to docs/evidence/milestones.json; node scripts/prd-to-action.js exits 0 at 10/10 with gate C comparing the three stores instead of a hardcoded count; node scripts/plan-sync.js --check exits 0 with M7 status equal across prd/ms/plan.
+- Verify: node scripts/prd-to-action.js
 - Status: done
 
 ## 7. Verification gates

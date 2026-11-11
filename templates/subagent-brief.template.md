@@ -8,6 +8,10 @@ owner.
 
 ```
 Task: <one-line goal>
+Checkpoints: <one line per scope item - after each item report
+  "item N done, next M" to the main session; pause and report status
+  before any item exceeds ~20 min; two failed attempts on one item =
+  stop and hand back with the stuck evidence>
 Context: <2-4 lines: what exists, what was ruled out, why this package exists>
 Output files: <exact paths you MAY write/create>
 FORBIDDEN: <every path you must NOT touch - name the other agents' files and

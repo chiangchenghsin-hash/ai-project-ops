@@ -2,6 +2,44 @@
 
 All notable changes to this skill package. Versions follow semver.
 
+## 1.9.0 - 2026-11-11 (acceptance rounds + work board)
+
+Ships R27-R32: live-review UI chrome, the I-020 goal tree with analysis
+columns, the R29 acceptance batch, tree manual control with the WBS template
+library, hour-axis humanization with card AI fields, and the merged Work board
+with tree CRUD. SKILL.md version synced per the R26-A rule.
+
+- **R27 UI chrome** (I-022/I-023/I-024): charter block folded by default,
+  sidebar drag-resizable and collapsible, Settings page (theme / port /
+  language row / glass / layout reset), plan panel folds + split divider,
+  13 hint blocks cut to one-liners. Battery 120/120.
+- **R28 I-020 traceability view**: goal tree + analysis columns (status |
+  progress | cost | rounds | rework) served from /api/plan goals+analysis;
+  milestone M7 shipped todo -> done; fix round caught a derivation-rule drift
+  and a latent window.location-stub defect (section 28 gate). Battery 126/126.
+- **R29 I-025..I-030 acceptance batch**: First principles on Command desk
+  only, glass slider moved to Settings, plan pagination with pinned tab bar,
+  issue ledger with evidence + drag-resizable columns + working mirror upsert,
+  kanban card dependency links, dependency model completion (lead = negative
+  lag + nature vocab). Battery 148/148.
+- **R30 I-031 tree manual control + template library**: G/M fold toggles with
+  persistence, drag-move behind validated atomic three-store writes (gates
+  green after every move kind), 6-template WBS library with save/apply, and
+  the ms-scroll layout fix. Battery 167/167.
+- **I-036 subagent dispatch discipline**: checkpoint rule in SKILL.md section
+  2 and the brief template (interim report per scope item, ~20 min status
+  pause, stop after two failed attempts); handbacks require pasted evidence.
+- **R31 I-032/I-033**: hour-axis humanization (one purpose line, labelled NOW,
+  tooltips with start-end/duration/cost/owner, past-hours shading, shared
+  status palette) + card AI fields (model/instance/cost/confidence, owner-scope
+  gate badges with below-threshold auto-escalation, per-card audit trail,
+  red-line-1 scan gate). Battery 192/192.
+- **R32 I-037/I-038**: Work board (kanban + hour axis on one page, 40/60
+  persisted split, card<->bar cross-highlight) + tree CRUD (detail drawer,
+  four-store atomic commits with per-class gate assertions, add-child with
+  fresh ids, cascade delete behind a dependents confirm). Fix round caught a
+  flex min-width:0 product bug that broke real-pointer drags. Battery 213/213.
+
 ## 1.8.1 - 2026-11-09 (graph design + skill map)
 
 Docs-only round. No product code change.

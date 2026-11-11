@@ -17,6 +17,14 @@ namespace CP {
     if (fromSide === 'right' && toSide === 'right') return 'FF';
     return 'SF';
   }
+
+  /** I-030: the nature the operator picked for the next canvas link. Frozen
+   *  vocab: '' (unspecified) | mandatory | discretionary | external. The
+   *  value travels through the existing dep write path as `nature`. */
+  export function linkNature(): string {
+    const sel = document.getElementById('gdepNature') as HTMLSelectElement | null;
+    return sel ? sel.value : '';
+  }
   let drag: {
     id: string; mode: 'move' | 'left' | 'right'; x0: number;
     start: string; end: string; newStart: string; newEnd: string; changed: boolean;
@@ -61,6 +69,8 @@ namespace CP {
     el.style.width = `${a.hours * HOUR_W}px`;
     /* R22: indent the label by tree depth, same rule as the kanban card. */
     el.style.setProperty('--depth', String(taskDepth(store.state ? store.state.tasks : [], t.id)));
+    /* I-032: status color straight from the column palette the kanban uses
+       (columnById) - one dataset, one palette, both surfaces agree. */
     el.style.background = t.placeholder ? 'transparent' : col.color;
     el.style.borderColor = rgba(col.color, .8);
     (el.querySelector('.gbar-fill') as HTMLElement).style.width = `${t.progress}%`;
@@ -80,7 +90,11 @@ namespace CP {
     } else {
       ghost.style.display = 'none';
     }
-    el.title = `${t.title} | ${tickLabel(t.start)} -> ${tickLabel(t.end)} | ${ownerLabel(t.owner_type)}`
+    /* I-032: cost-first label unchanged; the hover tooltip carries start
+       hour -> end hour, duration, cost and owner (the four fields the
+       human asked to see without opening the edit form). */
+    const dur = Math.round(a.hours * 10) / 10;
+    el.title = `${costLabel(t)} | ${tickLabel(t.start)} -> ${tickLabel(t.end)} | ${dur}h | ${ownerLabel(t.owner_type)}`
       + (t.parent_id ? ` | part of ${t.parent_id}` : '');
   }
 
@@ -190,6 +204,8 @@ namespace CP {
 
     store.selected = t.id;
     CP.paintSelection(false);
+    /* I-037: dragging the bar lights its kanban card for the whole drag. */
+    CP.setLinkHover(t.id);
     const handle = target.closest('.gbar-handle') as HTMLElement | null;
     drag = {
       id: t.id,
@@ -223,6 +239,9 @@ namespace CP {
       return;
     }
     if (!drag) return;
+    /* I-037: keep the dragged bar's card lit even when the pointer crosses
+       other bars mid-drag (a mouseout would otherwise clear the pair). */
+    CP.setLinkHover(drag.id);
     const delta = Math.round((e.clientX - drag.x0) / HOUR_W);
     if (delta === 0 && !drag.changed) return;
     let s = drag.start;
@@ -269,8 +288,9 @@ namespace CP {
       const target = s ? s.tasks.filter((x) => x.id === toId)[0] : null;
       const side = bar ? (closestSide(bar, e.clientX) || 'left') : 'left';
       const type = linkType(from.side, side);
+      /* I-030: nature rides along on the existing dep write path. */
       void store.commit('PUT', '/api/task-deps',
-        { from: from.id, to: toId, type, lag: 0 },
+        { from: from.id, to: toId, type, lag: 0, nature: linkNature() },
         `Linked ${from.id} -> ${toId} (${type})`).catch((err) => CP.toast('Link refused: ' + String(err)));
       void target;
       return;
@@ -281,6 +301,12 @@ namespace CP {
     document.body.classList.remove('is-dragging');
     document.querySelectorAll('.gbar.is-dragging').forEach((el) => el.classList.remove('is-dragging'));
     if (tip) { tip.remove(); tip = null; }
+    /* I-037: re-derive the paired highlight from what sits under the pointer
+       now that the drag session ended. */
+    const released = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const releasedNode = released && typeof released.closest === 'function'
+      ? released.closest('[data-task-id]') as HTMLElement | null : null;
+    CP.setLinkHover(releasedNode && releasedNode.dataset.taskId ? releasedNode.dataset.taskId : null);
     if (!d.changed) return;
 
     /* R21: everything the dragged bar constrains follows it, by the least
@@ -334,13 +360,19 @@ namespace CP {
       lines.push(`<div class="gline${isMidnight(s) ? ' midnight' : ''}" style="left:${i * HOUR_W}px"></div>`);
     }
     const nowX = diffHours(axis, fmt(new Date())) * HOUR_W;
+    /* I-032: past hours shaded subtly under the lanes; clamped to the axis
+       so a clock outside the window cannot paint a negative/oversized box.
+       pointer-events:none keeps drags and hovers on the bars above. */
+    const pastW = Math.max(0, Math.min(nowX, width));
 
     scroll.innerHTML = `<div class="gantt-inner" style="width:${LABEL_W + width}px">
       <div class="gantt-head">
         <div class="gantt-corner">Work units | hour axis (day/night)</div>
-        <div class="gantt-ticks" style="width:${width}px">${ticks.join('')}</div>
+        <div class="gantt-ticks" style="width:${width}px">${ticks.join('')}
+          <div class="gnow-flag" data-now-flag="1" style="left:${nowX}px">NOW</div></div>
       </div>
       <div class="gantt-body" id="ganttBody">
+        <div class="past-shade" style="left:${LABEL_W}px;width:${pastW}px"></div>
         <div class="gantt-grid" style="left:${LABEL_W}px;width:${width}px">${lines.join('')}</div>
         <div class="now-line" style="left:${LABEL_W + nowX}px"><span>NOW</span></div>
         <svg class="gantt-edges" id="ganttEdges" style="left:${LABEL_W}px"></svg>

@@ -112,9 +112,6 @@ textarea, .snapshot { width: 100%; border: var(--hair); border-radius: 10px; bac
 .panel { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0; }
 .panel-head { display: flex; align-items: baseline; gap: 12px; padding: 12px 15px 10px; border-bottom: var(--hair); flex: 0 0 auto; }
 .panel-head .hint { margin: 0; }
-.divider { display: flex; align-items: center; justify-content: center; cursor: row-resize; touch-action: none; }
-.divider span { width: 46px; height: 4px; border-radius: 4px; background: var(--soft2); transition: all .18s var(--ease); }
-.divider:hover span { background: var(--accent); width: 64px; }
 body.is-dragging { user-select: none; }
 
 /* gantt hour axis */
@@ -123,7 +120,20 @@ body.is-dragging { user-select: none; }
 .gantt-head { position: sticky; top: 0; z-index: 8; display: flex; background: var(--card-solid); border-bottom: var(--hair); }
 .gantt-corner { position: sticky; left: 0; z-index: 9; flex: 0 0 252px; width: 252px; padding: 0 12px 9px;
   display: flex; align-items: flex-end; font-size: 11px; color: var(--text3); background: var(--card-solid); border-right: var(--hair); }
-.gantt-ticks { display: flex; height: 38px; flex: 0 0 auto; }
+.gantt-ticks { display: flex; height: 38px; flex: 0 0 auto; position: relative; }
+/* I-032: labelled NOW marker riding the axis head (the body keeps its
+   .now-line; this flag is the axis label the human asked for). */
+.gnow-flag {
+  position: absolute; top: 3px; z-index: 3; transform: translateX(-50%);
+  font-size: 9px; font-weight: 700; letter-spacing: .5px; color: var(--red);
+  background: var(--card-solid); border: 1px solid var(--red); border-radius: 4px;
+  padding: 0 4px; line-height: 14px; white-space: nowrap; pointer-events: none;
+}
+/* I-032: subtle shading for hours already in the past, under the lanes. */
+.past-shade {
+  position: absolute; top: 0; bottom: 0; z-index: 0;
+  background: var(--soft2); opacity: .6; pointer-events: none;
+}
 .gtick { flex: 0 0 auto; display: flex; align-items: flex-end; padding: 0 0 7px 6px; font-size: 10px; color: var(--text2);
   border-right: var(--hair); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .gtick.midnight { color: var(--text); font-weight: 620; border-left: 1px solid var(--line); }
@@ -143,7 +153,7 @@ body.is-dragging { user-select: none; }
   box-shadow: 0 2px 7px rgba(0,0,0,.16); transition: transform .16s var(--ease), box-shadow .16s var(--ease); }
 .gbar:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0,0,0,.22); z-index: 6; }
 .gbar.is-selected { box-shadow: 0 0 0 3px var(--accent-soft), 0 6px 16px rgba(0,0,0,.2); z-index: 7; }
-.gbar.is-dragging { z-index: 8; transform: scale(1.015); box-shadow: 0 12px 26px rgba(0,0,0,.3); }
+.gbar.is-dragging { z-index: 8; transform: scale(1.015); box-shadow: 0 12px 26px rgba(0,0,0,.3); cursor: grabbing; }
 .gbar.placeholder { border: 1.5px dashed var(--text3); background: var(--soft) !important; color: var(--text2); box-shadow: none; }
 .gbar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255,255,255,.22); border-radius: 8px 0 0 8px; pointer-events: none; }
 .gbar-label { position: relative; z-index: 1; padding: 0 10px; font-size: 11px; font-weight: 620; white-space: nowrap; overflow: hidden;
@@ -182,6 +192,44 @@ body.is-dragging { user-select: none; }
 .kb-title { margin: 0 0 4px; font-size: 12.5px; font-weight: 620; }
 .kb-role { font-size: 10.5px; color: var(--text2); }
 .kb-cost { margin-top: 5px; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; color: var(--text); }
+/* I-033: the four AI dimension fields under the cost line (model/instance,
+   confidence, gate badge, audit chip). Cost stays first - cost-first. */
+.kb-ai {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 5px;
+  font-size: 9.5px; font-variant-numeric: tabular-nums;
+}
+.kb-model, .kb-conf {
+  color: var(--text2); background: var(--soft2); border-radius: 5px;
+  padding: 2px 6px; white-space: nowrap;
+}
+.kb-gate {
+  font-weight: 700; letter-spacing: .3px; border-radius: 5px; padding: 2px 7px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.kb-gate.gate-autonomous { color: #1a7f37; background: rgba(52,199,89,.14); border-color: rgba(52,199,89,.45); }
+.kb-gate.gate-needs-ack { color: #b25000; background: rgba(255,159,10,.16); border-color: rgba(255,159,10,.5); }
+.kb-gate.gate-never-auto { color: #c41c3a; background: rgba(255,45,85,.14); border-color: rgba(255,45,85,.45); }
+:root[data-theme='dark'] .kb-gate.gate-autonomous { color: #30d158; }
+:root[data-theme='dark'] .kb-gate.gate-needs-ack { color: #ff9f0a; }
+:root[data-theme='dark'] .kb-gate.gate-never-auto { color: #ff375f; }
+.kb-audit {
+  margin-left: auto; font-size: 9.5px; font-weight: 700; padding: 2px 8px;
+  border-radius: 5px; border: 1px solid var(--line); background: var(--card-solid);
+  color: var(--accent); cursor: pointer;
+}
+.kb-audit:hover, .kb-audit.is-on { background: var(--accent-soft); border-color: var(--accent); }
+.kb-card { position: relative; }
+.kb-audit-pop {
+  position: absolute; left: 8px; right: 8px; top: 62%; z-index: 30;
+  background: var(--card-solid); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.28); padding: 8px 9px;
+  font-size: 10px; max-height: 190px; overflow: auto; cursor: default;
+}
+.kb-audit-pop[hidden] { display: none; }
+.kb-audit-head { font-weight: 700; font-size: 10.5px; margin-bottom: 5px; color: var(--text); }
+.kb-audit-sec { font-weight: 700; color: var(--text2); margin-top: 5px; }
+.kb-audit-item { color: var(--text2); word-break: break-word; padding: 1px 0; border-top: var(--hair); }
+.kb-audit-none { color: var(--text3); font-style: italic; }
 .kb-handoff { margin-top: 4px; font-size: 10.5px; color: var(--text2); }
 .kb-window { margin-top: 5px; font-size: 10px; color: var(--text3); font-variant-numeric: tabular-nums; }
 .kb-drop-line { height: 3px; border-radius: 3px; background: var(--accent); flex: 0 0 auto; }
@@ -282,7 +330,8 @@ body.is-dragging { user-select: none; }
 
 /* ---- Sidebar ------------------------------------------------------- */
 .sidebar {
-  flex: 0 0 236px; width: 236px; min-width: 0; display: flex; flex-direction: column;
+  position: relative;
+  flex: 0 0 var(--side-w, 236px); width: var(--side-w, 236px); min-width: 0; display: flex; flex-direction: column;
   gap: 16px; padding: 18px 13px 13px; background: var(--soft); border-right: var(--hair);
   overflow-y: auto; overflow-x: hidden;
   transition: flex-basis .22s var(--ease), width .22s var(--ease), padding .22s var(--ease);
@@ -370,12 +419,13 @@ body.side-collapsed .nav button { justify-content: center; padding: 9px 0; width
 body.side-collapsed .side-collapse { width: 40px; justify-content: center; padding: 7px 0; }
 body.side-collapsed .side-collapse svg { transform: rotate(180deg); }
 
-/* ---- First-principles charter (visible on every view) --------------- */
+/* ---- First-principles charter (Command desk view only, I-025) ------- */
 .charter {
   margin: 10px 0 2px; padding: 13px 15px 14px; border-radius: var(--radius);
   background: var(--card); border: var(--hair); box-shadow: var(--shadow);
   backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); flex: 0 0 auto;
 }
+.charter[hidden] { display: none; }
 .charter-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
 .charter-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .charter-cell {
@@ -549,28 +599,133 @@ body.is-linking .gbar-link { opacity: 1; }
 .nav button[data-view="meter"] .nav-dot { background: #ff2d55; }
 .nav button.active .nav-dot { box-shadow: 0 0 0 3px var(--accent-soft), inset 0 1px 0 rgba(255,255,255,.55); }
 
-/* (b) The signature transparency slider. */
-.glass-control {
-  display: flex; align-items: center; gap: 7px; height: 31px; padding: 0 10px;
-  border-radius: var(--radius-sm); background: var(--card);
-  border: 1px solid var(--glass-border);
-  box-shadow: inset 0 1px 0 var(--glass-edge);
-  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
-}
-.glass-control-label { font-size: 11px; font-weight: 650; color: var(--text2); }
-.glass-control output { font-size: 10.5px; color: var(--text2); font-variant-numeric: tabular-nums; min-width: 30px; text-align: right; }
-.glass-control input[type=range] { width: 92px; accent-color: var(--accent); cursor: pointer; }
-
-/* ---- Two independent views: plan (stacked) and board (own page) ------ */
+/* ---- Two views: plan (goal tree full-page) and the Work board --------- */
 #view-board.active { display: flex; }
-.board-page { flex: 1 1 auto; min-height: 0; display: flex; }
-.board-page > .card.panel { flex: 1 1 auto; }
+/* R32 / I-037: the Work board holds the kanban and the hour axis on one
+   page - side by side with one draggable split (default 40/60, the axis the
+   larger share, width persisted in cp.wb-split by app.ts initWorkBoard).
+   min-width:0 is load-bearing: without it this row flex item's automatic
+   minimum is its min-content (the gantt-inner is 4284px wide), which
+   inflates the page past the viewport and pushes the axis pane off-screen -
+   real pointer drags then miss every bar. */
+.board-page { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
+.wb-pane { min-width: 0; min-height: 0; }
+.wb-kanban { flex: 0 0 var(--wb-left, 40%); }
+.wb-axis { flex: 1 1 auto; }
+.wb-split {
+  flex: 0 0 10px; margin: 0 6px; align-self: stretch; cursor: col-resize;
+  border-radius: 6px; background: var(--soft); border: 1px solid var(--hair);
+  position: relative; user-select: none; touch-action: none;
+}
+.wb-split::after {
+  content: ''; position: absolute; inset: 40% 3px; border-radius: 3px;
+  background: var(--line);
+}
+.wb-split:hover, body.is-dragging .wb-split { background: var(--accent-soft); border-color: var(--accent); }
+/* Stacked fallback on narrow viewports: same page, vertical order,
+   the split handle retires (its width drag has no meaning in a column). */
+@media (max-width: 1100px) {
+  .board-page { flex-direction: column; }
+  .wb-kanban { flex: 0 0 44%; width: 100%; }
+  .wb-axis { flex: 1 1 auto; }
+  .wb-split { display: none; }
+}
+
+/* ============================================================
+   R32 / I-038 - node detail drawer (right side slide-over).
+   Fixed overlay: opening it never reflows the plan pane, so the
+   R30 layout assertions keep measuring the same boxes.
+   ============================================================ */
+.node-drawer {
+  position: fixed; top: 0; right: 0; bottom: 0;
+  width: 380px; max-width: 92vw; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--card); border-left: var(--hair);
+  box-shadow: -12px 0 32px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+}
+.node-drawer.hidden { display: none; }
+.nd-head {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 14px 10px; border-bottom: var(--hair); flex: 0 0 auto;
+}
+.nd-eyebrow {
+  display: block; font-size: 9px; font-weight: 750; letter-spacing: .6px;
+  text-transform: uppercase; color: var(--text3);
+}
+.nd-kind {
+  font-size: 13px; font-weight: 680; color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.nd-close {
+  margin-left: auto; width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--card-solid);
+  color: var(--text2); font-size: 15px; line-height: 1; cursor: pointer;
+}
+.nd-close:hover { color: var(--text); border-color: var(--accent); }
+.nd-body {
+  flex: 1 1 auto; min-height: 0; overflow: auto;
+  padding: 12px 14px 16px; display: flex; flex-direction: column; gap: 10px;
+}
+.nd-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nd-field > label {
+  font-size: 9.5px; font-weight: 700; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text3);
+}
+.nd-row { display: flex; gap: 10px; }
+.nd-row .nd-field { flex: 1 1 0; }
+.nd-input {
+  width: 100%; height: 30px; padding: 0 9px;
+  border: var(--hair); border-radius: 8px; background: var(--card-solid);
+  font-size: 12.5px; color: var(--text); font-family: inherit;
+}
+textarea.nd-input { height: auto; min-height: 62px; padding: 7px 9px; resize: vertical; line-height: 1.45; }
+.nd-input:read-only { background: var(--soft); color: var(--text2); cursor: default; }
+.nd-hint { font-size: 10px; color: var(--text3); }
+.nd-static {
+  font-size: 12.5px; font-weight: 620; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.nd-section { border-top: 1px dashed var(--line); padding-top: 9px; }
+.nd-sec-title {
+  font-size: 9.5px; font-weight: 750; letter-spacing: .5px;
+  text-transform: uppercase; color: var(--text3); margin-bottom: 6px;
+}
+.nd-group { margin-bottom: 6px; }
+.nd-group-label { font-size: 9.5px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+.nd-rel {
+  display: inline-block; margin: 3px 4px 0 0; padding: 2px 7px;
+  font-size: 10.5px; border: 1px solid var(--hair); border-radius: 999px;
+  background: var(--soft); color: var(--text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.nd-rel-nature { color: #af52de; font-weight: 700; }
+.nd-none { font-size: 10.5px; color: var(--text3); font-style: italic; }
+.nd-audit-head { font-weight: 700; font-size: 10.5px; color: var(--text); margin-bottom: 4px; }
+.nd-audit-sec { font-weight: 700; color: var(--text2); font-size: 10.5px; margin-top: 6px; }
+.nd-audit-item {
+  color: var(--text2); font-size: 10.5px; word-break: break-word;
+  padding: 2px 0; border-top: var(--hair);
+}
+.nd-audit-none { color: var(--text3); font-style: italic; font-size: 10.5px; }
+.nd-actions { display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+.nd-kids { font-size: 10.5px; color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* R32 / I-037: cross-surface hover - the card and the bar of one task light
+   together (app.ts setLinkHover drives the class; selection keeps its own
+   .is-selected ring unchanged). */
+.kb-card.is-link-hover {
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, .55), 0 6px 18px rgba(0, 0, 0, .14);
+}
+.gbar.is-link-hover {
+  outline: 2px solid rgba(10, 132, 255, .85);
+  outline-offset: 1px;
+  filter: brightness(1.08);
+}
 
 .plan-stack { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; flex-direction: column; gap: 10px; }
-#divider { display: none; }
-.milestone-panel { flex: 0 0 44%; min-height: 190px; }
-#ganttPanel { flex: 1 1 auto; min-height: 200px; }
+.nature-tool { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
+.nature-tool .select { height: 26px; font-size: 11px; padding: 0 6px; }
 .milestone-layer { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; }
 
 /* ---- Milestone layer: main line / sub-lines / relations / critical --- */
@@ -583,7 +738,13 @@ body.is-linking .gbar-link { opacity: 1; }
 .ms-corner { flex: 0 0 252px; width: 252px; padding: 5px 12px; font-size: 10px; color: var(--text3); border-right: var(--hair); }
 .ms-ticks { flex: 0 0 var(--ms-w, 600px); width: var(--ms-w, 600px); position: relative; height: 20px; }
 .ms-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid var(--line); padding-left: 4px; font-size: 9px; color: var(--text3); font-variant-numeric: tabular-nums; }
-.ms-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* I-031 layout fix: never let the gantt block shrink to zero under a tall
+   goal tree (the old flex:1 1 auto + min-height:0 collapsed it to height 0
+   and the MAIN LINE / RELATIONS rows became unreachable). The layer is the
+   single vertical scroll over [goal tree, legend, axis, gantt block]; the
+   gantt keeps its own horizontal scroll. min-height is the floor so the
+   block stays visible even with a tiny fixture. */
+.ms-scroll { flex: 0 0 auto; min-height: 160px; overflow: auto; }
 .ms-layer-inner { min-width: calc(252px + var(--ms-w, 600px)); }
 .ms-rows { display: flex; flex-direction: column; }
 .ms-group { border-bottom: 1px dashed var(--line); }
@@ -611,7 +772,13 @@ body.is-linking .gbar-link { opacity: 1; }
 .ms-rel-from, .ms-rel-to { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--accent); }
 .ms-rel-arrow { color: #af52de; font-weight: 800; }
 .ms-rel-type { color: var(--text); font-weight: 700; }
-.ms-rel-lag { color: var(--text3); font-variant-numeric: tabular-nums; }
+.ms-rel-lag { color: var(--text3); font-variant-numeric: tabular-nums; font-weight: 650; }
+/* I-030: optional nature badge on a plan relation row. */
+.ms-rel-nature {
+  font-size: 9px; font-weight: 700; color: #af52de;
+  background: var(--soft2); border: 1px solid var(--hair);
+  padding: 1px 6px; border-radius: 5px;
+}
 .ms-critical-note { padding: 8px 14px 14px; font-size: 10.5px; color: #ff3b30; font-weight: 650; }
 .ms-empty { margin: 20px; padding: 22px; border-radius: var(--radius); background: var(--card); border: 1px dashed var(--accent); text-align: left; }
 .ms-empty-title { font-size: 15px; font-weight: 720; color: var(--accent); margin-bottom: 8px; }
@@ -701,3 +868,194 @@ body.is-linking .gbar-link { opacity: 1; }
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
+
+
+/* ---- UI chrome: drag-resize, folds, theme override, settings (I-022/023/024).
+   The state value lives in its own custom property (--side-w / --ms-h); these
+   rules only derive sizes from it. Theme override mirrors the two
+   prefers-color-scheme blocks above with higher specificity. ---- */
+.side-resize {
+  position: absolute; top: 0; right: -2px; bottom: 0; width: 5px;
+  cursor: col-resize; touch-action: none; z-index: 30;
+}
+.side-resize:hover { background: var(--accent-soft); }
+body.side-collapsed .side-resize { display: none; }
+
+.charter-actions { display: flex; gap: 6px; }
+.charter.collapsed .charter-grid { display: none; }
+.charter.collapsed { margin: 6px 0 2px; padding: 9px 15px 9px; }
+
+.settings-rows { padding: 2px 2px 6px; }
+.set-row { display: flex; align-items: center; gap: 16px; padding: 11px 2px; border-bottom: var(--hair); }
+.set-row:last-child { border-bottom: 0; }
+.set-label { flex: 0 0 132px; font-size: 12.5px; font-weight: 620; }
+.set-ctrl { display: flex; align-items: center; gap: 9px; flex: 1 1 auto; min-width: 0; }
+.set-ctrl .hint { margin: 0; }
+.set-input {
+  width: 96px; padding: 6px 9px; border-radius: 9px; border: var(--hair);
+  background: var(--soft); font-size: 12px;
+}
+.set-static { font-size: 12.5px; font-weight: 550; }
+#setTheme .btn.mini.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+:root[data-theme='light'] {
+  --bg: #f5f5f7; --card: rgba(255,255,255,.80); --card-solid: #fff;
+  --text: #1d1d1f; --text2: #6e6e73; --text3: #a1a1a6;
+  --accent: #0071e3; --accent-soft: rgba(0,113,227,.10);
+  --hair: 1px solid rgba(0,0,0,.075); --line: rgba(0,0,0,.07);
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 8px 26px rgba(0,0,0,.055);
+  --soft: rgba(0,0,0,.032); --soft2: rgba(0,0,0,.055);
+}
+:root[data-theme='dark'] {
+  --bg: #1c1c1e; --card: rgba(44,44,46,.78); --card-solid: #2c2c2e;
+  --text: #f5f5f7; --text2: #a1a1a6; --text3: #8e8e93;
+  --accent: #0a84ff; --accent-soft: rgba(10,132,255,.16);
+  --hair: 1px solid rgba(255,255,255,.10); --line: rgba(255,255,255,.09);
+  --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 26px rgba(0,0,0,.38);
+  --soft: rgba(255,255,255,.045); --soft2: rgba(255,255,255,.075);
+}
+:root[data-theme='dark'] body { background: var(--bg); }
+
+/* ============================================================
+   I-020 - goal tree + analysis columns above the milestone gantt.
+   Plain selectable text rows; depth indent via --depth; goal rows
+   bold and tinted so they read as group headers, not data rows.
+   ============================================================ */
+.ms-goal-tree { flex: 0 0 auto; border-bottom: var(--hair); padding: 6px 0 8px; background: var(--card-solid); }
+.ms-goal-row {
+  display: flex; align-items: center; gap: 10px; min-height: 22px;
+  padding: 2px 14px 2px calc(14px + 16px * var(--depth, 0));
+  font-size: 10.5px; color: var(--text2); white-space: nowrap;
+}
+.ms-a-head {
+  font-size: 9px; font-weight: 750; letter-spacing: .5px; text-transform: uppercase;
+  color: var(--text3); border-bottom: var(--hair); margin-bottom: 3px;
+}
+.ms-goal-group { border-bottom: 1px dashed transparent; }
+.ms-goal-group + .ms-goal-group { margin-top: 2px; }
+.ms-a-goal {
+  font-weight: 750; color: var(--text); background: var(--accent-soft);
+  border-radius: 7px; margin: 2px 8px; padding-top: 3px; padding-bottom: 3px;
+}
+.ms-a-ms { color: var(--text2); }
+.ms-a-wu { color: var(--text3); }
+.ms-a-id { flex: 0 0 52px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--text); }
+.ms-a-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ms-a-status { flex: 0 0 108px; font-weight: 700; color: var(--text); }
+.ms-a-progress { flex: 0 0 56px; text-align: right; font-variant-numeric: tabular-nums; }
+.ms-a-cost { flex: 0 0 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--text); }
+.ms-a-rounds { flex: 0 0 168px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; }
+.ms-a-rework { flex: 0 0 78px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9.5px; }
+
+/* ===== R29 / I-028 ledger: expanded rows, column drag grips ===== */
+.issue-table { table-layout: fixed; }
+.issue-table thead th { position: relative; user-select: none; }
+.issue-table thead th .icgrip {
+  position: absolute; top: 0; right: -4px; width: 9px; height: 100%;
+  cursor: col-resize; z-index: 2; background: transparent;
+}
+.issue-table thead th .icgrip:hover { background: rgba(127, 127, 127, .35); }
+.issue-table td.iexpand { padding: 0; }
+.iexpand-strip { display: flex; gap: 6px; align-items: flex-start; padding: 4px 8px; }
+.iexpand-strip .ireply { flex: 1; min-width: 140px; }
+.iexpand-full { display: none; padding: 6px 10px 8px; border-top: 1px dashed rgba(127, 127, 127, .4); }
+.issue-row.is-open .iexpand-full { display: block; }
+.issue-row.is-open .iexpand-strip { display: none; }
+.iexpand-detail { white-space: pre-wrap; font-size: 12px; margin-bottom: 4px; }
+.iexpand-line { font-size: 12px; margin: 2px 0; }
+.iexpand-label { opacity: .7; margin-right: 4px; }
+.iexpand-edit { display: flex; gap: 6px; align-items: flex-start; margin-top: 6px; }
+.iexpand-edit .ireply { flex: 1; }
+.issue-table .iev-list { font-size: 11px; opacity: .85; word-break: break-all; }
+
+/* ===== R29 / I-029 kanban card dependency links ===== */
+.kb-dep-toggle {
+  margin-left: auto; padding: 2px 5px; font-size: 11px; line-height: 1;
+  color: inherit; background: transparent; cursor: pointer;
+  border: 1px solid rgba(127, 127, 127, .45); border-radius: 6px; opacity: .65;
+}
+.kb-dep-toggle:hover { opacity: 1; }
+.kb-dep-toggle.is-on { opacity: 1; color: #0a84ff; border-color: #0a84ff; }
+.kb-dep-row {
+  display: none; margin-top: 6px; padding-top: 6px; font-size: 11px;
+  border-top: 1px dashed rgba(127, 127, 127, .4);
+}
+.kb-dep-row.is-on { display: block; }
+.kb-dep-label { margin-top: 4px; opacity: .65; text-transform: uppercase; letter-spacing: .04em; }
+.kb-dep-label:first-child { margin-top: 0; }
+.kb-dep-link {
+  display: inline-block; margin: 2px 4px 0 0; padding: 1px 6px; font-size: 11px;
+  color: inherit; background: rgba(127, 127, 127, .12); cursor: pointer;
+  border: 1px solid rgba(127, 127, 127, .45); border-radius: 999px;
+}
+.kb-dep-link:hover { color: #0a84ff; border-color: #0a84ff; }
+.kb-dep-nature {
+  display: inline-block; margin-left: 4px; padding: 0 4px; font-size: 10px;
+  background: rgba(255, 159, 10, .22); border-radius: 4px;
+}
+.kb-dep-none { opacity: .55; }
+/* scroll-to highlight flash (I-029) */
+.kb-card.kb-flash { animation: kb-flash 1.5s ease-out; }
+@keyframes kb-flash {
+  0% { box-shadow: 0 0 0 2px #0a84ff, 0 0 14px rgba(10, 132, 255, .85); }
+  100% { box-shadow: 0 0 0 2px transparent, 0 0 0 transparent; }
+}
+
+/* ============================================================
+   I-031 - goal-tree manual control: [+]/[-] fold toggles, drag
+   drop-target highlighting, WBS template library modal.
+   ============================================================ */
+.ms-a-fold {
+  flex: 0 0 20px; text-align: center; cursor: pointer; user-select: none;
+  color: var(--text3); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+}
+.ms-a-fold:hover { color: var(--accent); }
+.ms-a-tpl { flex: 0 0 auto; margin-left: 4px; }
+.ms-tpl-btn {
+  padding: 1px 6px; font-size: 9.5px; line-height: 1.5; cursor: pointer;
+  color: var(--text3); background: transparent;
+  border: 1px solid rgba(127, 127, 127, .4); border-radius: 6px;
+  opacity: .8; white-space: nowrap; font-family: inherit;
+}
+.ms-tpl-btn:hover { opacity: 1; color: var(--accent); border-color: var(--accent); }
+/* R32 / I-038: add-child button on G rows (new milestone) and M rows (new
+   work unit); W rows keep an empty spacer so the columns stay aligned. */
+.ms-a-add { flex: 0 0 auto; margin-left: 4px; }
+.ms-add-btn {
+  padding: 1px 6px; font-size: 10px; line-height: 1.5; cursor: pointer;
+  color: #1a7f37; background: transparent;
+  border: 1px solid rgba(52, 199, 89, .55); border-radius: 6px;
+  opacity: .85; white-space: nowrap; font-family: inherit; font-weight: 700;
+}
+.ms-add-btn:hover { opacity: 1; color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+.ms-goal-row[draggable='true'] { cursor: grab; }
+.ms-goal-row[draggable='true']:active { cursor: grabbing; }
+.ms-goal-row.is-drop-ok {
+  outline: 1.5px dashed var(--accent); outline-offset: -1px;
+  background: var(--accent-soft);
+}
+.ms-goal-children.is-folded, .ms-goal-sub.is-folded { display: none; }
+
+/* WBS template library modal ([+ from template]) */
+.tpl-list {
+  display: flex; flex-direction: column; gap: 7px;
+  margin: 10px 0; max-height: 46vh; overflow: auto;
+}
+.tpl-item {
+  display: flex; align-items: center; gap: 10px; padding: 7px 9px;
+  border: var(--hair); border-radius: 8px; background: var(--soft);
+}
+.tpl-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tpl-name { font-size: 12px; color: var(--text); }
+.tpl-prov {
+  font-size: 9.5px; color: var(--text3);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.tpl-counts { font-size: 9.5px; color: var(--text2); }
+.tpl-save-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.tpl-save-row input {
+  flex: 1 1 auto; min-width: 140px; height: 32px; padding: 0 10px;
+  border: var(--hair); border-radius: 9px; background: var(--card-solid);
+  font-size: 12.5px;
+}

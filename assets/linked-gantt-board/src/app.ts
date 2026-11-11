@@ -33,10 +33,60 @@ namespace CP {
     }
   }
 
+  /** I-037: cross-surface hover. The kanban card and the hour-axis bar of one
+   *  task light together - one dataset, one highlight, the same
+   *  [data-task-id] selector paintSelection uses. `hoverId` survives the
+   *  className rewrites in reconcile's update step, so a store emit while the
+   *  pointer rests on a card keeps the paired bar lit (repaintLinkHover
+   *  re-subscribes with the selection paint). */
+  let hoverId: string | null = null;
+
+  function linkHoverEls(id: string): NodeListOf<HTMLElement> {
+    return document.querySelectorAll<HTMLElement>(`[data-task-id="${CSS.escape(id)}"]`);
+  }
+
+  function repaintLinkHover(): void {
+    if (!hoverId) return;
+    linkHoverEls(hoverId).forEach((el) => el.classList.add('is-link-hover'));
+  }
+
+  export function setLinkHover(id: string | null): void {
+    const prev = hoverId;
+    hoverId = id;
+    if (prev && prev !== hoverId) {
+      linkHoverEls(prev).forEach((el) => el.classList.remove('is-link-hover'));
+    }
+    if (hoverId) linkHoverEls(hoverId).forEach((el) => el.classList.add('is-link-hover'));
+  }
+
+  /** Document-level delegation: hovering (or dragging) a card highlights its
+   *  bar and vice versa. mouseout only clears when the pointer really left
+   *  the task node, so moving across a card's children never flickers. */
+  function initLinkHover(): void {
+    document.addEventListener('mouseover', (e) => {
+      const t = e.target as HTMLElement | null;
+      const node = t && typeof t.closest === 'function' ? t.closest('[data-task-id]') as HTMLElement | null : null;
+      setLinkHover(node && node.dataset.taskId ? node.dataset.taskId : null);
+    });
+    document.addEventListener('mouseout', (e) => {
+      const t = e.target as HTMLElement | null;
+      const from = t && typeof t.closest === 'function' ? t.closest('[data-task-id]') as HTMLElement | null : null;
+      if (!from) return;
+      const to = e.relatedTarget as HTMLElement | null;
+      if (to && typeof to.closest === 'function' && from.contains(to)) return;
+      setLinkHover(null);
+    });
+    store.subscribe(repaintLinkHover);
+  }
+
   function closeModal(): void { layer.classList.add('hidden'); modalOpen = false; editingId = null; }
   function openModal(html: string): void {
     sheet.innerHTML = html; layer.classList.remove('hidden'); modalOpen = true;
   }
+  /** I-031: the goal tree opens the WBS template library through the same
+   *  modal plumbing (Esc, backdrop click and data-action="close" included). */
+  export function openPanelModal(html: string): void { openModal(html); }
+  export function closePanelModal(): void { closeModal(); }
   function swatches(active: string, colId?: string): string {
     return PALETTE.map((c) => `<button type="button" class="swatch${c === active ? ' active' : ''}"
       style="background:${c}" data-color="${c}"${colId ? ` data-col="${colId}"` : ''}></button>`).join('');
@@ -100,7 +150,7 @@ namespace CP {
     const m = s.meta || {};
     const val = (k: string): string => esc(stripCJK(String(m[k] || '')));
     openModal(`<h3>Project charter</h3>
-      <p class="modal-sub">First-principles framing shown on every view. It lives in SQLite, so every fork states its own. The values originate from the ingested milestone plan. The Evaluation field states the method, never a live score.</p>
+      <p class="modal-sub">First-principles framing shown on the Command desk. It lives in SQLite, so every fork states its own. The values originate from the ingested milestone plan. The Evaluation field states the method, never a live score.</p>
       <form id="charterForm"><div class="form-grid">
         <div class="field wide"><label>Purpose - why this project exists</label>
           <textarea id="cPurpose" rows="3" placeholder="Loaded from the milestone plan">${val('project_purpose')}</textarea></div>
@@ -233,7 +283,17 @@ namespace CP {
     closeModal();
   }
 
+  /** I-025: the First-principles block belongs to the Command desk alone.
+   *  Every other view hides it; the charter modal stays reachable from the
+   *  desk's Edit button while the block is on screen. */
+  function syncCharterView(view: string): void {
+    const charter = document.getElementById('charter');
+    if (charter) charter.hidden = view !== 'desk';
+  }
+
   function initNav(): void {
+    const first = document.querySelector('#nav button.active') as HTMLElement | null;
+    syncCharterView(first && first.dataset.view ? first.dataset.view : 'desk');
     byId('nav').addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('button[data-view]') as HTMLElement | null;
       if (!b) return;
@@ -241,8 +301,11 @@ namespace CP {
       document.querySelectorAll('.view').forEach((v) => {
         (v as HTMLElement).classList.toggle('active', v.id === 'view-' + b.dataset.view);
       });
-      /* Setting scrollLeft on a hidden view does nothing; reposition to NOW after switching to plan. */
-      if (b.dataset.view === 'plan') {
+      syncCharterView(b.dataset.view || 'desk');
+      /* Setting scrollLeft on a hidden view does nothing; reposition to NOW
+         after switching to the Work board - the hour axis lives there now
+         (R32 / I-037 moved it out of the Plan pagination). */
+      if (b.dataset.view === 'board') {
         window.requestAnimationFrame(() => CP.scrollGanttToNow());
       }
     });
@@ -273,33 +336,188 @@ namespace CP {
     });
   }
 
+  /** Persist a small chrome preference; storage may be blocked in private
+   *  mode, in which case the UI still works for the current session. */
+  function saveChrome(key: string, val: string): void {
+    try { localStorage.setItem(key, val); } catch (_e) { /* storage blocked */ }
+  }
+  function loadChrome(key: string): string | null {
+    try { return localStorage.getItem(key); } catch (_e) { return null; }
+  }
+
   function initSidebar(): void {
     byId('btnCharterEdit').addEventListener('click', () => openCharterModal());
-    byId('btnCollapse').addEventListener('click', () => {
+
+    /* I-022: the first-principles block is folded by default; one toggle. */
+    const fold = byId('btnCharterFold');
+    const charter = document.getElementById('charter');
+    const syncCharter = (open: boolean): void => {
+      if (!charter) return;
+      charter.classList.toggle('collapsed', !open);
+      fold.textContent = open ? 'Fold' : 'Unfold';
+      saveChrome('cp.charter-open', open ? '1' : '0');
+    };
+    syncCharter(loadChrome('cp.charter-open') === '1');
+    fold.addEventListener('click', () =>
+      syncCharter(!charter || charter.classList.contains('collapsed')));
+
+    /* I-022: the sidebar keeps its collapsed state across reloads. */
+    const collapseBtn = byId('btnCollapse');
+    const sideCollapsed = loadChrome('cp.side-collapsed') === '1';
+    if (sideCollapsed) document.body.classList.add('side-collapsed');
+    collapseBtn.setAttribute('aria-expanded', sideCollapsed ? 'false' : 'true');
+    collapseBtn.addEventListener('click', () => {
       const on = document.body.classList.toggle('side-collapsed');
-      byId('btnCollapse').setAttribute('aria-expanded', on ? 'false' : 'true');
+      collapseBtn.setAttribute('aria-expanded', on ? 'false' : 'true');
+      saveChrome('cp.side-collapsed', on ? '1' : '0');
+    });
+
+    /* I-022: drag the right edge to resize. The width is a state value kept
+       in --side-w; the stylesheet derives the flex-basis from it. */
+    const grip = byId('sideResize');
+    const root = document.documentElement;
+    const savedW = loadChrome('cp.side-w');
+    if (savedW) root.style.setProperty('--side-w', savedW);
+    let x0 = 0; let w0 = 0; let active = false;
+    grip.addEventListener('pointerdown', (e) => {
+      active = true; x0 = e.clientX;
+      w0 = byId('sidebar').getBoundingClientRect().width;
+      try { grip.setPointerCapture(e.pointerId); } catch (_err) { /* synthetic pointer */ }
+      document.body.classList.add('is-dragging'); e.preventDefault();
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!active) return;
+      root.style.setProperty('--side-w', Math.max(180, Math.min(420, w0 + e.clientX - x0)) + 'px');
+    });
+    const gripEnd = (): void => {
+      if (!active) return;
+      active = false; document.body.classList.remove('is-dragging');
+      const cur = root.style.getPropertyValue('--side-w');
+      if (cur) saveChrome('cp.side-w', cur);
+    };
+    grip.addEventListener('pointerup', gripEnd);
+    grip.addEventListener('pointercancel', gripEnd);
+  }
+
+  /** I-027: the plan page paginated between Milestone plan and Hour axis.
+   *  R32 / I-037 moved the hour axis to the Work board, so the tab bar and
+   *  cp.plan-tab are retired; the Plan page shows the goal tree full-page. */
+
+  /** I-037: the Work board split. Kanban left, hour axis right, default
+   *  40/60 with the axis keeping the larger share; one draggable separator
+   *  whose width persists in cp.wb-split like every other chrome key. The
+   *  clamp keeps the axis at least as wide as the kanban (25..50 percent
+   *  left). Narrow viewports stack in the stylesheet and ignore --wb-left. */
+  function initWorkBoard(): void {
+    const page = document.getElementById('workBoard');
+    const grip = document.getElementById('wbSplit');
+    if (!page || !grip) return;
+    const clamp = (pct: number): number => Math.max(25, Math.min(50, pct));
+    const apply = (pct: number): void => {
+      page.style.setProperty('--wb-left', clamp(pct) + '%');
+    };
+    const saved = Number(loadChrome('cp.wb-split'));
+    let leftPct = Number.isFinite(saved) && saved ? saved : 40;
+    apply(leftPct);
+    let x0 = 0; let w0 = 0; let active = false;
+    grip.addEventListener('pointerdown', (e) => {
+      active = true; x0 = e.clientX;
+      w0 = page.getBoundingClientRect().width;
+      try { grip.setPointerCapture(e.pointerId); } catch (_err) { /* synthetic pointer */ }
+      document.body.classList.add('is-dragging'); e.preventDefault();
+    });
+    grip.addEventListener('pointermove', (e) => {
+      if (!active || w0 <= 0) return;
+      const base = w0 * clamp(leftPct) / 100;
+      leftPct = clamp(((base + (e.clientX - x0)) / w0) * 100);
+      apply(leftPct);
+    });
+    const gripEnd = (): void => {
+      if (!active) return;
+      active = false; document.body.classList.remove('is-dragging');
+      leftPct = clamp(Math.round(leftPct));
+      apply(leftPct);
+      saveChrome('cp.wb-split', String(leftPct));
+    };
+    grip.addEventListener('pointerup', gripEnd);
+    grip.addEventListener('pointercancel', gripEnd);
+  }
+
+  /** I-023: the Settings page. Theme and glass take effect now; the port is
+   *  read at server boot, so the page records the wish and prints the exact
+   *  restart command instead of pretending to hot-swap. */
+  function initSettings(): void {
+    const applyTheme = (mode: string): void => {
+      const root = document.documentElement;
+      if (mode === 'auto') root.removeAttribute('data-theme');
+      else root.setAttribute('data-theme', mode);
+      saveChrome('cp.theme', mode);
+      document.querySelectorAll('#setTheme [data-theme-val]').forEach((b) => {
+        b.classList.toggle('active', b.getAttribute('data-theme-val') === mode);
+      });
+    };
+    applyTheme(loadChrome('cp.theme') || 'auto');
+    byId('setTheme').addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('button[data-theme-val]') as HTMLElement | null;
+      if (b && b.dataset.themeVal) applyTheme(b.dataset.themeVal);
+    });
+
+    const portIn = byId('setPort') as HTMLInputElement;
+    const portNote = byId('setPortNote');
+    fetch('/healthz').then((r) => r.json())
+      .then((h: { port?: number }) => { if (h && h.port) portIn.value = String(h.port); })
+      .catch(() => { /* healthz unreachable; keep the default */ });
+    byId('setPortSave').addEventListener('click', () => {
+      const n = Number(portIn.value);
+      if (!Number.isInteger(n) || n < 1024 || n > 65535) {
+        portNote.textContent = 'Port must be 1024..65535'; return;
+      }
+      portNote.textContent = 'Restart with PANEL_PORT=' + n + ' node server.js';
+      saveChrome('cp.port-pref', String(n));
+    });
+
+    const glass = byId('setGlass') as HTMLInputElement;
+    const glassOut = byId('setGlassOut');
+    const setGlass = (v: number): void => {
+      document.documentElement.style.setProperty('--glass-alpha', String(v / 100));
+      glassOut.textContent = v + '%';
+      saveChrome('cp.glass-alpha', String(v / 100));
+    };
+    const gv = loadChrome('cp.glass-alpha');
+    setGlass(gv ? Math.round(Number(gv) * 100) : 80);
+    glass.value = gv ? String(Math.round(Number(gv) * 100)) : '80';
+    glass.addEventListener('input', () => setGlass(Number(glass.value)));
+
+    /* I-033: the confidence gate. Persisted in cp.conf-threshold (default
+       0.7); board.ts reads it on every card patch, so saving here re-paints
+       the badges immediately. */
+    const confIn = byId('setConfGate') as HTMLInputElement;
+    const confNote = byId('setConfGateNote');
+    const applyConf = (raw: string, persist: boolean): void => {
+      const n = Number(raw);
+      const ok = raw !== '' && Number.isFinite(n) && n >= 0 && n <= 1;
+      if (persist && ok) saveChrome('cp.conf-threshold', String(n));
+      confNote.textContent = ok
+        ? `cards below ${n.toFixed(2)} show needs-ack`
+        : 'enter a number from 0 to 1';
+      patchBoard();
+    };
+    confIn.value = loadChrome('cp.conf-threshold') || '0.7';
+    applyConf(confIn.value, false);
+    confIn.addEventListener('change', () => applyConf(confIn.value, true));
+
+    byId('setReset').addEventListener('click', () => {
+      ['cp.side-w', 'cp.side-collapsed', 'cp.charter-open', 'cp.wb-split']
+        .forEach((k) => { try { localStorage.removeItem(k); } catch (_e) { /* storage blocked */ } });
+      CP.reload();
     });
   }
 
-  function initDivider(): void {
-    const div = byId('divider');
-    const plan = byId('view-plan-split');
-    let y0 = 0; let h0 = 0; let active = false;
-    div.addEventListener('pointerdown', (e) => {
-      active = true; y0 = e.clientY;
-      h0 = (document.getElementById('ganttPanel') as HTMLElement).getBoundingClientRect().height;
-      div.setPointerCapture(e.pointerId);
-      document.body.classList.add('is-dragging'); e.preventDefault();
-    });
-    div.addEventListener('pointermove', (e) => {
-      if (!active) return;
-      const h = Math.max(180, Math.min(plan.clientHeight - 220, h0 + e.clientY - y0));
-      plan.style.setProperty('--gantt-h', `${h}px`);
-    });
-    const end = (): void => { active = false; document.body.classList.remove('is-dragging'); };
-    div.addEventListener('pointerup', end);
-    div.addEventListener('pointercancel', end);
-  }
+  /** Reload seam. window.location.* is non-writable (LegacyUnforgeable), so a
+   *  test cannot stub it in place; tests replace CP.reload instead (R28
+   *  re-check correction: the old window.location stub silently no-oped and
+   *  the reset click really reloaded the page mid-suite). */
+  export function reload(): void { window.location.reload(); }
 
   function initKeys(): void {
     document.addEventListener('keydown', (e) => {
@@ -325,7 +543,7 @@ namespace CP {
     store.subscribe(paintSelectionFalse);
     store.subscribe(patchCharter);
     store.subscribe(patchSidebar);
-    initNav(); initFilters(); initSidebar(); initDivider(); initKeys();
+    initNav(); initFilters(); initSidebar(); initWorkBoard(); initLinkHover(); initSettings(); initKeys();
     layer.addEventListener('click', (e) => { if (e.target === layer) closeModal(); });
     sheet.addEventListener('click', onModalClick);
     sheet.addEventListener('change', onModalChange);

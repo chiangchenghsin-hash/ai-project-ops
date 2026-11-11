@@ -96,6 +96,23 @@
       "completion": "python scripts/validate_skill.py reports failed = 0; python scripts/package.py --out ai-project-ops.zip builds a zip whose entry count matches the packaged file set of the same run and a checksum outside the archive; a CJK scan over the owned files prints 0; docs/handoffs/G1.md has the four required sections and stays under 40 lines.",
       "verify": "python scripts/validate_skill.py",
       "status": "done"
+    },
+    {
+      "id": "M7",
+      "name": "Traceability view (I-020)",
+      "depends_on": [
+        "M6"
+      ],
+      "type": "code",
+      "files": [
+        "assets/linked-gantt-board/db.js",
+        "assets/linked-gantt-board/data/milestone-plan.json",
+        "docs/evidence/milestones.json",
+        "scripts/prd-to-action.js"
+      ],
+      "completion": "/api/plan returns goals[] (G1 covers M1-M6, G2 covers M7) and an analysis object keyed by all 7 milestone ids and 18 work-unit ids with status/progress/cost/rounds/rework derived from data/milestone-plan.json and docs/TASK-LOG.md; milestone-plan.json main_line lists M1..M7, sub_lines keeps M7: [] with 18 work units unchanged; docs/PRD.md carries a 7-field M7 block with Status in_progress equal to docs/evidence/milestones.json; node scripts/prd-to-action.js exits 0 at 10/10 with gate C comparing the three stores instead of a hardcoded count; node scripts/plan-sync.js --check exits 0 with M7 status equal across prd/ms/plan.",
+      "verify": "node scripts/prd-to-action.js",
+      "status": "done"
     }
   ],
   "main_line": [
@@ -104,7 +121,8 @@
     "M3",
     "M4",
     "M5",
-    "M6"
+    "M6",
+    "M7"
   ],
   "sub_lines": {
     "M1": [
@@ -136,7 +154,8 @@
       "W16",
       "W17",
       "W18"
-    ]
+    ],
+    "M7": []
   },
   "relations": [
     {

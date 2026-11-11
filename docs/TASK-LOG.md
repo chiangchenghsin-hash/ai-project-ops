@@ -12,7 +12,7 @@
 > A gap found and fixed during verification belongs in Check; its lesson in Act.
 
 ## Scoreboard
-PASS 19 / FAIL 1
+PASS 26 / FAIL 1
 
 ---
 
@@ -1686,3 +1686,305 @@ Re-check (main): behavior claim remains open — if a non-PRD session still hija
   gate, or it drifts again. Candidate invariant: CHANGELOG head version ==
   SKILL.md version == newest shipped round; defer wiring until the graph
   round (it has a natural --check home).
+
+### 2026-11-09 R27 - UI chrome round: folds, drag widths, settings page (tier M, by: main session)
+
+- **P** Plan: live-review wants I-022 (charter block covers every page; sidebar
+  resizable + collapsible), I-023 (settings page: port / language / colors),
+  I-024 (plan panels resizable + collapsible), plus the human note "too much
+  text; match F:/Papaer/remote console style" and "content and features stay
+  as previously discussed". Acceptance: charter folded by default behind one
+  toggle; sidebar drag-resized via --side-w with persistence; both plan
+  panels fold with persistence and the divider drives --ms-h; settings page
+  with theme (auto/light/dark), port, language, glass, layout reset; hint
+  prose cut to one-liners; suite grows additively; all pinned literals
+  untouched. Non-goals: no content/feature change, no I-020 build (separate
+  round), no CJK in shipped files.
+- **D** Do: panel.html (fold buttons, side-resize grip, settings view, 13 hint
+  trims), styles.css (--side-w / --ms-h derivation, fold states, theme
+  override via [data-theme]), app.ts (initSidebar drag + persistence,
+  initPanelFolds, initSettings, initDivider rewritten to --ms-h), selftest.js
+  section 26 (10 new assertions, none of the 111 edited).
+- **C** Check: real output, pasted.
+  - `PANEL_PORT=4186 CDP_PORT=9236 node scripts/verify.js` ->
+    `Result: 120/120 passed`, `RESULT: PASS (exit 0)`, `0 errors`. Section 26
+    lines: `First-principles block starts folded` {"collapsed":true};
+    `Charter toggle ... persists` {"open":true,"stored":"1"};
+    `Sidebar drag-resize sets --side-w and persists` {"w":"316px","width":316};
+    `Sidebar width survives a reload` {"w":"316px","width":316};
+    `panels fold and persist` {"plan":true,"gantt":true};
+    `divider drag sets --ms-h and persists` {"after":"120px","stored":"120px"};
+    `Settings page ... theme applies` rows=Color scheme|Port|Language|Glass|Layout
+    theme=dark port=4186; `glass slider drives --glass-alpha` {"alpha":"0.55"};
+    `reset clears saved chrome preferences` left=[].
+  - Two FALSE FAILS fixed before the green run, both in my own test code, not
+    the product: a rename regex hit the string literal `--glass-alpha`, and
+    the width probe raced the 0.22s CSS transition. A 4-assertion FAIL batch
+    after that was environment pollution: the port-4184 demo server shared
+    data/ with the verify run. Stopped it, removed panel.db*, re-run -> 120/120.
+  - Pinned literals survive: `Needs human decision`, DEMO banner, cost-first
+    label, 42-tick axis name all pass unchanged.
+- **A** Act: PASS. Lessons: (1) a shared data directory turns two servers into
+    one flaky test - verify must own its data dir, or the demo must be stopped
+    first (recorded as the runbook step, not a gate yet); (2) synthetic
+    PointerEvent tests must wait out CSS transitions before measuring; (3) a
+    rename regex must never cross into string literals. Scoreboard
+    PASS 20 / FAIL 1. Content and features unchanged; the text density pass
+    cut 13 hint blocks to one-liners in the remote-console style.
+
+Re-check (main): `validate_skill 14/14 leaks=0; localize 159 files CJK=0; discipline-gate PASS (8 hard / 2 soft)` — PASS
+
+### 2026-11-09 R28 - ACCEPTANCE LOCK (before subagents return): I-020 traceability view
+
+Locked at dispatch time; subagent results are judged against these lines only.
+
+1. Plan view renders a goal layer on top and the milestone/work-unit tree below
+   it, with analysis columns exactly as signed: status | progress | cost |
+   rounds | rework.
+2. Goal rows group milestones; every milestone belongs to exactly one goal;
+   the I-020 work itself appears as a new plan milestone (todo -> done).
+3. `rounds` lists the PDCA entry ids whose text names the node; `rework`
+   counts rework-of entries touching it. Deterministic derivation, no manual
+   map.
+4. `/api/plan` carries `goals` and `analysis` blocks; data contract names for
+   rounds / notifications / status / module-notes / module-deps unchanged.
+5. selftest grows additively (section 27+); all 120 existing assertions pass
+   unedited; `verify.js` exits 0.
+6. `scripts/prd-to-action.js` 10/10 (count checks derive from the arrays, not
+   a hardcoded 6); `plan-sync.js --check` green; CJK_COUNT=0; no npm deps.
+7. One PDCA entry per subagent with pasted evidence; both cite I-020.
+
+### 2026-11-09 I-020/P1 - goal layer + analysis block for the traceability view (by: subagent-p1)
+- **P** Plan: I-020 R28 lock: plan.goals (G1: M1-M6, G2: M7), new M7 in all three stores (in_progress, zero W, main_line+M7, relations unchanged), /api/plan returns goals + analysis{status|progress|cost|rounds|rework} per M/W id derived from the plan file and docs/TASK-LOG.md, gate C counts derive from the three stores. Acceptance: R28 lines 1-6, W1-W18 stay 18, contract names unchanged, no npm deps, CJK=0.
+- **D** Do: edited exactly the 5 owned files (milestone-plan.json, docs/evidence/milestones.json, docs/PRD.md, db.js 2.2.0, prd-to-action.js 1.1.0); db.js adds readPdcaEntries/mentionsNode/milestoneProgress/buildAnalysis with analysis_note fallback; gate X gained sub_lines-key, two-way membership and goal-coverage checks; >=2 work units now applies only to milestones that own units (M7 owns none).
+- **C** Check: `node scripts/plan-sync.js --check` -> `M7 status :: prd=in_progress ms=in_progress plan=in_progress` + `PLAN-SYNC CHECK: 26/26 passed`, exit 0; `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`, exit 0 (C evidence: `count and id sets agree across the three stores (derived, not hardcoded)`; X: `2 goals cover 7 milestones exactly once`); `node scripts/prd-to-action.js --negative` -> `NEGATIVE CONTROL: PASS :: gate DETECTED "works correctly"`, exit 2 expected; `node --check assets/linked-gantt-board/db.js` -> exit 0; payload smoke -> `analysis keys=25`, `M7={in_progress,50,0,[],0}`, `analysis_note=""`; `python scripts/localize_check.py | tail -2` -> `Text files scanned: 159` / `CJK_COUNT=0`, exit 0.
+- **A** Act: **PASS (I-020 P1)**. Gap pre-empted: gate X's old unconditional ">=2 work units" would have failed the frozen zero-W M7, so the rule now binds only milestones that own units while new checks (mandatory sub_lines entry, membership consistency, exactly-one-goal coverage) make the gate stronger overall; lesson: when a contract adds an empty container, relax the count rule for that container and add structural rules instead. Main session flips M7 to done (plan-sync --set M7:done) once P2's render lands.
+
+Re-check (main): re-ran P1's five commands — plan-sync 26/26 exit 0; prd-to-action 10/10 exit 0; --negative exit 2 (DETECT); node --check db.js ok; localize 159 files CJK=0; frozen counts W=18 relations=16 zero units on the new milestone. One R28 line-3 drift found and fixed before scoring: analysis.rework counted any entry containing the word "rework", while the lock counts only entries carrying the redo link tag; db.js buildAnalysis now counts the tag literal. Post-paste smoke: analysis keys=25, M7 row = in_progress / 50 / 0 / [I-020/P1] / 0. Known artifact: an entry that quotes the redo tag without redoing anything still counts (the R25 design entry does); the relations registry in the graph round replaces this heuristic. — PASS
+
+### 2026-11-09 I-020/P2 - goal tree + analysis columns render (by: subagent-p2)
+- **P** Plan: package P2 renders the signed mockup (goal rows on top, milestone/work-unit tree below, columns status | progress | cost | rounds | rework) above the existing plan gantt, against P1's frozen /api/plan `goals`+`analysis` shape; degrade when absent; additive selftest section 27; tsc exit 0; CJK 0; owned files only.
+- **D** Do: milestone.ts (goal types + rollup helpers + goalTreeHtml prefixed into layer.innerHTML), styles.css (appended goal-tree rules), panel.html (hint), selftest.js section 27 (5 assertions: fixture goal rows+columns, WU rounds, live /api/plan, degrade fixture, no new exceptions) inserted before the untouched final exception PASS.
+- **C** Check: real output pasted - `TSC_EXIT=0`; `node --check dist/milestone.js` -> 0; `node --check selftest.js` -> 0; `localize_check` -> `Text files scanned: 159` / `CJK_COUNT=0`; DOM-stub smoke G1_ROW="G1 Release 1.8.x with discipline gates [done] 100% $2.7k rounds: R24 R26 rework: 0", W14_ROW="W14 Gate wiring [done] 100% $2.1k rounds: R24 rework: 0", OLD_HAS_TREE=false; section 27 PASS labels listed above (5 new, 0 edited).
+- **A** Act: PASS pending main re-check. Lesson: goal rollup splits by field - cost/progress sum milestones (the server already folds WU cost into the milestone), rounds/rework union the subtree because a ledger entry can name a work unit without naming its milestone; the fixture's WU-only round R99 pins that choice.
+
+Re-check (main): P2 claims re-run - tsc exit 0, node --check dist + selftest 0, CJK=0. First battery run FAILED at section 27 (119 PASS then "CP.applyPlan is not a function"); boundary probes proved a mid-reload page, not P2's code. Root cause: latent R27 defect - the reset test stubbed window.location.reload, which is non-writable (LegacyUnforgeable), so the stub silently no-oped and the click really navigated; R27 missed it only because that test ended the suite. Corrections (unscored, C4/C6 precedent): CP.reload seam in app.ts, the test stubs the seam (assert condition unchanged), section 28 turns the lesson into a gate (selftest.js must carry no window.location writes). Final battery: `Result: 126/126 passed`, `RESULT: PASS (exit 0)`; section 27 five PASS lines incl. live `{"status":200,"available":true,"goals":2,"anaKeys":25,"hasTree":true,"goalRows":2,"groups":7}`; section 28 `found=[]`. M7 flipped to done via `plan-sync --set M7:done`, then `PLAN-SYNC CHECK: 26/26 passed` and `PRD-TO-ACTION GATE: 10/10 passed` re-run green. — PASS
+
+### 2026-11-09 R28 - I-020 judged: goal-anchored WBS traceability view (by: main)
+- **P** Plan: judge I-020 P1+P2 against the seven locked lines above; score one round; close I-020 only where every line holds with pasted evidence.
+- **D** Do: re-ran P1's five gates; judged P2's render code against the signed mockup; ran the unified battery three times (instrumented bisection between runs); fixed one derivation-rule drift (line 3) and one latent reset-stub defect (line 5); removed probes; flipped M7 todo -> done; closed I-020.
+- **C** Check: line-by-line - (1) `Goal rows render above the gantt with the five analysis columns (I-020) :: {"hasTree":true,"goalCount":2,"cols":true...msDepth":"1"}`; goal rows above, milestone/work-unit rows nested at depth 1/2, header `status | progress | cost | rounds | rework` (milestone.ts goalTreeHtml). (2) `2 goals cover 7 milestones exactly once`; I-020 shipped as M7 "Traceability view (I-020)", flipped to done in all three stores (`PLAN-SYNC CHECK: 26/26 passed` after `--set M7:done`). (3) rounds = ledger entry ids naming the node; rework counts marker-tagged entries (drift fixed, smoke `M7 row = in_progress / 50 / 0 / [I-020/P1] / 0`). (4) `/api/plan` live proof `{"status":200,"available":true,"goals":2,"anaKeys":25,"hasTree":true,"goalRows":2,"groups":7}`; contract filenames/fields untouched. (5) sections 27 (5 asserts) + 28 (1 assert) added; `Result: 126/126 passed`, `RESULT: PASS (exit 0)`; deviation: 1 of the 120 prior assertions (R27 reset stub) needed a stub correction first - assert condition unchanged, 119 passed unedited. (6) `PRD-TO-ACTION GATE: 10/10 passed` derived counts, `PLAN-SYNC CHECK: 26/26 passed`, `CJK_COUNT=0`, no npm deps. (7) one PDCA entry per subagent pasted above, both cite I-020.
+- **A** Act: **PASS (R28)**. Scoreboard PASS 21 / FAIL 1. Lessons made gates (I-021): (a) derived rules are judged against the locked wording, not the executor's paraphrase - the line-by-line re-check is the gate and it caught one drift; (b) monkey-patching a non-writable host API silently no-ops - section 28 forbids window.location writes in selftest.js and stubs go through CP seams. Known artifact: spec text quoting the redo tag inflates node counts (documented in P1's Re-check); the graph round's relations registry replaces the heuristic. I-020 closed.
+
+### 2026-11-09 R29 - ACCEPTANCE LOCK (before subagents return): I-025..I-030 acceptance batch
+
+Locked at dispatch; results judged against these lines only. Scope signed by the
+human on the five mockups plus the I-030 additive scope.
+
+1. I-025: the charter block (First principles header, preview, Edit/fold)
+   renders only on the Command desk view; no other view shows any of it; the
+   charter modal stays reachable from Command desk.
+2. I-026: the global #glassAlpha control is gone from the shared chrome; the
+   Settings Glass row is the single --glass-alpha control (persisted); no other
+   page shows a glass control.
+3. I-027: the plan view is two tabs (Milestone plan | Hour axis), one panel at
+   a time; the tab bar stays pinned at the top while panel content scrolls; the
+   goal tree stays inside the Milestone plan tab; the split divider and the two
+   Fold buttons are removed; their section-26 assertions are replaced by tab
+   assertions (recorded corrections, citing I-027).
+4. I-028: real I-xxx issues reach the panel (the issue.js mirror inserts
+   missing rows - today it only updates and reports "issue not found"); ledger
+   rows show detail (acceptance wording), evidence (TASK-LOG entry ids naming
+   the issue id as a whole token, derived like analysis.rounds), reply and
+   updated time; rows expand; every column width is drag-resizable and
+   persists across reloads; demo ISS rows untouched.
+5. I-029: every kanban card can show upstream/downstream links from task_deps
+   (depends-on / depended-by); the link row is optional per card (toggle,
+   persisted); clicking a link scrolls to and highlights the linked card;
+   links show type + signed lag and the nature badge when present; demo rows
+   untouched.
+6. I-030: lead = negative lag accepted and rendered ("FS-2d"); cascade math
+   respects the sign; optional nature on task_deps (migration + validation +
+   API) and passed through plan relations when present; visible on relation
+   rows and kanban links; existing field names and values untouched. Vocab
+   frozen: mandatory | discretionary | external (lowercase), '' = unspecified.
+7. tsc exit 0; node --check on changed js; CJK_COUNT=0; no npm deps; the data
+   contract for rounds/notifications/status/module-notes/module-deps stays
+   unchanged. selftest grows additively EXCEPT recorded corrections (only the
+   section-26 divider/fold assertions and #glassAlpha refs may be rewritten).
+   One PDCA entry per subagent citing its issues; the main session runs the
+   unified battery (verify.js) after integration and judges.
+
+### 2026-11-09 R30 - ACCEPTANCE LOCK (before subagents return): I-031 tree manual control + template library
+
+Locked at dispatch; judged against these lines only. Scope signed by the
+human (sign-off on the I-031 mockup): +/- collapse, drag-move, template library.
+
+1. Collapse: G and M rows carry +/- toggles; children hide/show; W rows are
+   leaves; fold state persists per node (localStorage cp.tree-fold JSON map).
+2. Move: rows drag to a new parent or a new sibling position (W under M only,
+   M under G only; drop targets highlighted; invalid drops rejected with zero
+   writes). The change persists to data/milestone-plan.json through a real
+   write path (PUT /api/plan/structure or equivalent, atomic rewrite).
+   Invariants enforced on write: every milestone belongs to exactly one goal,
+   sub_lines and milestone_id stay consistent, existing ids never change
+   (W1-W18 and M1-M7 keep their ids), prd-to-action.js 10/10 and
+   plan-sync.js --check stay green after a move.
+3. Template library: [+ from template] on G/M rows opens the library. Built-in
+   templates = 4-6 fresh generic WBS skeletons (categories like product
+   launch / release / market campaign / event / hiring), provenance line:
+   "inspired by Teambition public template categories; content authored
+   fresh". Save selected G/M subtree as a named template; apply instantiates a
+   new subtree at the selected position with placeholder status/cost
+   (todo / 0) and NEW ids continuing the existing series (M8+, W19+, never
+   reusing or colliding). Storage: SQLite new table wbs_templates +
+   /api/templates GET/POST (additive; the five frozen data contracts stay
+   untouched; demo rows untouched).
+4. Gates: tsc exit 0; node --check on changed js; CJK_COUNT=0; no npm deps;
+   selftest grows additively in a new section (30+); one PDCA entry citing
+   I-031; the main session runs the unified battery after integration.
+
+### 2026-11-09 R29/P-A - plan chrome + tabs + dep render (by: subagent-pa)
+- **P** Plan: implement the locked R29 acceptance lines 1,2,3,6 (I-025, I-026, I-027, I-030 render half) inside the exclusive file set (panel.html, styles.css, src/app.ts, src/milestone.ts, src/gantt.ts, src/types.ts, selftest.js); keep pinned literals byte-identical; only two recorded-correction classes may touch existing assertions (section-26 divider/fold, #glassAlpha refs); gates tsc=0, node --check=0, CJK=0; no forbidden file, no TASK-LOG edit, no commit, no verify.js run.
+- **D** Do: I-025 - syncCharterView hides #charter via the hidden attribute on every non-desk nav click (and at boot), leaving Edit/Fold/cp.charter-open/modal intact; I-026 - deleted the topbar #glassAlpha/#glassAlphaOut block, .glass-control CSS, and milestone.ts GLASS_KEY/setGlass/initGlass (header claim rewritten), Settings #setGlass untouched as the single control, section-23 reference rewritten to #setGlass; I-027 - rebuilt #view-plan as a sticky #plan-tabs bar over two .plan-pane panels (one visible, cp.plan-tab persisted, default "Hour axis"), removed #divider/btnFoldPlan/btnFoldGantt/initDivider/initPanelFolds/cp.fold-*/cp.plan-split/.panel.collapsed, replaced section-26 fold+divider assertions with three I-027 tab assertions; I-030 - signed non-zero lag tokens ("FS-2d"/"FS+3d", 'd' per lock) and optional nature badge on .ms-rel rows, nature? on TaskDep/PlanRelation, #gdepNature select + CP.linkNature() passed as `nature` on the existing PUT /api/task-deps body; additive section 29 with 8 assertions; dist/* regenerated by tsc.
+- **C** Check: `npx tsc -p tsconfig.json` -> `TSC_EXIT=0`. `node --check selftest.js` -> `NODE_CHECK_EXIT=0`. `python scripts/localize_check.py` -> `Text files scanned: 159` / `CJK_COUNT=0`. Node smoke of the section-29 cascade fixture -> `{"hold":0,"moved":["L2@2026-11-05T04:00"]}` + `EXPECT hold=0 moved starts with L2@ : PASS`. Structural grep: `PASS(` count = 136, remaining `glassAlpha` refs = 3 (1 correction comment + 2 absence checks), removed ids -> NONE_FOUND. Pinned literals re-grepped byte-identical.
+- **A** Act: **PASS (pending main-session verify.js re-check)**. Recorded corrections (only the two allowed classes): (1) selftest section 23 #glassAlpha -> #setGlass, citing I-026; (2) selftest section 26 panel-fold + divider-split assertions -> three plan-tab assertions, citing I-027. Design note: the default active plan tab is "Hour axis" because unmodifiable sections 2/4/21 measure gantt layout on first plan open; tab ORDER remains Milestone plan | Hour axis as locked. Lessons: hiding the charter with the `hidden` attribute keeps textContent-based legacy assertions green; the "FS-2d" token implemented literally; client always sends `nature` on link authoring ('' = unspecified); tsc also rebuilds dist from in-flight sources (expected shared-build side effect).
+
+Re-check (main): re-ran gates - tsc exit 0, node --check selftest 0, CJK=0 (159 files); corrections verified as only the two allowed classes; owned-file grep for removed ids -> NONE_FOUND. Standalone battery on the P-A state: `Result: 135/135 passed`, `RESULT: PASS (exit 0)`. Default plan tab accepted as "Hour axis" (flagged for the human at acceptance). — PASS
+
+### 2026-11-09 R29/P-B - issue pipeline + kanban links + dep nature (by: subagent-pb)
+- **P** Plan: implement R29 in the panel data layer under exclusive file ownership (db.js, scripts/issue.js, src/ledger.ts, src/board.ts; one accepted server.js line for the /api/task-deps write path). Locked acceptance: I-028 mirror upsert + enriched state/issues rows (evidence = TASK-LOG entry ids naming the issue id as a whole token) + runtime ledger table (7 columns, expandable rows, drag-resizable widths persisted in cp.issue-cols); I-029 optional per-card dep link row (cp.card-deps toggle, scroll+flash navigation, signed lag + nature badge); I-030 task_deps.nature column (add-once migration, frozen vocab, setTaskDep validation, API passthrough).
+- **D** Do: db.js 2.3.0 - issues gains opened/updated columns (CREATE + ALTER); state() rows enriched via readPdcaEntries+mentionsNode (unreadable -> evidence: [], never throws); new upsertIssue (full-row INSERT OR REPLACE; updateIssue stays strict); task_deps gains nature; setTaskDep validates the frozen vocab. scripts/issue.js 1.1.0 - mirrorSQLite passes the whole ledger row to upsertIssue (still no implicit DB create). ledger.ts - rebuilds the whole issues table including thead at runtime, rows expand to detail + evidence + reply + updated, header grip drag writes cp.issue-cols. board.ts 2.1.0 - chain toggle per card, kb-dep-row with depends-on/depended-by groups, signed-lag pills + nature badge, gotoCard scroll+kb-flash, cp.card-deps state. server.js - PUT /api/task-deps forwards nature.
+- **C** Check: `node --check` db.js/issue.js/server.js -> 0; `npx tsc -p tsconfig.json` -> TSC_EXIT=0; `python scripts/localize_check.py` -> CJK_COUNT=0. Backup/restore smoke with I-901-TEST: `PASS issue added :: I-901-TEST | mirrored to SQLite`, `PASS issue update :: I-028 | mirrored to SQLite`, `PASS issue close :: I-901-TEST | mirrored to SQLite`; I-028 evidence ["R29"]; unnamed id -> evidence []; nature probe -> `invalid rejected: unknown dependency nature: required (allowed: '', mandatory, discretionary, external)` and `valid accepted: {"from":"W4","to":"W6","type":"SS","lag":-2,"nature":"mandatory"}` (probe edge deleted; dep count 16); after restore: issues.json + issue-delta.json `IDENTICAL to pre-smoke backup`, issue.js list OPEN=7 no I-901 row.
+- **A** Act: shipped; UI layer handed over as CSS + selftest blocks for integration. Lessons: issues.json and panel.db restore as a pair (4KB shell + WAL trio); keep the mirror JSON-first - a boot-time bulk import would break the frozen section-1 contract (issues === 5).
+
+Re-check (main): smoke accepted and independently re-confirmed (issue.js list -> OPEN=7, no I-901 residue, no stray backups). CSS + selftest section 30 pasted at integration. First integrated battery: `Result: 143/148 passed` - 5 FAILs, ALL assertion-environment, zero product defects (the column width really persisted: style=348px, stored=348; it measured 0 only because the reloaded page sat on another view; the card/nature block assumed seeded W tasks the battery env lacks - `unknown task in dependency`). Two integration fixes inside the pasted block: section 30 seeds plan tasks before probing and re-activates the ledger view after its reload. Re-run: `Result: 148/148 passed`, `RESULT: PASS (exit 0)`. server.js one-line nature forward accepted at resume (recorded). — PASS
+
+### 2026-11-10 R29 - I-025..I-030 judged: acceptance batch from live review (by: main)
+- **P** Plan: judge both packages against the seven R29 lock lines; score one round; close I-025..I-030 only where every line holds with pasted evidence.
+- **D** Do: verified P-A standalone (battery 135/135) and P-B by smoke + integration; pasted CSS + selftest section 30; fixed two assertion-environment gaps in the pasted block; re-ran the unified battery; closed six issues.
+- **C** Check: line-by-line - (1) charter block only on Command desk: syncCharterView + hidden attribute, two section-29 assertions green; (2) global glass control gone, Settings row the single --glass-alpha control (recorded section-23 correction); (3) sticky #planTabs, one pane at a time, goal tree inside the Milestone plan tab, divider + Fold buttons removed (three recorded section-26 corrections); (4) `PASS issue added :: I-901-TEST | mirrored to SQLite`, evidence ["R29"], expandable rows + grip drag -> cp.issue-cols surviving reload; (5) per-card toggle + pills `W4 SS-2d` + nature badge + gotoCard flash, cp.card-deps persisted; (6) `FS-2d` signed render + sign-aware cascade (section 29) + nature vocab 400/200 matrix over HTTP (section 30); (7) tsc 0, node --check 0, CJK=0, no npm, frozen contracts untouched. Final: `Result: 148/148 passed`, `RESULT: PASS (exit 0)`.
+- **A** Act: **PASS (R29)**. Scoreboard PASS 22 / FAIL 1. Lessons as gates: (a) subagent assertions must provision their own data preconditions - section 30 now seeds the plan tasks it probes; briefs must state the data env; (b) post-reload assertions must re-activate their view before measuring - encoded in the corrected assertion. I-025..I-030 closed; I-031 (tree manual control + template library) builds next against the R30 lock.
+
+### 2026-11-10 R30/I-031 - goal tree control + template library (by: subagent-i31)
+- **P** Plan: R30 acceptance lines 1-4 for I-031 inside the exclusive file set (panel.html, styles.css, src/app.ts, src/milestone.ts, src/types.ts, db.js, server.js, selftest.js, dist via tsc), plus the coordinator's layout addition (gantt block must keep height>0 with the tree fully expanded): [+]/[-] fold persisted in cp.tree-fold; drag-move behind PUT /api/plan/structure (planStructureUpdate: validate -> temp+rename, 400 zero writes); wbs_templates + /api/templates GET/POST with 6 provenance-stamped built-ins, subtree save, apply at todo/0 with fresh M8+/W19+ ids; selftest section 31 measuring layout, not DOM counts; gates tsc/node-check/CJK/pinned literals; no docs/ scripts/ templates/ writes, no commit, no verify.js, no second server.
+- **D** Do: db.js 2.4.0 adds validatePlanStructure, structureMove, structureApply, planStructureUpdate, seedTemplates, listTemplates, saveTemplate, the wbs_templates CREATE TABLE and exports; server.js 2.2.0 adds PUT /api/plan/structure and GET/POST /api/templates; milestone.ts 1.3.0 adds fold toggles + cp.tree-fold, drag handlers with valid-target highlighting, CP.planMove/CP.applyTemplateAt seams, the [+ from template] modal (via new CP.openPanelModal/closePanelModal exports in app.ts), and work_units-order sibling rendering; styles.css adds the .ms-scroll flex fix plus fold/drop/template styles; panel.html hint updated; selftest.js gains section 31 (layout, fold, drag, invalid ops, M/W moves, gates-after-move, template CRUD, restore+gates in finally).
+- **C** Check: `tsc -p tsconfig.json` -> `TSC=0`; `node --check` on all changed js -> 0; `python scripts/localize_check.py` -> `CJK_COUNT=0` (160 files); `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed` exit 0; `node scripts/plan-sync.js --check` -> `PLAN-SYNC CHECK: 45/45 passed` exit 0; node direct-call smoke `SMOKE RESULT: 15 passed, 0 failed` with gates green after M move and W reorder; offline Chrome DOM smoke `DOM SMOKE RESULT: 9 passed, 0 failed` incl. `{"treeH":735,"scrollH":794,"groups":30,"reachable":true}`; lone cross-parent probe for the finding: `FAIL X ... :: sub_lines mismatch` / 9/10 exit 2, restored=true; pinned literals present; section-28 scan empty.
+- **A** Act: PASS pending the main battery. Finding: gate X's byte-equality on sub_lines makes W cross-parent moves gate-red until docs/evidence/milestones.json is re-synced - that file is outside this package's write ownership, so the smoke restores byte-identical before every final gate run. Lesson: when an acceptance line says "gates stay green after a move", enumerate which move kinds the cross-store byte pins allow - drag scope, gate X equality and the docs/ write ban form a three-way tension that only shows up when a move is actually run against the gate. (Fix round: db.js 2.4.1 syncs milestones.json sub_lines on every accepted move with dual-tmp rollback; section 31 grew to 19 assertions incl. gates-green after a W cross-parent move.)
+
+Re-check (main): the auto-mode security classifier blocked the fix report, so everything was re-verified from the ground - file footprint = authorized set only (the docs/evidence/milestones.json sync was pre-authorized; no frozen doc touched); prd-to-action 10/10 + plan-sync 45/45 + CJK=0 at rest; both stores equal at rest; writeStructureStores rollback reviewed (dual tmp, evidence rename first, plan-failure restores evidence bytes). Fix accepted. Two integration corrections (test-side; the product proved right in both): (1) section 30's temp issue id is now random per run - the pasted PDCA entries had started naming I-901-TEST, so evidence derivation correctly returned entries for it (fixture pollution, not a bug); (2) the fold-reload assertion contradicted its own setup step (which deliberately re-opens G1), expectations corrected so the reload check now proves BOTH map polarities survive. Final battery: `Result: 167/167 passed`, `RESULT: PASS (exit 0)`. — PASS
+
+### 2026-11-10 R30 - I-031 judged: goal tree manual control + template library (by: main)
+- **P** Plan: judge I-031 against the four R30 lock lines plus the ms-scroll layout addition; score one round; close I-031 only where every line holds with pasted evidence.
+- **D** Do: reviewed the package (collapse / move / templates / layout); resolved the W-move gate tension by authorizing an evidence re-sync inside the structure write path; integrated two test-side corrections; ran the unified battery twice (165/167 then 167/167).
+- **C** Check: (1) collapse: [-]/[+] toggles on G/M rows, cp.tree-fold map, rolled-up numbers stay on the parent row; the reload check proves both map polarities survive. (2) move: drag with valid-target highlight; invalid drops zero-write; PUT /api/plan/structure -> planStructureUpdate validates (every milestone in exactly one goal, sub_lines<->milestone_id two-way, ids never rewritten, fresh-id collision check) and atomically rewrites both stores; prd-to-action 10/10 + plan-sync 45/45 green AFTER M moves, W same-parent reorders AND W cross-parent moves. (3) templates: 6 built-ins carrying "inspired by Teambition public template categories; content authored fresh"; save subtree -> wbs_templates + /api/templates; apply instantiates todo / 0 with fresh M8+/W19+ ids through the validated write path. (4) layout: .ms-scroll keeps height>0 with the tree expanded (DOM smoke `{"treeH":735,"scrollH":794,"reachable":true}`), MAIN LINE / SUB-LINES / RELATIONS / CRITICAL PATH reachable; selftest section 31 = 19 assertions (layout-measuring, restore-in-finally, byte-identical proofs). Final: `Result: 167/167 passed`, `RESULT: PASS (exit 0)`.
+- **A** Act: **PASS (R30)**. Scoreboard PASS 23 / FAIL 1. Lessons as gates: fixture ids in evidence-derivation tests must be random (their PDCA entries will name them once pasted) - encoded in the corrected assertion; an assertion must not contradict its own setup step; "gates green after a move" must enumerate move kinds against the cross-store pins - the re-sync now lives in the write path and section 31 asserts it. I-031 closed. I-032 (hour axis humanization) and I-033 (card AI fields) await the human sign-off on their mockups; I-034 follows the now-live template library; I-035 last.
+
+### 2026-11-10 R31 - ACCEPTANCE LOCK (before the subagent returns): I-032 + I-033 from the signed mockups
+
+Locked at dispatch; judged against these lines only. Scope signed by the
+human on the two mockups (hour axis humanization + card AI fields).
+
+1. I-032 hour axis: a one-line purpose header ("drag bars to reschedule" plus
+   a labelled NOW) and nothing more (the human cut hint prose earlier); drag
+   affordances visible - grab cursor, hover lift, tooltip carrying start/end
+   hour, duration, cost, owner; past hours shaded; bars colored by status with
+   the same palette as the kanban; cost-first labels unchanged; the flat
+   work-unit arrangement stays (no grouping was requested); pinned literals
+   survive byte-identical (incl. the 42-tick axis name).
+2. I-033 cards: every card carries the AI dimension fields - model/instance,
+   cost, confidence (shown as a dash when unset), and a gate badge derived
+   from the owner-scope data (autonomous / needs-ack / never-automatic). Red
+   line 1 as a display rule: AI cards show model/instance/cost, never persona
+   wording. Confidence below the threshold (default 0.7, adjustable in
+   Settings) auto-escalates the card's gate to needs-ack. Each card links to
+   its audit trail (the event/PDCA rows for that task). Additive only: a
+   confidence column migration on tasks, existing fields/rows untouched.
+3. Gates: tsc exit 0; node --check on changed js; CJK_COUNT=0; no npm deps;
+   frozen data contracts unchanged; demo rows untouched at rest; selftest
+   grows additively (section 32+); tests provision their data, re-activate
+   views after reload before measuring, restore mutations in finally, and use
+   random fixture ids anywhere evidence derivation reads the ledger.
+4. One PDCA entry citing I-032 and I-033; the main session runs the unified
+   battery after integration and judges.
+
+### 2026-11-10 R32 - ACCEPTANCE LOCK: I-037 + I-038 per "build it the way you judged correct"
+
+Locked at dispatch; judged against these lines only. The human signed the
+judged direction: side-by-side 40/60 + cascade delete + plan-sync-class write
+path + docs write scope below.
+
+1. I-037 linked work board: kanban + hour axis on ONE page (Work board),
+   side-by-side 40/60 (the axis gets the larger share) with a draggable split
+   persisted; narrow viewports stack instead. Hover/select a card highlights
+   its bar and vice versa; dragging a card moves its bar and vice versa (one
+   dataset, one move). The Hour axis leaves the Plan pagination; Plan keeps
+   the goal tree / milestone layer full-page. The R31 hour-axis humanizations
+   (purpose line, NOW label, tooltips, status palette) carry over unchanged.
+   Pinned literals survive byte-identical.
+2. I-038 tree CRUD + detail drawer: clicking a G/M/W row (not the fold
+   toggle, not the drag handle) opens a detail drawer on the right: name,
+   status, owner, cost, progress, start/end, an additive notes field, a
+   relations summary, and audit links (events + PDCA entry ids). Every save
+   goes through the plan-sync-class write path: one atomic commit across
+   milestone-plan.json + docs/evidence/milestones.json + docs/PRD.md status
+   lines + SQLite tasks; after every operation class (create / update /
+   delete) prd-to-action.js 10/10 and plan-sync.js --check must be green
+   (asserted in selftest per class). Add-child buttons on G (new milestone)
+   and M (new work unit) rows with fresh ids (M8+ / W19+, collision-checked).
+   Delete: confirm dialog listing dependents (relations + children); cascade
+   deletes the confirmed edges/children; cancel = zero writes. Docs write
+   authorization: docs/evidence/milestones.json (membership + status fields)
+   and docs/PRD.md status lines ONLY; frozen docs never.
+3. Gates: tsc exit 0; node --check on changed js; CJK_COUNT=0; no npm deps;
+   frozen data contracts unchanged; demo rows untouched at rest; selftest
+   section 33+ (additive). Tests provision their data, re-activate views
+   after reload before measuring, use row-level DML restores only (NEVER
+   file-copy panel.db or its wal/shm - the trio lesson), use random fixture
+   ids wherever evidence derivation reads the ledger, and restore mutations
+   in finally with a byte-identical proof.
+4. Checkpoint discipline (I-036): one-line checkpoint to main after each
+   scope item; ~20 minutes of silence on an item = status report; two failed
+   attempts on one item = stop and hand back with the stuck evidence. One
+   PDCA entry citing I-037 and I-038; the main session runs the unified
+   battery after integration and judges.
+
+### 2026-11-10 R31/I-032+I-033 - hour axis humanization + card AI fields (by: subagent-r31)
+- **P** Plan: R31 acceptance-lock lines 1-2 inside the exclusive file set: I-032 hour axis gets one purpose line + labelled NOW, grab/hover/tooltip affordances, past-hours shading, shared status palette, byte-identical pinned literals; I-033 cards get model/instance + cost + confidence (dash when unset) + owner-scope gate badge (autonomous / needs-ack / never-auto), red-line-1 display rule with a selftest scan gate, confidence column migration (additive, defaults NULL) with a 0.7 threshold adjustable in Settings (cp.conf-threshold) that escalates low-confidence cards to needs-ack, and a per-card audit link to the task's event/PDCA trail; gates tsc / node --check / CJK=0 / frozen contracts / prd-to-action 10/10 / plan-sync green; section 32 additive with provision-own-data, re-activate-after-reload, random fixture ids, finally-restore.
+- **D** Do: gantt.ts adds the .gnow-flag axis marker + .past-shade + tooltip carrying cost/start-end/duration/owner + palette comment; panel.html swaps the hint for the single purpose line and gains the Confidence-gate Settings row; styles.css adds gnow-flag/past-shade/grabbing + kb-ai row, gate pills and audit popover; types.ts widens Task with optional model/confidence; db.js 2.5.0 adds the two columns, add-once migration, NEW-columns-only backfill (human->human/0.95, AI->claude, 0.9/0.8/0.75), seed/update/create support with 0..1 validation, and taskAudit; server.js 2.3.0 serves GET /api/tasks/:id/audit; board.ts 2.2.0 renders the four fields, gateFromScope/gateBadge/confThreshold, and the audit popover (createElement/textContent only); app.ts wires the Settings row to cp.conf-threshold + patchBoard; selftest.js 3.1.0 gains section 32.
+- **C** Check: `tsc -p tsconfig.json` -> exit 0; `node --check` on all changed js -> exit 0; `python scripts/localize_check.py` -> `CJK_COUNT=0`; `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`; `node scripts/plan-sync.js --check` -> `PLAN-SYNC CHECK: 45/45 passed`; row-level smoke 13/13 incl. `migration: every OLD task column byte-identical (pre vs post-require) :: rows=33 same=true`, `updateTask: confidence 1.5 refused :: confidence must be a number in 0..1`, `taskAudit ... {"events":1,"pdca":[]}`, restore proofs byte-identical; red-line scan of board.ts+dist/board.js -> no persona words (exit 1).
+- **A** Act: **PASS pending the main battery**. Incident as lesson-as-gate: a file-level backup/restore of panel.db must move the whole trio (db + wal + shm) and never run against a live/attached database; this package's tests use row-level DML restores only. Second lesson: the battery server must restart after a package touches db.js/server.js or new endpoints 404 under old code. Third: boot-time require of db.js logs job/import events - smokes snapshot event ids and remove only their own delta.
+
+Re-check (main): gates re-run at checkpoint 5 (prd-to-action 10/10, plan-sync 45/45, CJK=0, data dir clean, the self-reported stray recovery file gone). Incident accepted as disclosed: the file-level backup corrupted the live trio - quarantined as *.corrupt-20261110 and the derived db rebuilt from source; the cross-session three-defect retest came back green (board 33 cards / 3 columns, hour axis 33 bars, tree fold+drag in place). Unified battery after handback: `Result: 192/192 passed`, `RESULT: PASS (exit 0)` - first run green. — PASS
+
+### 2026-11-10 R31 - I-032 + I-033 judged: hour axis humanization + card AI fields (by: main)
+- **P** Plan: judge against the four R31 lock lines; score one round; close I-032 and I-033 only where every line holds with pasted evidence.
+- **D** Do: five checkpoints verified in-flight (each spot-checked against disk before acknowledging), the db-trio incident handled (quarantine + rebuild from source), the unified battery run after handback.
+- **C** Check: (1) I-032: one purpose line + labelled NOW (.gnow-flag), tooltip cost/start-end/duration/owner, grab + grabbing cursor with hover lift, .past-shade, shared status palette ("one dataset, one palette"), pinned literals byte-identical, flat arrangement kept. (2) I-033: cards carry model/instance + cost + confidence (dash when unset) + gate badge (never-auto > needs-ack > autonomous from owner-scope), confidence below the Settings threshold (cp.conf-threshold, default 0.7) escalates to needs-ack, per-card audit popover via GET /api/tasks/:id/audit (events + PDCA entry ids), red-line-1 display rule with a proven scan gate. Additive migration: tasks.model + tasks.confidence with NEW-columns-only backfill (old fields byte-identical, `rows=33 same=true`). (3) gates: tsc 0 / node --check 0 / CJK=0 / frozen contracts / smoke 13/13. Final: `Result: 192/192 passed`, `RESULT: PASS (exit 0)`.
+- **A** Act: **PASS (R31)**. Scoreboard PASS 24 / FAIL 1. Lessons as gates (all three now enforced in section 32 or the brief rules): (a) file-level db backup/restore must move the trio and never touch a live database - row-level DML restores only; (b) restart the server after db.js/server.js changes or new endpoints 404; (c) boot-time require logs events - smokes remove only their own id-delta. I-032 and I-033 closed. Next: R32 (I-037 work board merge + I-038 tree CRUD) against the locked R32 lines.
+
+### 2026-11-10 R32/I-037+I-038 - work board merge + tree CRUD (by: subagent-r32)
+- **P** Plan: R32 acceptance-lock lines 1-2 inside the exclusive file set (assets/linked-gantt-board/* + dist + data/milestone-plan.json through the new write paths; docs only milestones.json membership/status + PRD Status registry via the plan-sync-class commit). Line 1 (I-037): kanban + hour axis on one Work board page, 40/60 side-by-side with a persisted draggable split, stacked fallback, hover/select cross-highlight, one dataset one move, Plan full-page tree, R31 humanizations and pinned literals carried over, retargeting the tab-clicking assertions with intent intact. Line 2 (I-038): row-click drawer with the locked field set + notes + relations (type/lag/nature) + audit links; every save through a four-store atomic commit with prd-to-action 10/10 and plan-sync --check green after EACH operation class asserted in selftest; add-child on G/M with collision-checked M8+/W19+ ids; delete confirm listing dependents, cascade on confirm, cancel = zero writes.
+- **D** Do: panel.html builds #workBoard (kanban + #wbSplit + the byte-identical #ganttPanel) and retires #planTabs (Plan = full-page #milestoneLayer); styles add .wb-* + stacked media + .is-link-hover + .node-drawer + .ms-add-btn; app.ts swaps initPlanTabs for initWorkBoard (cp.wb-split) + setLinkHover/initLinkHover; board.ts/gantt.ts hook the paired highlight into the drag lifecycle; milestone.ts adds the I-038 block (drawer read side, planNodeCreate/Save/DeleteConfirm seams, dependents dialog, [+] add-child, drag-tail guard); db.js 2.6.0 adds makeFreshIds, prdMilestoneScan/prdBlockLinesOf/prepareNodeDocs, writeNodeStores (BEGIN IMMEDIATE -> tmp -> evidence->PRD->plan renames -> COMMIT with restore chain), structureCreateMilestone/WorkUnit (gate-X pair), resolveWStatus, structureUpdateNode, structureDeleteNode (floor + empty-goal/last-goal refusals, cascade); server.js 2.4.0 documents the six kinds; selftest retargets R1-R7 and adds sections 33-35.
+- **C** Check: `npx tsc -p tsconfig.json` -> exit 0; `node --check` all changed js -> exit 0; `python scripts/localize_check.py` -> `CJK_COUNT=0`; `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`; `node scripts/plan-sync.js --check` -> `PLAN-SYNC CHECK: 45/45 passed`; direct-call smoke twice -> `R32 SMOKE: 13/13 passed` exit 0 with per-class gate lines (create 10/10+46/46, create-unit 50/50, update 50/50 with refusal `progress=100 is reserved for status done`, delete 45/45 with refusal `M8 would keep 1 work unit; PRD gate X needs 0 or at least 2` and cascade `{"removed":["W19","W20"],"relations":16,"rows":0,"edge":0}`, restored 45/45 with `plan=true evidence=true prd=true`); at rest `demo_rows=15 W_rows=18 W19_residue=0 columns=3`, pinned literals byte-identical.
+- **A** Act: **PASS pending the main battery.** Judgment calls, all recorded for the judge: (1) create/delete write the PRD milestone block (add/remove) because a blockless milestone fails gate C and plan-sync's PRD-shape check - the gates force the wider docs surface; (2) create-work-unit on an empty milestone ships the pair gate X requires (0 or >=2), stated in the toast; (3) delete refuses a landing at exactly 1 unit so every delete class ends green; (4) new nodes use status 'pending' (the frozen vocab has no 'todo'); (5) notes/owner on G/M are plan-only additive. Lessons obeyed: row-level DML restores only, desk_events boot delta removed by unit+kind, views re-activated after reload, byte-identical finally proofs.
+
+### 2026-11-10 R32 battery-fix addendum (by: subagent-r32)
+- **P** Plan: prove the first class (real bar drag + canvas edge drag on the live page) before fixing anything; then the section-34 selector class and the intentional-400 console-noise class; iterate the unified battery to 100% with every assertion intent unchanged, row-level DML only, checkpoint per class.
+- **D** Do: instrumented tests 69/70/139 with live-layout diagnostics (PASS conditions byte-identical) and ran the granted battery; the diag proved a PRODUCT layout bug (sc=[2390,150,3143,607] in a 1422px window, hit1:null, scroll capped at max 1141) - .board-page missing min-width:0 let its min-content floor (gantt-inner 4284px) inflate the Work board to ~5275px - so the fix went to styles.css (one line + comment), not to the drag tests; R8 replaced the template-literal-cooked regex with indexOf; R9 added the documented (400 + /api/plan/structure) allowlist to the section-35 and final error gates only.
+- **C** Check: battery run 1 (207/213) isolated the classes; run 2 (210/213) proved R8+R9 (205 PASS with hasDownW11=true; 218/219 PASS with unexpected=0 allowlisted=1) and carried the class-1 diagnosis; run 3 after the CSS fix: `Result: 213/213 passed`, `RESULT: PASS (exit 0)`, the three drag tests green on live coords (stored=["FF","FS","SF","SS"], hit1="gbar-link right", nature PUT bodies=[{...,"nature":"mandatory"}]); fast gates tsc=0, node --check=0, CJK_COUNT=0, PRD-TO-ACTION GATE: 10/10 passed, PLAN-SYNC CHECK: 26/26 passed (documented SQLite SKIP post-wipe).
+- **A** Act: **PASS (213/213).** Lessons as gates: any flex ROW container holding a wide scroller needs min-width:0 on every viewport-bounded item - the drag tests now print live-layout diag as standing invariants; regexes that must survive inside js() template literals avoid backslash escapes; expected-400 refusals are allowlisted by exact (URL + status) pair at the gate, never at collection.
+
+Re-check (main): fixes verified from the ground - the min-width:0 product fix present at styles.css:611 with its load-bearing comment; the two test fixes proven by package runs 2-3; my independent battery re-run: `Result: 213/213 passed`, `RESULT: PASS (exit 0)`. Classification confirmed: one real product defect (flex min-content inflating the Work board past the viewport - real-pointer drags broke while synthetic stayed green), one template-literal regex defect in a new assertion, one gate-allowlist refinement for intentional refusal 400s. — PASS
+
+### 2026-11-10 R32 - I-037 + I-038 judged: work board merge + tree CRUD (by: main)
+- **P** Plan: judge against the four R32 lock lines; score one round; close I-037 and I-038 only where every line holds; name every judgment call and deviation.
+- **D** Do: verified five checkpoints in-flight (each spot-checked on disk); ran the battery three times with the package (207/213 -> 210/213 -> 213/213) under a diagnostic-order fix mandate (prove the drag pipeline before touching tests); independently re-ran the final battery.
+- **C** Check: (1) I-037: #workBoard kanban 40% + hour axis 60% with #wbSplit (cp.wb-split persisted, clamp 25-50, stacked fallback <=1100px), cross-highlight via setLinkHover surviving reconcile rewrites, one-dataset drag preserved, Plan full-page tree (#planTabs retired, retirement proven by assertion), R31 humanizations and pinned literals carried. (2) I-038: #nodeDrawer on row click (fold/tpl/drag excluded), fields + additive notes + relations pills (type/signed lag/nature) + audit via /api/tasks/:id/audit; CRUD behind writeNodeStores (BEGIN IMMEDIATE -> tmp -> evidence->PRD->plan renames -> COMMIT with full restore chain); per-class gates asserted (create 10/10+46/46, create-unit 50/50, update 50/50 with progress=100 refusal, delete 45/45 with floor refusal + cascade, restored 45/45); confirm dialog lists dependents, Cancel byte-identical. Named judgment calls (accepted): PRD block add/remove on create/delete is gate-forced (wider than the lock wording - necessary for gate C, recorded); pair-create on empty milestones (gate X needs 0 or >=2); delete refuses landing at 1 unit; 'pending' is the frozen status vocab. Named deviation fixed in the fix round: .board-page missing min-width:0 (product) inflating the Work board past the viewport. (3) gates: tsc 0 / node --check 0 / CJK=0 / frozen contracts / smoke 13/13 twice. Final: `Result: 213/213 passed` twice (package run 3 + main re-run).
+- **A** Act: **PASS (R32)**. Scoreboard PASS 25 / FAIL 1. Lessons as gates: (a) any flex row holding a wide scroller needs min-width:0 on every viewport-bounded item - the drag tests now print live-layout diag as standing invariants; (b) regexes inside js() template literals must avoid backslash escapes (cooked strings); (c) expected refusal 400s are allowlisted by exact (URL,status) pair at the gate, never at collection. I-037 and I-038 closed. Queue: I-034 (SOP templates), I-035 (ops stats), I-036 close-out, then the 1.9.0 release (CHANGELOG + SKILL.md version sync) when the human asks to commit.
+
+### 2026-11-11 R33 - release 1.9.0 audit (by: main)
+- **P** Plan: ship the R27-R32 batch per the R26-A version-sync rule and the release checklist: fresh gates, version three-sync, zip build, staged-set check, push origin master:main. I-034/I-035 stay open in the ledger by human order; I-036 closes with this release.
+- **D** Do: version bumped (repo SKILL.md 1.8.1 -> 1.9.0, installed skill copy 1.1.0 -> 1.9.0, CHANGELOG Unreleased -> 1.9.0 dated 2026-11-11); fast gates re-run; release battery; package.py --out release/ai-project-ops-1.9.0.zip; the stale 1.8.0 zip pair removed (the human's established cleanup); the commit carries every round R27-R32 plus the discipline and design docs.
+- **C** Check: `python scripts/validate_skill.py` -> leaks=0 PASS; `node scripts/discipline-gate.js` -> `DISCIPLINE GATE PASS (8 hard / 2 soft)`; `node scripts/prd-to-action.js` -> `PRD-TO-ACTION GATE: 10/10 passed`; `node scripts/plan-sync.js --check` -> `PLAN-SYNC CHECK: 45/45 passed`; `python scripts/localize_check.py` -> `CJK_COUNT=0` (160 files); release battery `Result: 213/213 passed` + `RESULT: PASS (exit 0)`; `python scripts/package.py --out release/ai-project-ops-1.9.0.zip` -> `PACKAGE PASS` (no CJK content, no runtime evidence) + sha256; git staged set = the 30 modified files + docs/HUMAN-AI-BOARD-DESIGN.md and nothing else (panel.db*, the *.corrupt-20261110 quarantine, release/, per-turn evidence all gitignored); `git push --dry-run origin master:main` reachable.
+- **A** Act: **PASS (R33)**. Scoreboard PASS 26 / FAIL 1. Known limitation, reported to the human: the GH_TOKEN environment variable still holds the revoked leaked PAT - the gh API returns 401 with no fallback login, so no GitHub Release object is created; the push rides the git credential manager. The human clears the token and runs gh auth login (or gh release create v1.9.0 with the zip) when they want the release object. I-036 closed (discipline landed: the checkpoint rule in SKILL.md section 2 + the brief template, handback-evidence requirement, acceptance-before-dispatch, CHANGELOG kept current, same-turn issue-registration proof). I-021 stays open (standing rule); I-023 open (human ruling on the language row); I-034/I-035 deferred by human order.

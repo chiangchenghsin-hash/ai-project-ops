@@ -10,11 +10,20 @@ namespace CP {
     /** Frozen plan window, empty when no baseline has been taken. */
     baseline_start: string;
     baseline_end: string;
+    /** I-033: model/instance label for the executor shown on the card.
+     *  Additive column; '' = unset (card shows n/a). Optional so a degraded
+     *  or pre-migration payload still renders. */
+    model?: string;
+    /** I-033: AI confidence 0..1. Additive nullable column; null/absent =
+     *  unset (card shows a dash) and never disturbs any older field. */
+    confidence?: number | null;
   }
 
   /** One precedence edge between two work units. `lag` is hours; a negative
-   *  lag is a lead, so the successor may start before the predecessor ends. */
-  export interface TaskDep { from: string; to: string; type: string; lag: number; }
+   *  lag is a lead, so the successor may start before the predecessor ends.
+   *  I-030: `nature` is optional and frozen to mandatory|discretionary|
+   *  external lowercase; '' means unspecified. */
+  export interface TaskDep { from: string; to: string; type: string; lag: number; nature?: string; }
   export interface Issue {
     id: string; source: string; title: string; detail: string; reply: string;
     enddate: string; urgent: number; status: string;

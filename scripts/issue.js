@@ -12,7 +12,11 @@
  * input, 2 on ledger write failure. Every write appends to
  * docs/evidence/issue-delta.json. Never edits docs/TASK-LOG.md (main session
  * owns it). Set AIOPS_SESSION to override the session id.
- * VERSION: 1.0.1 - issue status vocabulary unified to open/done (close marks done).
+ * VERSION: 1.1.0 - I-028: the SQLite mirror upserts (INSERT missing rows,
+ * refresh existing ones) through db.js upsertIssue, so every add/update/close
+ * lands in panel.db instead of reporting "issue not found"; still only when
+ * the DB file already exists (no implicit database create).
+ * 1.0.1 - issue status vocabulary unified to open/done (close marks done).
  */
 'use strict';
 const fs = require('fs');
@@ -57,15 +61,18 @@ function delta(action, id, note) {
   d.events.push({ ts: new Date().toISOString(), session_id: SESSION, action, id, note: note || '' });
   fs.writeFileSync(DELTA, JSON.stringify(d, null, 2) + '\n');
 }
-function mirrorSQLite(id, patch) {
+/* I-028a: the mirror upserts the FULL ledger row (not a field patch), so a
+   brand-new id INSERTs into panel.db and an existing one refreshes in place.
+   Still gated on the DB file existing - this CLI never creates a database. */
+function mirrorSQLite(row) {
   if (!fs.existsSync(DB)) return 'skipped: no panel.db';
   try {
     const store = require(path.join(ROOT, 'assets/linked-gantt-board/db.js'));
-    if (typeof store.updateIssue === 'function') {
-      store.updateIssue(id, patch);
+    if (typeof store.upsertIssue === 'function') {
+      store.upsertIssue(row);
       return 'mirrored to SQLite';
     }
-    return 'skipped: no updateIssue export';
+    return 'skipped: no upsertIssue export';
   } catch (e) { return 'mirror failed: ' + e.message; }
 }
 
@@ -102,7 +109,7 @@ function main() {
     });
     write(data);
     delta('add', a.id, a.title);
-    console.log('PASS  issue added :: ' + a.id + ' | ' + mirrorSQLite(a.id, {}));
+    console.log('PASS  issue added :: ' + a.id + ' | ' + mirrorSQLite(data.issues[data.issues.length - 1]));
     return 0;
   }
   if (cmd === 'update' || cmd === 'close') {
@@ -122,8 +129,7 @@ function main() {
     it.updated = new Date().toISOString();
     write(data);
     delta(cmd, a.id, it.reply || it.status);
-    console.log('PASS  issue ' + cmd + ' :: ' + a.id + ' | ' +
-      mirrorSQLite(a.id, { reply: it.reply, status: it.status, enddate: it.enddate, urgent: it.urgent }));
+    console.log('PASS  issue ' + cmd + ' :: ' + a.id + ' | ' + mirrorSQLite(it));
     return 0;
   }
   console.error('usage: issue.js list|add|update|close|no-new [--id --title --source --detail --reply --status --urgent --enddate --reason]');

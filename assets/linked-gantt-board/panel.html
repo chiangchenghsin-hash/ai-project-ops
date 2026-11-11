@@ -23,15 +23,16 @@
       <nav class="nav" id="nav">
         <button type="button" data-view="desk" class="active"><span class="nav-dot"></span><span class="nav-label">Command desk</span></button>
         <button type="button" data-view="plan"><span class="nav-dot"></span><span class="nav-label">Plan linkage</span></button>
-        <button type="button" data-view="board"><span class="nav-dot"></span><span class="nav-label">Work division</span></button>
+        <button type="button" data-view="board"><span class="nav-dot"></span><span class="nav-label">Work board</span></button>
         <button type="button" data-view="ledger"><span class="nav-dot"></span><span class="nav-label">Issue ledger</span></button>
         <button type="button" data-view="meter"><span class="nav-dot"></span><span class="nav-label">Meter</span></button>
+        <button type="button" data-view="settings"><span class="nav-dot"></span><span class="nav-label">Settings</span></button>
       </nav>
 
       <div class="side-block">
         <div class="side-eyebrow">Work division</div>
         <ul class="roster" id="ownerRoster"></ul>
-        <p class="side-note">Who owns what. Owner type is stored on the work unit.</p>
+        <p class="side-note">Who owns what.</p>
       </div>
 
       <div class="side-block">
@@ -40,22 +41,26 @@
           <strong id="sideCost">-</strong>
           <span id="sideTokens">-</span>
         </div>
-        <p class="side-note">Figures come from the meter import. Never hand-counted.</p>
+        <p class="side-note">Meter import only; never hand-counted.</p>
       </div>
 
       <button type="button" id="btnCollapse" class="side-collapse" title="Collapse sidebar">
         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5"/></svg>
         <span class="nav-label">Collapse</span>
       </button>
+      <div class="side-resize" id="sideResize" title="Drag to resize the sidebar"></div>
     </aside>
 
     <div class="main-col">
     <div id="demoBanner" class="demo-banner">DEMO build: seeded sample data only. SQLite state is disposable; do not enter real project data.</div>
 
-    <section class="charter" id="charter" aria-label="Project charter">
+    <section class="charter collapsed" id="charter" aria-label="Project charter">
       <div class="charter-head">
         <div class="side-eyebrow">First principles</div>
-        <button type="button" id="btnCharterEdit" class="btn mini">Edit</button>
+        <div class="charter-actions">
+          <button type="button" id="btnCharterEdit" class="btn mini">Edit</button>
+          <button type="button" id="btnCharterFold" class="btn mini" title="Show or hide the first-principles block">Unfold</button>
+        </div>
       </div>
       <div class="charter-grid">
         <div class="charter-cell">
@@ -84,11 +89,6 @@
           <option value="subagent">Subagent</option>
           <option value="team">Agent team</option>
         </select>
-        <label class="glass-control" title="macOS 27 readability-fixed glass transparency">
-          <span class="glass-control-label">Glass</span>
-          <input id="glassAlpha" type="range" min="10" max="100" step="1" value="80" aria-label="Glass transparency">
-          <output id="glassAlphaOut">80%</output>
-        </label>
         <button id="btnAddTask" class="btn btn-primary">New work unit</button>
         <button id="btnColumns" class="btn">Status settings</button>
         <button id="btnRefresh" class="btn">Refresh</button>
@@ -119,14 +119,14 @@
         <section class="desk-sheet active" id="sheet-console" role="tabpanel" aria-label="Command console">
           <div class="card">
             <h2>Command console</h2>
-            <p class="hint">Human intent travels through the snapshot, not by scrolling chat history. Commands and replies are written to SQLite and survive a reload.</p>
+            <p class="hint">The snapshot carries intent; commands and replies persist in SQLite.</p>
             <textarea id="nextCommand" rows="3" placeholder="Next command..."></textarea>
             <div class="row-btns">
               <button id="btnSend" class="btn btn-primary">Send update (copy snapshot)</button>
               <button id="btnGenerate" class="btn">Generate only</button>
             </div>
             <pre id="snapshotOut" class="snapshot">(no snapshot generated yet)</pre>
-            <p class="hint">Collaboration rule: the human issues commands only through snapshots; every AI change leaves a PDCA trail; cost figures come only from the read-only meter import.</p>
+            <p class="hint">Commands go through snapshots; every AI change leaves a PDCA trail.</p>
           </div>
           <div class="card desk-history" id="history-command">
             <h3 class="hist-head">History</h3>
@@ -146,7 +146,7 @@
             <h2 class="mt">Scheduled job status</h2>
             <table class="grid-table"><thead><tr><th>Job</th><th>Last run</th><th>Result</th><th>Summary</th></tr></thead>
               <tbody id="jobBody"></tbody></table>
-            <p class="hint">Scheduling is gated by presence; when absent it silently skips with zero notices and zero spend.</p>
+            <p class="hint">Presence-gated: absent means a silent skip, zero spend.</p>
           </div>
           <div class="card desk-history" id="history-job">
             <h3 class="hist-head">History</h3>
@@ -162,7 +162,7 @@
         <section class="desk-sheet" id="sheet-acks" role="tabpanel" aria-label="Command ACKs">
           <div class="card">
             <h2>Command ACKs</h2>
-            <p class="hint">Copying a snapshot opens an ACK row. Approve to move it in progress; Reject requires a reason and writes a PDCA-style rejections.json entry.</p>
+            <p class="hint">Copy opens an ACK; Reject requires a written reason.</p>
             <ul id="ackList" class="ack-list"></ul>
           </div>
           <div class="card desk-history" id="history-ack">
@@ -179,7 +179,7 @@
         <section class="desk-sheet" id="sheet-signals" role="tabpanel" aria-label="Human decisions">
           <div class="card">
             <h2>Needs human decision</h2>
-            <p class="hint">Blocking signals (stuck &gt; 24h, dependency unfinished, urgent + overdue). Plain text list, no decorative widgets.</p>
+            <p class="hint">stuck &gt; 24h | dependency unfinished | urgent + overdue.</p>
             <ul id="signalList" class="signal-list"></ul>
           </div>
           <div class="card desk-history" id="history-signal">
@@ -194,22 +194,106 @@
         </section>
       </section>
 
-      <!-- Plan linkage: the milestone gantt page. Full height, no split.
-           #view-plan-split / #divider are retained as inert ids so the legacy
-           divider initializer keeps working. -->
+      <!-- Plan linkage: the goal tree / milestone layer is the full page
+           now (R32 / I-037). The Hour axis left this view and lives on the
+           Work board beside the kanban; the I-027 tab bar is retired. -->
       <section class="view" id="view-plan">
         <div class="plan-stack" id="view-plan-split">
-          <div class="card panel milestone-panel" id="milestonePanel">
+          <div class="card panel milestone-panel" id="milestonePanel" role="region" aria-label="Milestone plan">
             <div class="panel-head"><h2>Milestone plan</h2>
-              <span class="hint">main line | sub-lines | dependency relations | critical path | charter from the PRD</span>
+              <span class="hint">goal tree | [-]/[+] fold | drag M to a goal, W to a milestone | [+ from template] | click a row for details</span>
             </div>
             <div id="milestoneLayer" class="milestone-layer"></div>
           </div>
-          <div class="divider" id="divider" title="Drag to resize"><span></span></div>
-          <div class="card panel" id="ganttPanel">
+        </div>
+      </section>
+
+      <!-- Settings: chrome and runtime preferences. -->
+      <section class="view" id="view-settings">
+        <div class="card panel">
+          <div class="panel-head"><h2>Settings</h2>
+            <span class="hint">Chrome preferences persist in this browser</span>
+          </div>
+          <div class="settings-rows">
+            <div class="set-row">
+              <div class="set-label">Color scheme</div>
+              <div class="set-ctrl" id="setTheme">
+                <button type="button" class="btn mini" data-theme-val="auto">Auto</button>
+                <button type="button" class="btn mini" data-theme-val="light">Light</button>
+                <button type="button" class="btn mini" data-theme-val="dark">Dark</button>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-label">Port</div>
+              <div class="set-ctrl">
+                <input id="setPort" class="set-input" type="number" min="1024" max="65535" value="4174">
+                <button type="button" id="setPortSave" class="btn mini">Save</button>
+                <span class="hint" id="setPortNote"></span>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-label">Language</div>
+              <div class="set-ctrl"><span class="set-static">English</span>
+                <span class="hint">Locked: the package ships ASCII-only (localize_check gate)</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-label">Confidence gate</div>
+              <div class="set-ctrl">
+                <input id="setConfGate" class="set-input" type="number" min="0" max="1" step="0.05" value="0.7"
+                  aria-label="Confidence gate threshold">
+                <span class="hint" id="setConfGateNote">cards below this confidence show needs-ack</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-label">Glass</div>
+              <div class="set-ctrl">
+                <input id="setGlass" type="range" min="0" max="100" step="5" value="80">
+                <span class="hint" id="setGlassOut">80%</span>
+              </div>
+            </div>
+            <div class="set-row">
+              <div class="set-label">Layout</div>
+              <div class="set-ctrl">
+                <button type="button" id="setReset" class="btn mini">Reset panel sizes</button>
+                <span class="hint">Clears saved widths and folds</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Work board (I-037 / R32): kanban left + hour axis right on ONE
+           linked page over one dataset. One draggable split (#wbSplit),
+           width persisted in cp.wb-split (40/60 default, axis the larger
+           share); narrow viewports stack through the stylesheet. -->
+      <section class="view" id="view-board">
+        <div class="board-page" id="workBoard">
+          <div class="card panel wb-pane wb-kanban">
+            <div class="panel-head"><h2>Work board</h2>
+              <span class="hint">one drag = one move | double-click to edit</span></div>
+            <div class="board-area">
+              <div class="board-wrap">
+                <div id="boardColumns" class="kb-columns"></div>
+                <button type="button" id="btnAddColumn" class="kb-add-col">+ Add status</button>
+              </div>
+            </div>
+          </div>
+          <div class="wb-split" id="wbSplit" role="separator" aria-orientation="vertical" tabindex="0"
+            title="Drag to resize the kanban and the hour axis"></div>
+          <div class="card panel wb-pane wb-axis" id="ganttPanel" role="region" aria-label="Hour axis">
             <div class="panel-head"><h2>Hour axis (flat work units)</h2>
-              <span class="hint">Hour axis | 12h ticks | midnight grid | NOW line | drag snaps to hour | cost label first</span>
+              <span class="hint">drag bars to reschedule (hour-snapped) - cost first</span>
               <div class="panel-tools">
+                <label class="nature-tool" title="Nature written through the dep write path for newly drawn canvas links">
+                  <span>Nature</span>
+                  <select id="gdepNature" class="select" aria-label="Relation nature for new links">
+                    <option value="">unspecified</option>
+                    <option value="mandatory">mandatory</option>
+                    <option value="discretionary">discretionary</option>
+                    <option value="external">external</option>
+                  </select>
+                </label>
                 <button id="btnBaseline" class="btn mini" title="Freeze the current window as the baseline">Freeze baseline</button>
                 <button id="btnCritical" class="btn mini" title="Dim every bar outside the critical path">Critical path</button>
               </div>
@@ -219,26 +303,10 @@
         </div>
       </section>
 
-      <!-- Work-division kanban: its own page, one shared data set. -->
-      <section class="view" id="view-board">
-        <div class="board-page">
-          <div class="card panel">
-            <div class="panel-head"><h2>Work-division kanban</h2>
-              <span class="hint">Cross-column drag = one move over one data set | double-click a card to edit</span></div>
-            <div class="board-area">
-              <div class="board-wrap">
-                <div id="boardColumns" class="kb-columns"></div>
-                <button type="button" id="btnAddColumn" class="kb-add-col">+ Add status</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <!-- Issue ledger -->
       <section class="view" id="view-ledger">
         <div class="card ledger-card">
-          <div class="panel-head"><h2>Issue ledger</h2><span class="hint">Reply / ENDDATE / urgent write to SQLite and travel with the snapshot to the AI</span></div>
+          <div class="panel-head"><h2>Issue ledger</h2><span class="hint">Replies travel with the snapshot</span></div>
           <div class="ledger-tools">
             <input id="issueQuery" class="text-input" type="search" placeholder="Filter issues...">
             <div class="chips" id="issueChips">
@@ -261,7 +329,7 @@
               <button id="btnLedgerSend" class="btn btn-primary">Send replies (copy snapshot)</button>
               <button id="btnLedgerGen" class="btn">Show snapshot</button>
             </div>
-            <p class="hint">Send saves every reply to SQLite, copies the command snapshot and opens an ACK row. You never leave this tab.</p>
+            <p class="hint">Send saves replies, copies the snapshot, opens an ACK.</p>
             <pre id="ledgerSnapOut" class="snapshot small">(no snapshot generated yet)</pre>
           </div>
         </div>
@@ -270,7 +338,7 @@
       <!-- Meter -->
       <section class="view" id="view-meter">
         <div class="card">
-          <div class="panel-head"><h2>Token meter</h2><span class="hint">Figures come from the read-only handoff JSON imported from the meter DB, not hand-computed</span></div>
+          <div class="panel-head"><h2>Token meter</h2><span class="hint">Read-only meter import; never hand-counted.</span></div>
           <table class="grid-table"><thead><tr><th>Round</th><th>Name</th><th>Window</th><th>billed</th><th>fresh</th><th>$</th></tr></thead>
             <tbody id="roundBody"></tbody></table>
           <p class="data-line" id="roundTotal">-</p>
@@ -278,7 +346,7 @@
           <table class="grid-table"><thead><tr><th>tier</th><th>token range</th><th>use</th></tr></thead>
             <tbody><tr><td>S</td><td>10-50k</td><td>small fix / single file</td></tr><tr><td>M</td><td>50-200k</td><td>single module</td></tr>
             <tr><td>L</td><td>0.2-1M</td><td>multi-module rewrite</td></tr><tr><td>XL</td><td>1-3M</td><td>full clean-room rewrite</td></tr></tbody></table>
-          <p class="hint">billed = in + out + cache-read; fresh = in + out. tier is a planning word only; measured columns come from the meter.</p>
+          <p class="hint">billed = in + out + cache-read; fresh = in + out. Tier is planning only.</p>
         </div>
       </section>
     </main>
@@ -288,6 +356,19 @@
       <span>Left / Right arrow moves 1 hour | Esc clears selection</span></footer>
     </div>
   </div>
+
+  <!-- I-038: node detail drawer. Opens from a G/M/W row click on the Plan
+       page; content (fields, relations, audit) is built by milestone.ts. -->
+  <aside class="node-drawer hidden" id="nodeDrawer" aria-label="Node detail">
+    <div class="nd-head">
+      <div class="nd-head-text">
+        <span class="nd-eyebrow">Node detail</span>
+        <span class="nd-kind" id="ndKind"></span>
+      </div>
+      <button type="button" id="ndClose" class="nd-close" title="Close details" aria-label="Close details">&times;</button>
+    </div>
+    <div class="nd-body" id="ndBody"></div>
+  </aside>
 
   <div class="modal-layer hidden" id="modalLayer"><div class="modal-sheet" id="modalSheet"></div></div>
   <div class="toast" id="toast"></div>

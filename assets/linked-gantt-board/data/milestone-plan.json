@@ -6,6 +6,27 @@
     "evaluation": "PDCA iteration is the evaluation method: each round appends one Plan/Do/Check/Act entry to docs/TASK-LOG.md with pasted command output as Check evidence; acceptance is a re-run of the deterministic gates (scripts/prd-to-action.js, scripts/verify.js, scripts/selftest-discipline.js), never a numeric rating.",
     "side_purpose": "Milestone main line drives the gantt; sub-lines and relations keep the plan honest."
   },
+  "goals": [
+    {
+      "id": "G1",
+      "title": "Release 1.8.x with discipline gates",
+      "milestone_ids": [
+        "M1",
+        "M2",
+        "M3",
+        "M4",
+        "M5",
+        "M6"
+      ]
+    },
+    {
+      "id": "G2",
+      "title": "Goal-anchored WBS visualization",
+      "milestone_ids": [
+        "M7"
+      ]
+    }
+  ],
   "milestones": [
     {
       "id": "M1",
@@ -76,6 +97,18 @@
       "status": "done",
       "completion": "python scripts/validate_skill.py reports failed = 0; python scripts/package.py --out ai-project-ops.zip builds a zip whose entry count matches the packaged file set of the same run and a checksum outside the archive; a CJK scan over the owned files prints 0; docs/handoffs/G1.md has the four required sections and stays under 40 lines.",
       "verify": "python scripts/validate_skill.py"
+    },
+    {
+      "id": "M7",
+      "name": "Traceability view (I-020)",
+      "depends_on": [
+        "M6"
+      ],
+      "start_offset_h": 48,
+      "end_offset_h": 72,
+      "status": "done",
+      "completion": "/api/plan returns goals[] (G1 covers M1-M6, G2 covers M7) and an analysis object keyed by all 7 milestone ids and 18 work-unit ids with status/progress/cost/rounds/rework derived from data/milestone-plan.json and docs/TASK-LOG.md; milestone-plan.json main_line lists M1..M7, sub_lines keeps M7: [] with 18 work units unchanged; docs/PRD.md carries a 7-field M7 block with Status in_progress equal to docs/evidence/milestones.json; node scripts/prd-to-action.js exits 0 at 10/10 with gate C comparing the three stores instead of a hardcoded count; node scripts/plan-sync.js --check exits 0 with M7 status equal across prd/ms/plan.",
+      "verify": "node scripts/prd-to-action.js"
     }
   ],
   "work_units": [
@@ -436,7 +469,8 @@
     "M3",
     "M4",
     "M5",
-    "M6"
+    "M6",
+    "M7"
   ],
   "sub_lines": {
     "M1": [
@@ -468,6 +502,7 @@
       "W16",
       "W17",
       "W18"
-    ]
+    ],
+    "M7": []
   }
 }

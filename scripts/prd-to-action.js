@@ -19,7 +19,11 @@
  * DETECT signal per the brief), or 1 if discrimination cannot be proven.
  * Every check prints "PASS  <label> :: <evidence>" or "FAIL  ...".
  * Summary line: "PRD-TO-ACTION GATE: n/n passed".
- * VERSION: 1.0.1 - gate X also asserts three-store milestone status equality
+ * VERSION: 1.1.0 - gate C milestone counts derive from the three stores
+ * (same length, same id sets - no hardcoded 6); gate X requires an explicit
+ * sub_lines entry per milestone, keeps >=2 work units for every milestone
+ * that owns units, and checks that goals cover every milestone exactly once.
+ * 1.0.1 - gate X also asserts three-store milestone status equality
  * (PRD Status field vs milestones.json vs milestone-plan.json, divergent
  * values named in the FAIL evidence). 1.0.0 - initial gates L1-L3 (loads),
  * A banned vague phrases,
@@ -209,9 +213,23 @@ function runChecks(prdText, msText, planText) {
     const msMs = ms.milestones || [], planMs = plan.milestones || [];
     const prdBlocks = parsePrdMilestones(prdText);
     const p = [];
-    if (msMs.length !== 6) p.push('ms.milestones=' + msMs.length);
-    if (planMs.length !== 6) p.push('plan.milestones=' + planMs.length);
-    if (prdBlocks.length !== 6) p.push('prd blocks=' + prdBlocks.length);
+    /* Count check DERIVES from the three stores: same length, same id sets,
+       duplicate ids rejected. No hardcoded milestone count anywhere. */
+    const idsOf = (list) => list.map((m) => m.id);
+    const idSet = (list) => Array.from(new Set(idsOf(list))).sort().join(',');
+    if (msMs.length !== planMs.length || planMs.length !== prdBlocks.length) {
+      p.push('milestone count mismatch: ms=' + msMs.length + ' plan=' + planMs.length +
+        ' prd=' + prdBlocks.length);
+    }
+    if (idSet(msMs) !== idSet(planMs)) {
+      p.push('id set mismatch ms vs plan: [' + idSet(msMs) + '] != [' + idSet(planMs) + ']');
+    }
+    if (idSet(planMs) !== idSet(prdBlocks)) {
+      p.push('id set mismatch plan vs prd: [' + idSet(planMs) + '] != [' + idSet(prdBlocks) + ']');
+    }
+    [['ms', idsOf(msMs)], ['plan', idsOf(planMs)], ['prd', idsOf(prdBlocks)]].forEach((s) => {
+      if (new Set(s[1]).size !== s[1].length) p.push(s[0] + ' duplicate milestone id');
+    });
     for (const m of msMs) {
       if (!Array.isArray(m.depends_on)) p.push(m.id + ':depends_on');
       if (!m.completion) p.push(m.id + ':completion');
@@ -226,7 +244,8 @@ function runChecks(prdText, msText, planText) {
     }
     for (const b of prdBlocks) for (const f of MS_FIELDS) if (!b.fields[f]) p.push(b.id + ':' + f);
     cOk = p.length === 0;
-    cEv = cOk ? (prdBlocks.length + ' PRD blocks + ' + msMs.length + ' + ' + planMs.length + ' JSON milestones carry depends_on/completion/verify/status (7 PRD fields)') : p.join(', ');
+    cEv = cOk ? (prdBlocks.length + ' PRD blocks + ' + msMs.length + ' + ' + planMs.length +
+      ' JSON milestones carry depends_on/completion/verify/status (7 PRD fields); count and id sets agree across the three stores (derived, not hardcoded)') : p.join(', ');
   }
   add('C', 'C: every milestone has depends_on/completion/verify/status', cOk, cEv);
 
@@ -310,15 +329,47 @@ function runChecks(prdText, msText, planText) {
     }
     for (const m of (plan.milestones || [])) if (!(m.start_offset_h < m.end_offset_h)) p.push(m.id + ': offsets');
     const sub = plan.sub_lines || {};
+    const wOf = {};
+    wu.forEach((w) => { wOf[w.id] = w; });
     for (const k of mIds) {
+      /* Every milestone needs an explicit sub_lines entry; it may be empty
+         only when the milestone owns no work units (M7 in I-020). */
+      if (!Object.prototype.hasOwnProperty.call(sub, k)) p.push(k + ': no sub_lines entry');
       const arr = sub[k] || [];
-      if (arr.length < 2) p.push(k + ': <2 work units');
-      for (const id of arr) if (!wset.has(id)) p.push(k + ': dangling sub_line id ' + id);
+      const owned = wu.filter((w) => w.milestone_id === k);
+      if (arr.length < 2 && owned.length > 0) p.push(k + ': <2 work units');
+      for (const id of arr) {
+        if (!wset.has(id)) p.push(k + ': dangling sub_line id ' + id);
+        else if (wOf[id].milestone_id !== k) {
+          p.push(id + ': in sub_lines of ' + k + ' but milestone_id=' + wOf[id].milestone_id);
+        }
+      }
+      for (const w of owned) if (arr.indexOf(w.id) === -1) {
+        p.push(w.id + ': milestone_id ' + k + ' not listed in its sub_line');
+      }
     }
     const union = new Set();
     Object.values(sub).forEach((arr) => arr.forEach((id) => union.add(id)));
     if (union.size !== wIds.length) p.push('sub_lines do not cover all work units');
     if ((plan.relations || []).length < 10) p.push('relations < 10');
+    /* Goals: when the plan carries a goals layer, every milestone must sit in
+       exactly one goal (I-020 acceptance: goal rows group the tree). */
+    if (Array.isArray(plan.goals)) {
+      const covered = new Set();
+      for (const g of plan.goals) {
+        const gid = g && g.id ? String(g.id) : '(goal without id)';
+        if (!g || !g.id || !g.title || !Array.isArray(g.milestone_ids) || !g.milestone_ids.length) {
+          p.push('goal shape: ' + gid + ' needs id, title and a non-empty milestone_ids');
+          continue;
+        }
+        for (const mid of g.milestone_ids) {
+          if (mIds.indexOf(mid) === -1) p.push(gid + ': unknown milestone ' + mid);
+          if (covered.has(mid)) p.push(mid + ': covered by more than one goal');
+          covered.add(mid);
+        }
+      }
+      for (const id of mIds) if (!covered.has(id)) p.push(id + ': no goal');
+    }
     const prdStatus = {};
     parsePrdMilestones(prdText).forEach((b) => { prdStatus[b.id] = b.fields.Status; });
     const msStatus = {};
@@ -332,7 +383,10 @@ function runChecks(prdText, msText, planText) {
       }
     }
     xOk = p.length === 0;
-    xEv = xOk ? (wu.length + ' work units, >=2 per milestone, ' + (plan.relations || []).length + ' relations; main_line/sub_lines/relations consistent across both files; ' + (plan.milestones || []).length + ' milestone statuses equal across prd/ms/plan') : p.join(' | ');
+    xEv = xOk ? (wu.length + ' work units, >=2 for every milestone that owns units, ' +
+      (plan.relations || []).length + ' relations; main_line/sub_lines/relations consistent across both files; ' +
+      (Array.isArray(plan.goals) ? plan.goals.length + ' goals cover ' + mIds.length + ' milestones exactly once; ' : '') +
+      (plan.milestones || []).length + ' milestone statuses equal across prd/ms/plan') : p.join(' | ');
   }
   add('X', 'X: cross-file consistency + work-unit structure', xOk, xEv);
 
