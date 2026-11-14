@@ -17,6 +17,10 @@ namespace CP {
     /** I-033: AI confidence 0..1. Additive nullable column; null/absent =
      *  unset (card shows a dash) and never disturbs any older field. */
     confidence?: number | null;
+    /** I-034: additive approval flag (1 = SOP gate step). Absent/0 = normal
+     *  card; 1 shows the APPROVAL badge and floors the gate badge to at least
+     *  needs-ack. Mirrors the plan-only work_units[].approval flag. */
+    approval?: number;
   }
 
   /** One precedence edge between two work units. `lag` is hours; a negative

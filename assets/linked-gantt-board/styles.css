@@ -185,6 +185,11 @@ body.is-dragging { user-select: none; }
 .kb-card-top { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .kb-owner-chip { font-size: 9.5px; font-weight: 620; padding: 2px 6px; border-radius: 5px; }
 .kb-owner { margin-left: auto; font-size: 10.5px; color: var(--text3); }
+/* I-034: APPROVAL badge on SOP gate-step cards (additive tasks.approval=1). */
+.kb-approval { font-size: 9px; font-weight: 700; letter-spacing: .4px; padding: 2px 5px;
+  border-radius: 4px; color: #b25000; background: rgba(255, 159, 10, .16);
+  border: 1px solid rgba(255, 159, 10, .5); }
+.kb-approval[hidden] { display: none; }
 .kb-parent {
   font-size: 9.5px; font-weight: 620; padding: 2px 6px; border-radius: 5px;
   background: var(--soft2); color: var(--text2); white-space: nowrap;
@@ -601,35 +606,16 @@ body.is-linking .gbar-link { opacity: 1; }
 
 /* ---- Two views: plan (goal tree full-page) and the Work board --------- */
 #view-board.active { display: flex; }
-/* R32 / I-037: the Work board holds the kanban and the hour axis on one
-   page - side by side with one draggable split (default 40/60, the axis the
-   larger share, width persisted in cp.wb-split by app.ts initWorkBoard).
-   min-width:0 is load-bearing: without it this row flex item's automatic
-   minimum is its min-content (the gantt-inner is 4284px wide), which
-   inflates the page past the viewport and pushes the axis pane off-screen -
-   real pointer drags then miss every bar. */
-.board-page { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; }
-.wb-pane { min-width: 0; min-height: 0; }
-.wb-kanban { flex: 0 0 var(--wb-left, 40%); }
-.wb-axis { flex: 1 1 auto; }
-.wb-split {
-  flex: 0 0 10px; margin: 0 6px; align-self: stretch; cursor: col-resize;
-  border-radius: 6px; background: var(--soft); border: 1px solid var(--hair);
-  position: relative; user-select: none; touch-action: none;
-}
-.wb-split::after {
-  content: ''; position: absolute; inset: 40% 3px; border-radius: 3px;
-  background: var(--line);
-}
-.wb-split:hover, body.is-dragging .wb-split { background: var(--accent-soft); border-color: var(--accent); }
-/* Stacked fallback on narrow viewports: same page, vertical order,
-   the split handle retires (its width drag has no meaning in a column). */
-@media (max-width: 1100px) {
-  .board-page { flex-direction: column; }
-  .wb-kanban { flex: 0 0 44%; width: 100%; }
-  .wb-axis { flex: 1 1 auto; }
-  .wb-split { display: none; }
-}
+/* R36 / I-039: the Work board is a two-tab view - [Work board] kanban and
+   [Hour axis] flat work units - one dataset, one pinned tab bar styled as
+   the Command desk sheet tablist. The active tab persists in cp.wb-tab;
+   the split and the hover cross-highlight retire (navigation is explicit).
+   min-width:0 stays load-bearing for the 4284px gantt-inner (see I-037):
+   without it the automatic minimum inflates the pane past the viewport. */
+.board-page { flex: 1 1 auto; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.wb-tabs { flex: 0 0 auto; }
+.wb-pane { min-width: 0; min-height: 0; flex: 1 1 auto; }
+.wb-pane[hidden] { display: none; }
 
 /* ============================================================
    R32 / I-038 - node detail drawer (right side slide-over).
@@ -710,18 +696,6 @@ textarea.nd-input { height: auto; min-height: 62px; padding: 7px 9px; resize: ve
 .nd-audit-none { color: var(--text3); font-style: italic; font-size: 10.5px; }
 .nd-actions { display: flex; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
 .nd-kids { font-size: 10.5px; color: var(--text2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-
-/* R32 / I-037: cross-surface hover - the card and the bar of one task light
-   together (app.ts setLinkHover drives the class; selection keeps its own
-   .is-selected ring unchanged). */
-.kb-card.is-link-hover {
-  box-shadow: 0 0 0 2px rgba(10, 132, 255, .55), 0 6px 18px rgba(0, 0, 0, .14);
-}
-.gbar.is-link-hover {
-  outline: 2px solid rgba(10, 132, 255, .85);
-  outline-offset: 1px;
-  filter: brightness(1.08);
-}
 
 .plan-stack { flex: 1 1 auto; min-height: 0; width: 100%; display: flex; flex-direction: column; gap: 10px; }
 .nature-tool { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); }
@@ -941,6 +915,10 @@ body.side-collapsed .side-resize { display: none; }
 .ms-a-wu { color: var(--text3); }
 .ms-a-id { flex: 0 0 52px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; color: var(--text); }
 .ms-a-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* I-034: APPROVAL badge rides inside the title cell (no column shift). */
+.ms-approval { display: inline-block; margin-left: 8px; padding: 1px 5px; font-size: 9px;
+  font-weight: 700; letter-spacing: .4px; vertical-align: middle; border-radius: 4px;
+  color: #b25000; background: rgba(255, 159, 10, .16); border: 1px solid rgba(255, 159, 10, .5); }
 .ms-a-status { flex: 0 0 108px; font-weight: 700; color: var(--text); }
 .ms-a-progress { flex: 0 0 56px; text-align: right; font-variant-numeric: tabular-nums; }
 .ms-a-cost { flex: 0 0 64px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--text); }
@@ -994,8 +972,9 @@ body.side-collapsed .side-resize { display: none; }
   background: rgba(255, 159, 10, .22); border-radius: 4px;
 }
 .kb-dep-none { opacity: .55; }
-/* scroll-to highlight flash (I-029) */
+/* scroll-to highlight flash (I-029; R36 flashes bars with the same keyframes) */
 .kb-card.kb-flash { animation: kb-flash 1.5s ease-out; }
+.gbar.kb-flash { animation: kb-flash 1.5s ease-out; }
 @keyframes kb-flash {
   0% { box-shadow: 0 0 0 2px #0a84ff, 0 0 14px rgba(10, 132, 255, .85); }
   100% { box-shadow: 0 0 0 2px transparent, 0 0 0 transparent; }
@@ -1053,9 +1032,52 @@ body.side-collapsed .side-resize { display: none; }
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 .tpl-counts { font-size: 9.5px; color: var(--text2); }
-.tpl-save-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+/* I-034: SOP category chrome - section head, kind tag, chain preview. */
+.tpl-cat { margin: 8px 0 0; font-size: 10px; font-weight: 700; letter-spacing: .6px;
+  text-transform: uppercase; color: var(--text3); }
+.tpl-kind { flex: 0 0 auto; font-size: 9px; font-weight: 700; padding: 1px 5px;
+  border-radius: 4px; color: var(--text3); background: var(--soft); border: var(--hair); }
+.tpl-kind-sop { color: #b25000; background: rgba(255, 159, 10, .14);
+  border-color: rgba(255, 159, 10, .45); }
+.tpl-steps { font-size: 9.5px; color: var(--text2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tpl-save-row { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.tpl-save-row .btn { flex: 0 0 auto; }
 .tpl-save-row input {
   flex: 1 1 auto; min-width: 140px; height: 32px; padding: 0 10px;
   border: var(--hair); border-radius: 9px; background: var(--card-solid);
   font-size: 12.5px;
 }
+
+/* I-035: ops stats tiles on the Meter page, above the token meter.
+   Grid tracks + min-width:0 on every bounded item (R32 layout lesson):
+   the member-load bars are wide flex rows inside a grid cell. */
+.stats-tiles {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+  margin-bottom: 12px;
+}
+.stat-tile { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.stat-label { font-size: 11px; color: var(--text2); }
+.stat-value {
+  font-size: 22px; font-weight: 650; letter-spacing: -.6px;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.stat-sub { font-size: 9.5px; color: var(--text3); }
+.stat-empty { font-size: 14px; font-weight: 600; color: var(--text3); }
+.load-bars { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.load-row { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 10px; }
+.load-owner {
+  flex: 0 0 84px; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; color: var(--text2);
+}
+.load-track {
+  flex: 1 1 auto; min-width: 0; height: 8px; border-radius: 4px;
+  background: var(--soft); overflow: hidden;
+}
+.load-bar { display: block; height: 100%; border-radius: 4px; background: var(--accent); }
+.load-n {
+  flex: 0 0 auto; font-weight: 600; color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1100px) { .stats-tiles { grid-template-columns: repeat(2, 1fr); } }

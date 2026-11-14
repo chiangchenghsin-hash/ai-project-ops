@@ -2,6 +2,72 @@
 
 All notable changes to this skill package. Versions follow semver.
 
+## Unreleased
+
+## 1.10.0 - 2026-11-14 (SOP pack + ops stats + tabbed work board + A2UI Stage A)
+
+Ships R35, R36 and AUI-01 Stage A: the SOP template pack on the milestone
+library, deterministic ops-stats tiles on the Meter page, the two-tab Work
+board with explicit cross-view jumps, and the A2UI v1.0 governance catalog
+with its emitter/renderer and decision panel. SKILL.md version synced per
+the R26-A rule. Stage B (governance cards wired into sheet-acks) follows.
+
+- **R35 I-034 SOP template pack**: the I-031 template library gains a SOP
+  category with exactly two seeded process templates - Code review (1 lint,
+  2 test, 3 review APPROVAL, 4 merge) and Research (1 question, 2 gather,
+  3 verify APPROVAL, 4 write-up). `[use]` on a milestone applies one work unit
+  per step through the writeNodeStores four-store commit (status `pending`
+  from the frozen vocab, FS links in order into `task_deps` with lag 0 /
+  nature `mandatory`, prd-to-action 10/10 + plan-sync green asserted after
+  every apply). APPROVAL steps carry the plan-only additive approval flag
+  (mirrored into the additive `tasks.approval` column, R31 model/confidence
+  pattern, so the Work board card can badge it); the plan row and the card
+  show an APPROVAL badge and `gateFromScope` floors such a card to
+  `needs-ack` (never `autonomous`, never `n/a`). `[save W chain as SOP]`
+  saves an ordered W chain as a named SOP template and re-applies the same
+  shape (round-trip). The six builtin WBS templates keep byte-identical
+  list/apply behavior (additive store shape only). Selftest section 36;
+  battery 226/226.
+- **R35 I-035 ops stats**: `GET /api/stats` derives deterministically from
+  existing rows only (zero writes, zero new stores, no timestamps - two
+  calls return byte-identical JSON): approval pass <- `acks` decided-ask
+  pass rate (n = state IN ('IN_PROGRESS','DONE'), m = state <> 'ACK'; the
+  signed mockup's pass-rate semantics), human wait <- `acks` decided
+  mean(updated-created) hours, completion <- `tasks` done/all, member load
+  <- `tasks` open grouped by owner desc (per-metric table + filter named in
+  the db.js source comment).
+  Four tiles render on the Meter page above the token meter; an empty
+  source shows `n/a`, never 0% (proven through the `patchStats` override
+  seam). Selftest section 37; battery 234/234.
+
+- **AUI-01 Stage A A2UI governance catalog**: multi-agent governance decision
+  cards adopt the A2UI v1.0 contract. New `catalogs/agent-governance/v1/
+  catalog.json` (AskCard / ReviewCard / DecisionRecord + agentOnly
+  `recordDecision` / rendererOnly `formatAskAge`; basic-catalog atoms for
+  everything else) with the stdlib gate `scripts/validate_a2ui_catalog.py`.
+  New `src/a2ui.ts` (namespace CP.A2UI): v1.0 wire emitter
+  (createSurface/updateComponents/updateDataModel) plus an injectable-doc
+  renderer where `updateDataModel` refreshes bound text without structural
+  re-render and decision clicks emit agent-side events only - the ledger
+  write stays on the agentOnly contract. `a2ui-demo.html` (wire log +
+  measured ask-to-ACK) and `a2ui-selftest.js` 12/12. Add-only round: no
+  pending-release file touched; panel wiring is Stage B after 1.10.0.
+  CJK 0; dist diff adds only `dist/a2ui.js`.
+
+- **R36 Work board tabbed presentation (I-039)**: the Work board becomes a
+  two-tab view - `[Work board]` kanban and `[Hour axis]` flat work units -
+  styled as the Command desk sheet tablist, active tab persisted in
+  `cp.wb-tab`. Cross-view navigation replaces the hover cross-highlight: a
+  card's `-> hour axis` control switches to tab 2 and flashes the bar; a bar
+  click without drag switches back and flashes the card; a moved bar drag
+  swallows its trailing click. The 40/60 split (#wbSplit, `cp.wb-split`,
+  stacked fallback) and `.is-link-hover` retire with their drag-hook wiring.
+  Selftest retargeted to tab semantics (measurements per ACTIVE tab) plus a
+  drag-suppression probe and R36 pinned-literal checks. Battery 236/236.
+- **AUI-01 decision panel**: `a2ui-decisions.html` renders the open decision
+  queue as governance AskCards (approve/reject/defer) with a copyable
+  receipt - the standing surface for multi-item human decisions.
+
 ## 1.9.0 - 2026-11-11 (acceptance rounds + work board)
 
 Ships R27-R32: live-review UI chrome, the I-020 goal tree with analysis

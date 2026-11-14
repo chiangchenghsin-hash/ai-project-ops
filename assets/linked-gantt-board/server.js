@@ -8,7 +8,10 @@
  * backups under ./data/backups/; POST /shutdown exits 0 after responding.
  * GET /healthz is unauthenticated liveness. Errors surface as HTTP 400 + {error}
  * so callers can see the error code. Exit 1 on unhandled request error.
- * VERSION: 2.4.0 - I-038 R32: PUT /api/plan/structure now serves six kinds
+ * VERSION: 2.5.0 - I-035 R35: GET /api/stats serves store.stats - the pure
+ * ops-stats derivation (approval pass / human wait / completion / member
+ * load) with zero writes; additive route, no frozen contract changed.
+ * 2.4.0 - I-038 R32: PUT /api/plan/structure now serves six kinds
  * through the same door (store.planStructureUpdate: move | apply-template |
  * create-milestone | create-work-unit | update-node | delete-node); the four
  * node CRUD kinds run store's plan-sync-class four-store atomic commit and
@@ -28,7 +31,7 @@ const store = require('./db');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PANEL_PORT || 4174);
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 /* I-019: the four desk sheets are the allowed desk_events units. */
 const EVENT_UNITS = ['command', 'ack', 'signal', 'job'];
 const MIME = {
@@ -83,6 +86,8 @@ const server = http.createServer(async (req, res) => {
     /* I-031: WBS template library (built-ins + saved subtrees). */
     if (p === '/api/templates' && method === 'GET') return json(res, 200, store.listTemplates());
     if (p === '/api/templates' && method === 'POST') return json(res, 200, store.saveTemplate(await body(req)));
+    /* I-035: ops stats - pure derivation, zero writes (db.js stats()). */
+    if (p === '/api/stats' && method === 'GET') return json(res, 200, store.stats());
     if (p === '/api/snapshot' && method === 'POST') return json(res, 200, store.snapshot());
 
     /* S2 ACK command loop. */

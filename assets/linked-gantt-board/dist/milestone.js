@@ -22,7 +22,10 @@
  * work-unit sibling order read from work_units[] (the array a move rewrites),
  * and the R30 layout fix: .ms-scroll no longer shrinks to zero under a tall
  * goal tree, so the gantt block keeps a real height and the whole layer is one
- * vertical scroll. 1.2.0 - I-020 goal tree + analysis columns above the gantt;
+ * vertical scroll. 1.4.0 - I-034 SOP template pack: the library modal groups
+ * a SOP category (steps preview, [use] apply control) over the WBS list, an M
+ * row gains [save W chain as SOP], and W rows with the additive approval flag
+ * render an APPROVAL badge inside the title cell. 1.2.0 - I-020 goal tree + analysis columns above the gantt;
  * I-030 signed lag and nature badges on relation rows.
  */
 var CP;
@@ -210,8 +213,11 @@ var CP;
                 prog, cost: num(a.cost, num(w && w.cost)), rounds: a.rounds, rework: num(a.rework),
             };
         };
-        const row = (kind, id, title, st, prog, cost, rounds, rework, depth) => {
+        const row = (kind, id, title, st, prog, cost, rounds, rework, depth, approval = false) => {
             const badge = st ? '[' + txt(st) + ']' : '';
+            /* I-034: APPROVAL badge rides inside the title cell so no column shifts
+               for the rows that do not carry it. */
+            const appr = approval ? '<span class="ms-approval">APPROVAL</span>' : '';
             /* I-031: G/M rows carry a [+]/[-] fold toggle and a [+ from template]
                button; W rows are leaves (spacer only) and are never foldable. */
             const foldable = kind === 'goal' || kind === 'ms';
@@ -236,7 +242,7 @@ var CP;
             /* I-031: M and W rows drag; goal rows are roots and stay put. */
             const draggable = (kind === 'ms' || kind === 'wu') ? ' draggable="true"' : '';
             return `<div class="ms-goal-row ms-a-${kind}" data-kind="${kind}" data-node="${txt(id)}" style="--depth:${depth}"${draggable}>${foldHtml}
-        <span class="ms-a-id">${txt(id)}</span><span class="ms-a-title">${txt(title)}</span>
+        <span class="ms-a-id">${txt(id)}</span><span class="ms-a-title">${txt(title)}${appr}</span>
         <span class="ms-a-status">${badge}</span><span class="ms-a-progress">${Math.round(prog)}%</span>
         <span class="ms-a-cost">${fmtCost(cost)}</span>
         <span class="ms-a-rounds">rounds: ${fmtRounds(rounds)}</span>
@@ -276,7 +282,7 @@ var CP;
                 wuIdsOf(mid).forEach((wid) => {
                     const ws = wuStats(wid);
                     const w = wuById[wid];
-                    body += row('wu', wid, (w && w.title) || wid, ws.st, ws.prog, ws.cost, ws.rounds, ws.rework, 2);
+                    body += row('wu', wid, (w && w.title) || wid, ws.st, ws.prog, ws.cost, ws.rounds, ws.rework, 2, !!(w && w.approval));
                 });
                 body += '</div>';
             });
@@ -471,8 +477,10 @@ var CP;
         if (tplEl) {
             e.preventDefault();
             const nodeId = tplEl.dataset.tpl || '';
+            const tplRow = tplEl.closest('.ms-goal-row');
+            const tplKind = tplRow && tplRow.dataset.kind === 'ms' ? 'ms' : 'goal';
             if (nodeId)
-                void openTemplateLibrary(nodeId);
+                void openTemplateLibrary(nodeId, tplKind);
             return;
         }
         const addEl = target.closest('[data-add]');
@@ -692,29 +700,47 @@ var CP;
         }
     }
     CP.applyTemplateAt = applyTemplateAt;
-    /** [+ from template] modal: apply any library entry at this row, or save
-     *  this row's subtree as a named template (POST /api/templates). */
-    async function openTemplateLibrary(nodeId) {
+    /** [+ from template] modal: apply any library entry at this row ([use]),
+     *  or save the subtree / W chain as a named template (POST /api/templates).
+     *  I-034: the library carries a SOP category (the two seeded process
+     *  templates + any saved chain) with a steps preview, and an M row gains
+     *  the [save W chain as SOP] control for the round-trip save. */
+    async function openTemplateLibrary(nodeId, nodeKind) {
         try {
             const r = await fetch('/api/templates', { cache: 'no-store' });
             if (!r.ok)
                 throw new Error('HTTP ' + r.status);
             const data = await r.json();
             const list = Array.isArray(data.templates) ? data.templates : [];
-            const items = list.map((t) => `<div class="tpl-item">
+            const isMs = nodeKind === 'ms';
+            const item = (t) => {
+                const steps = Array.isArray(t.steps) ? t.steps : [];
+                const stepLine = steps.length
+                    ? `<span class="tpl-steps">${CP.esc(steps.map((s, i) => (i + 1) + ' ' + s.title + (s.approval ? ' (APPROVAL)' : '')).join(' -> '))}</span>`
+                    : '';
+                const kindTag = t.kind === 'sop' ? '<span class="tpl-kind tpl-kind-sop">SOP</span>'
+                    : '<span class="tpl-kind">WBS</span>';
+                return `<div class="tpl-item${t.kind === 'sop' ? ' tpl-item-sop' : ''}">
           <div class="tpl-meta">
-            <strong class="tpl-name">${CP.esc(CP.stripCJK(t.name))}</strong>
+            <strong class="tpl-name">${CP.esc(CP.stripCJK(t.name))}</strong>${kindTag}
             <span class="tpl-prov">${CP.esc(CP.stripCJK(t.provenance))}</span>
             <span class="tpl-counts">${num(t.n_milestones)} milestones / ${num(t.n_work_units)} work units</span>
+            ${stepLine}
           </div>
-          <button type="button" class="btn mini" data-tpl-apply="${CP.esc(t.id)}" data-tpl-target="${CP.esc(nodeId)}">Apply</button>
-        </div>`).join('');
-            CP.openPanelModal(`<h3>WBS template library</h3>
-        <p class="modal-sub">Apply a skeleton under ${CP.esc(nodeId)}, or save the ${CP.esc(nodeId)} subtree as a new template. New nodes get todo / 0 placeholders and fresh ids.</p>
-        <div class="tpl-list">${items || '<p class="modal-sub">No templates yet.</p>'}</div>
+          <button type="button" class="btn mini" data-tpl-apply="${CP.esc(t.id)}" data-tpl-target="${CP.esc(nodeId)}">[use]</button>
+        </div>`;
+            };
+            const sops = list.filter((t) => t.kind === 'sop');
+            const wbs = list.filter((t) => t.kind !== 'sop');
+            const sections = (sops.length ? `<h4 class="tpl-cat">SOP</h4><div class="tpl-list">${sops.map(item).join('')}</div>` : '')
+                + (wbs.length ? `<h4 class="tpl-cat">WBS</h4><div class="tpl-list">${wbs.map(item).join('')}</div>` : '');
+            CP.openPanelModal(`<h3>Template library</h3>
+        <p class="modal-sub">[use] applies an entry under ${CP.esc(nodeId)}. WBS instances get todo / 0 placeholders; SOP chains land as pending work units with FS links (lag 0, mandatory) and an APPROVAL gate step.</p>
+        ${sections || '<p class="modal-sub">No templates yet.</p>'}
         <div class="tpl-save-row">
           <input id="tplSaveName" maxlength="60" placeholder="New template name" autocomplete="off">
-          <button type="button" class="btn btn-primary" data-tpl-save="${CP.esc(nodeId)}">Save subtree as template</button>
+          <button type="button" class="btn btn-primary" data-tpl-save="${CP.esc(nodeId)}" data-tpl-kind="${CP.esc(nodeKind)}">Save subtree as template</button>
+          ${isMs ? `<button type="button" class="btn" data-tpl-save-sop="${CP.esc(nodeId)}">[save W chain as SOP]</button>` : ''}
         </div>
         <div class="modal-actions"><button type="button" class="btn" data-action="close">Close</button></div>`);
         }
@@ -744,9 +770,12 @@ var CP;
                 CP.closePanelModal();
             return;
         }
-        const saveBtn = target.closest('[data-tpl-save]');
-        if (saveBtn) {
-            const src = saveBtn.dataset.tplSave || '';
+        /* I-034: [save W chain as SOP] - same door, as_sop marks the chain save. */
+        const sopBtn = target.closest('[data-tpl-save-sop]');
+        const saveBtn = sopBtn ? null : target.closest('[data-tpl-save]');
+        if (sopBtn || saveBtn) {
+            const src = sopBtn ? (sopBtn.dataset.tplSaveSop || '') : (saveBtn.dataset.tplSave || '');
+            const kind = saveBtn ? (saveBtn.dataset.tplKind || '') : 'ms';
             const input = document.getElementById('tplSaveName');
             const name = input ? input.value.trim() : '';
             if (!name) {
@@ -756,10 +785,13 @@ var CP;
                 return;
             }
             try {
+                const payload = { name, source_node: src };
+                if (sopBtn)
+                    payload.as_sop = true;
                 const r = await fetch('/api/templates', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, source_node: src }),
+                    body: JSON.stringify(payload),
                 });
                 if (!r.ok) {
                     let msg = 'HTTP ' + r.status;
@@ -772,8 +804,8 @@ var CP;
                     CP.toast('Save failed: ' + msg);
                     return;
                 }
-                CP.toast('Template saved: ' + name);
-                await openTemplateLibrary(src);
+                CP.toast(sopBtn ? 'SOP chain saved: ' + name : 'Template saved: ' + name);
+                await openTemplateLibrary(src, kind || 'ms');
             }
             catch (err) {
                 CP.toast('Save failed: ' + String(err));

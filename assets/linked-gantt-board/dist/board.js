@@ -25,6 +25,9 @@
  * task's trail from GET /api/tasks/:id/audit. Red line 1 is a display rule
  * and a selftest gate: card markup carries model/instance/cost, never
  * persona wording.
+ * 2.3.0 - I-034: gateFromScope/gateBadge take an optional approval floor - an
+ * SOP gate-step card (additive tasks.approval=1) never answers 'autonomous'
+ * or 'n/a'; those cards carry an APPROVAL chip next to the owner chip.
  */
 var CP;
 (function (CP) {
@@ -105,7 +108,8 @@ var CP;
         row.innerHTML = t ? depRowHtml(t, deps) : '';
     }
     /** Scroll the linked card into view and flash it (it may sit in another
-     *  column, so the lookup spans the whole board). */
+     *  column, so the lookup spans the whole board). Exported for the R36
+     *  cross-view navigation: a bar click lands back on the card. */
     function gotoCard(taskId) {
         const el = document.querySelector('.kb-card[data-task-id="' + CSS.escape(taskId) + '"]');
         if (!el) {
@@ -118,6 +122,7 @@ var CP;
         el.classList.add('kb-flash');
         window.setTimeout(() => el.classList.remove('kb-flash'), 1600);
     }
+    CP.gotoCard = gotoCard;
     /** S2 blocking signal: fixed stuck threshold N=24 hours (documented, not tunable). */
     CP.STUCK_HOURS = 24;
     /* ---- I-033: card AI dimensions (model / confidence / gate / audit) ----- */
@@ -159,8 +164,11 @@ var CP;
      * confidence below `thr` escalates the badge to at least needs-ack: an
      * autonomous card becomes needs-ack; never-auto is already stricter and
      * stays. Rows not loaded (or unknown owner type) answer needs-ack.
+     * I-034: `approval` (an SOP gate step) floors the result the same way -
+     * an approval card never answers 'autonomous' or 'n/a'; never-auto stays
+     * because it is already stricter than needs-ack.
      */
-    function gateFromScope(row, confidence, thr) {
+    function gateFromScope(row, confidence, thr, approval) {
         let base = 'needs-ack';
         if (row) {
             if (scopeActive(row.never_automatic))
@@ -173,13 +181,15 @@ var CP;
         if (base === 'autonomous' && confidence !== null && Number.isFinite(confidence) && confidence < thr) {
             return 'needs-ack';
         }
+        if (approval && base === 'autonomous')
+            return 'needs-ack';
         return base;
     }
     CP.gateFromScope = gateFromScope;
     /** The card's badge: owner-scope row for the owner type + the live
-     *  Settings threshold. */
-    function gateBadge(ownerType, confidence) {
-        return gateFromScope(scopeRow(ownerType), confidence, confThreshold());
+     *  Settings threshold + the I-034 approval floor. */
+    function gateBadge(ownerType, confidence, approval) {
+        return gateFromScope(scopeRow(ownerType), confidence, confThreshold(), approval);
     }
     CP.gateBadge = gateBadge;
     /** Which card's audit popover is open (one at a time). */
@@ -362,14 +372,34 @@ var CP;
         const el = document.createElement('article');
         el.className = 'kb-card';
         el.setAttribute('draggable', 'true');
-        el.innerHTML = `<div class="kb-card-top"><span class="kb-owner-chip"></span><span class="kb-parent"></span><span class="kb-owner"></span><button type="button" class="kb-dep-toggle" title="Show dependency links" aria-pressed="false">&#128279;</button></div>
+        el.innerHTML = `<div class="kb-card-top"><span class="kb-owner-chip"></span><span class="kb-parent"></span><span class="kb-owner"></span><span class="kb-approval" hidden>APPROVAL</span><button type="button" class="kb-dep-toggle" title="Show dependency links" aria-pressed="false">&#128279;</button></div>
       <h4 class="kb-title"></h4><div class="kb-role"></div>
       <div class="kb-cost"></div>
-      <div class="kb-ai"><span class="kb-model" title="Model / instance of the executor"></span><span class="kb-conf" title="Confidence; - when unset"></span><span class="kb-gate" title="Gate from the owner-scope table for this owner type"></span><button type="button" class="kb-audit" title="Open this task's audit trail" aria-expanded="false">audit</button></div>
+      <div class="kb-ai"><span class="kb-model" title="Model / instance of the executor"></span><span class="kb-conf" title="Confidence; - when unset"></span><span class="kb-gate" title="Gate from the owner-scope table for this owner type"></span><button type="button" class="kb-audit" title="Open this task's audit trail" aria-expanded="false">audit</button><button type="button" class="kb-jump-axis" title="Switch to the hour axis and flash this task's bar">-> hour axis</button></div>
       <div class="kb-handoff"></div>
       <div class="kb-window"></div>
       <div class="kb-dep-row"></div>
       <div class="kb-audit-pop" hidden></div>`;
+        /* R36: the card's `-> hour axis` control - switch to tab 2 and flash the
+           paired bar. The click stops here so the card click (audit popover,
+           selection) is untouched. */
+        el.querySelector('.kb-jump-axis').addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const id = el.dataset.taskId;
+            if (!id)
+                return;
+            CP.switchWbTab('axis');
+            const bar = document.querySelector('.gbar[data-task-id="' + CSS.escape(id) + '"]');
+            if (!bar) {
+                CP.toast('Bar not on the hour axis: ' + id);
+                return;
+            }
+            bar.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            bar.classList.remove('kb-flash');
+            void bar.offsetWidth;
+            bar.classList.add('kb-flash');
+            window.setTimeout(() => bar.classList.remove('kb-flash'), 1600);
+        });
         return el;
     }
     function cardUpdate(el, t) {
@@ -390,6 +420,10 @@ var CP;
         const par = el.querySelector('.kb-parent');
         par.textContent = t.parent_id ? 'in ' + t.parent_id : '';
         par.style.display = t.parent_id ? '' : 'none';
+        /* I-034: APPROVAL badge on SOP gate-step cards (additive tasks.approval). */
+        const appr = el.querySelector('.kb-approval');
+        const isApproval = Number(t.approval || 0) === 1;
+        appr.hidden = !isApproval;
         /* R22: the tree is visible as an indent. Depth lives in its own custom
            property so the stylesheet derives the indent from it. */
         const depth = CP.taskDepth(CP.store.state ? CP.store.state.tasks : [], t.id);
@@ -412,7 +446,7 @@ var CP;
         const confEl = el.querySelector('.kb-conf');
         confEl.textContent = 'conf: ' + (confOk ? confNum.toFixed(2) : '-');
         confEl.dataset.conf = confOk ? String(confNum) : '';
-        const gate = gateBadge(t.owner_type, confOk ? confNum : null);
+        const gate = gateBadge(t.owner_type, confOk ? confNum : null, isApproval);
         const gateEl = el.querySelector('.kb-gate');
         gateEl.textContent = gate;
         gateEl.dataset.gate = gate;
@@ -466,16 +500,12 @@ var CP;
         document.querySelectorAll('.kb-card.is-ghost').forEach((el) => el.classList.remove('is-ghost'));
         dropTarget = null;
         draggingId = null;
-        CP.setLinkHover(null);
     }
     function onDragStart(e) {
         const card = e.target.closest('.kb-card');
         if (!card || !e.dataTransfer || !card.dataset.taskId)
             return;
         draggingId = card.dataset.taskId;
-        /* I-037: the dragged card lights its hour-axis bar for the whole drag -
-           one dataset, one move, visible on both surfaces. */
-        CP.setLinkHover(draggingId);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', draggingId);
         window.setTimeout(() => card.classList.add('is-ghost'), 0);
@@ -532,12 +562,6 @@ var CP;
         suppressClick = true;
         window.setTimeout(() => { suppressClick = false; }, 180);
         cleanup();
-        /* I-037: the pointer rests where the card landed - re-derive the paired
-           highlight from what is actually under it after the drop. */
-        const landed = document.elementFromPoint(e.clientX, e.clientY);
-        const landedNode = landed && typeof landed.closest === 'function'
-            ? landed.closest('[data-task-id]') : null;
-        CP.setLinkHover(landedNode && landedNode.dataset.taskId ? landedNode.dataset.taskId : null);
         const ref = info.ref ? CP.taskById(info.ref) : undefined;
         let sort = 0;
         const same = CP.store.state.tasks.filter((x) => x.status === info.status && x.id !== id).sort((a, b) => a.sort - b.sort);

@@ -13,7 +13,28 @@
  * READ-ONLY demo mode serving seeded in-memory state (no disk writes). In that
  * mode state.degraded = true and state.degraded_reason carries the failure text;
  * write endpoints return a readOnly marker instead of persisting.
- * VERSION: 2.6.0 - I-038 R32: planSync-class node CRUD behind the same
+ * VERSION: 2.8.1 - I-035 R35 fix addendum: approval pass derives from acks
+ * OUTCOMES (pass rate over decided asks: n = state IN ('IN_PROGRESS','DONE'),
+ * m = state <> 'ACK' - the signed mockup's pass-rate semantics; the
+ * pre-dispatch lock had named the wrong source table). 2.8.0 - I-035 R35: GET /api/stats - pure ops-stats derivation
+ * (store.stats) from existing rows only: approval pass <- acks decided
+ * pass rate, human wait <- acks decided mean(updated-created) hours,
+ * completion <- tasks done/all, member load <- tasks open grouped by owner
+ * desc; zero writes, zero new stores, null/[] on empty sources (UI renders
+ * n/a, never 0%), no timestamps in the payload so two calls are identical.
+ * 2.7.0 - I-034 R35: SOP template pack. Additive wbs_templates kind
+ * 'sop' seeded with exactly two payloads (Code review / Research, step names
+ * and approval flags pinned by the R35 lock); apply-template branches on a
+ * payload.steps array to instantiate one work unit per step (status 'pending'
+ * from the frozen vocab - SOP payloads never carry 'todo'), FS links in order
+ * written into task_deps (lag 0, nature 'mandatory'), the approval flag on the
+ * gate step kept plan-only additive (like notes/owner) and mirrored into the
+ * additive tasks.approval column so the Work board card can badge it; the SOP
+ * apply runs through writeNodeStores (evidence -> PRD -> plan renames, SQLite
+ * task/dep rows in the same transaction, rollback on failure) while the six
+ * builtin WBS templates keep their plan-only apply byte-identical. POST
+ * /api/templates gains as_sop: save an ordered W chain as a named SOP
+ * template (round-trip). 2.6.0 - I-038 R32: planSync-class node CRUD behind the same
  * PUT /api/plan/structure door - create-milestone | create-work-unit |
  * update-node | delete-node. One atomic commit spans milestone-plan.json +
  * docs/evidence/milestones.json (membership + status) + docs/PRD.md (Status
@@ -132,7 +153,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   cost REAL NOT NULL DEFAULT 0, sort INTEGER NOT NULL DEFAULT 0,
   parent_id TEXT NOT NULL DEFAULT '', baseline_start TEXT NOT NULL DEFAULT '',
   baseline_end TEXT NOT NULL DEFAULT '',
-  model TEXT NOT NULL DEFAULT '', confidence REAL
+  model TEXT NOT NULL DEFAULT '', confidence REAL,
+  approval INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS task_deps (
   from_id TEXT NOT NULL, to_id TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'FS',
@@ -204,6 +226,11 @@ CREATE TABLE IF NOT EXISTS wbs_templates (
   const hadConf = taskCols.indexOf('confidence') >= 0;
   if (!hadModel) db.exec("ALTER TABLE tasks ADD COLUMN model TEXT NOT NULL DEFAULT ''");
   if (!hadConf) db.exec('ALTER TABLE tasks ADD COLUMN confidence REAL');
+  /* I-034: additive approval flag (1 = SOP gate step). Same add-once pattern;
+     DEFAULT 0 backfills pre-existing rows so every OLD column stays identical. */
+  if (taskCols.indexOf('approval') < 0) {
+    db.exec('ALTER TABLE tasks ADD COLUMN approval INTEGER NOT NULL DEFAULT 0');
+  }
   if (!hadModel || !hadConf) {
     /* One-time migration backfill: fills ONLY the new columns on rows that
        predate them. Every OLD column value and row is left byte-identical;
@@ -1023,6 +1050,34 @@ const BUILTIN_TEMPLATES = [
   },
 ];
 
+/* I-034 R35 SOP pack: exactly two seeded process templates, kind 'sop'.
+ * Payload shape is additive and distinct from the WBS shape: steps[] carries
+ * the ordered chain (one work unit per step on apply); approval:true marks the
+ * gate step (plan-only additive flag, like notes/owner). Ids/names/step titles
+ * and the approval flags are pinned by the R35 acceptance lock - do not reword.
+ * The six builtin WBS templates above keep byte-identical payloads. */
+const SOP_TEMPLATES = [
+  {
+    id: 'sop-code-review', name: 'Code review', kind: 'sop',
+    steps: [
+      { title: 'lint' },
+      { title: 'test' },
+      { title: 'review', approval: true },
+      { title: 'merge' },
+    ],
+  },
+  {
+    id: 'sop-research', name: 'Research', kind: 'sop',
+    steps: [
+      { title: 'question' },
+      { title: 'gather' },
+      { title: 'verify', approval: true },
+      { title: 'write-up' },
+    ],
+  },
+];
+const SOP_PROVENANCE = 'R35 SOP pack (human-signed mockups 2026-11-11); content authored fresh';
+
 /** Parse milestone-plan.json strictly; used by every structure write so a
  *  corrupt or absent file is a thrown error (route -> 400), never a write. */
 function readPlanRaw() {
@@ -1430,6 +1485,12 @@ function structureApply(op) {
   try { payload = JSON.parse(row.payload); } catch (e) {
     throw new Error('template payload invalid: ' + templateId);
   }
+  /* I-034: a payload with steps[] is an SOP - it takes the SOP branch below.
+     The six builtin WBS templates (milestones[]) keep the plan-only apply
+     path byte-identical; nothing in that path changed this round. */
+  if (payload && Array.isArray(payload.steps)) {
+    return structureApplySop(target, templateId, payload.steps);
+  }
   const tplMs = payload && Array.isArray(payload.milestones) ? payload.milestones : [];
   const plan = readPlanRaw();
   const { freshM, freshW } = makeFreshIds(plan);
@@ -1516,6 +1577,97 @@ function structureApply(op) {
   return {
     ok: true, kind: 'apply-template', target, template_id: templateId,
     added_milestones: addedM, added_work_units: addedW,
+  };
+}
+
+/**
+ * I-034 R35: apply an SOP template (payload.steps) under a MILESTONE target.
+ * One work unit per step (fresh makeFreshIds series, status 'pending' - the
+ * frozen vocab has no 'todo' and SOP payloads never carry it), FS links in
+ * order into task_deps (lag 0, nature 'mandatory'), approval flag on the gate
+ * step kept plan-only additive (like notes/owner) and mirrored into the
+ * additive tasks.approval column so the Work board card can badge it. This
+ * branch runs through writeNodeStores - evidence sub_lines sync -> PRD (null
+ * here: no milestone changes) -> plan renames, SQLite task/dep rows inside the
+ * same transaction, full rollback on failure - so prd-to-action 10/10 and
+ * plan-sync --check stay green after every SOP apply. Goal targets are
+ * refused (the SOP chain lands on one milestone); the six builtin WBS
+ * templates never enter this function.
+ */
+function structureApplySop(target, templateId, steps) {
+  if (DEGRADED) throw new Error('read-only demo mode: structure writes unavailable');
+  if (!Array.isArray(steps) || !steps.length) {
+    throw new Error('template has no steps to instantiate under ' + target);
+  }
+  const plan = readPlanRaw();
+  const targetM = plan.milestones.filter((m) => String(m.id) === target)[0];
+  if (!targetM) throw new Error('SOP apply requires a milestone target: ' + target);
+  const { freshW } = makeFreshIds(plan);
+  let base = 0;
+  plan.milestones.concat(plan.work_units).forEach((x) => {
+    base = Math.max(base, Number(x.end_offset_h) || 0, Number(x.start_offset_h) || 0);
+  });
+  const n = steps.length;
+  const step = Math.max(1, Math.floor(12 / n));
+  const units = [];
+  const addedW = [];
+  const approvalSteps = [];
+  steps.forEach((s, j) => {
+    const wid = freshW();
+    const title = String((s && s.title) || ('Step ' + (j + 1)));
+    const wStart = base + 4 + j * step;
+    const wEnd = wStart + step;
+    const u = {
+      id: wid, milestone_id: target, title, owner: 'Unassigned', owner_type: 'main',
+      start_offset_h: wStart, end_offset_h: wEnd, status: 'pending', progress: 0,
+      tier: 'S', billed: 0, cost: 0,
+    };
+    if (s && s.approval) {
+      u.approval = true;
+      approvalSteps.push(title);
+    }
+    units.push(u);
+    addedW.push(wid);
+  });
+  const addedDeps = [];
+  for (let i = 0; i + 1 < addedW.length; i += 1) {
+    addedDeps.push({ from: addedW[i], to: addedW[i + 1], type: 'FS', lag: 0, nature: 'mandatory' });
+  }
+  units.forEach((u) => plan.work_units.push(u));
+  if (!plan.sub_lines || typeof plan.sub_lines !== 'object') plan.sub_lines = {};
+  const sub = Array.isArray(plan.sub_lines[target]) ? plan.sub_lines[target].slice() : [];
+  addedW.forEach((wid) => { if (sub.map(String).indexOf(wid) < 0) sub.push(wid); });
+  plan.sub_lines[target] = sub;
+  normalizePlanArrays(plan);
+  validatePlanStructure(plan);
+  const docs = prepareNodeDocs(plan);
+  const sqliteApply = (conn) => {
+    if (!conn.prepare('SELECT id FROM columns WHERE id=?').get('pending')) {
+      const colSort = conn.prepare('SELECT COALESCE(MAX(sort),0)+1 AS n FROM columns').get().n;
+      conn.prepare('INSERT INTO columns(id,label,color,sort) VALUES(?,?,?,?)')
+        .run('pending', 'Pending', '#8e8e93', colSort);
+    }
+    units.forEach((u) => {
+      if (conn.prepare('SELECT id FROM tasks WHERE id=?').get(u.id)) {
+        throw new Error('task row already exists: ' + u.id);
+      }
+      const sort = conn.prepare('SELECT COALESCE(MAX(sort),0)+1 AS n FROM tasks').get().n;
+      conn.prepare(`INSERT INTO tasks(id,title,owner,owner_type,role,handoff,status,start,end,
+        progress,placeholder,tier,billed,cost,sort,parent_id,approval) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(u.id, u.title, u.owner, u.owner_type, u.milestone_id, 'from milestone-plan.json',
+          u.status, at(u.start_offset_h), at(u.end_offset_h), u.progress, 0, u.tier,
+          u.billed, u.cost, sort, '', u.approval ? 1 : 0);
+    });
+    addedDeps.forEach((d) => {
+      conn.prepare('INSERT OR REPLACE INTO task_deps(from_id,to_id,type,lag,nature) VALUES(?,?,?,?,?)')
+        .run(d.from, d.to, d.type, d.lag, d.nature);
+    });
+  };
+  writeNodeStores(plan, docs.evidence, docs.prd, sqliteApply);
+  return {
+    ok: true, kind: 'apply-template', mode: 'sop', target, template_id: templateId,
+    added_milestones: [], added_work_units: addedW, added_deps: addedDeps,
+    status: 'pending', approval_steps: approvalSteps,
   };
 }
 
@@ -2132,7 +2284,8 @@ function planStructureUpdate(op) {
     + ' (allowed: move, apply-template, create-milestone, create-work-unit, update-node, delete-node)');
 }
 
-/** Idempotent boot seed: INSERT OR IGNORE keeps saved templates intact. */
+/** Idempotent boot seed: INSERT OR IGNORE keeps saved templates intact.
+ *  I-034: the two SOP payloads seed the same way under kind 'sop'. */
 function seedTemplates() {
   if (DEGRADED) return;
   const ins = db.prepare(`INSERT OR IGNORE INTO wbs_templates
@@ -2142,9 +2295,15 @@ function seedTemplates() {
     ins.run(t.id, t.name, TEMPLATE_PROVENANCE, 'builtin',
       JSON.stringify({ milestones: t.milestones }), created);
   });
+  SOP_TEMPLATES.forEach((t) => {
+    ins.run(t.id, t.name, SOP_PROVENANCE, 'sop',
+      JSON.stringify({ steps: t.steps }), created);
+  });
 }
 
-/** GET /api/templates: built-ins first (kind, name), then saved subtrees. */
+/** GET /api/templates: built-ins first (kind, name), then saved subtrees.
+ *  I-034: an SOP row reports its ordered steps (title + approval flag) so the
+ *  library modal can preview the chain; WBS rows keep the exact shape. */
 function listTemplates() {
   if (DEGRADED) return { templates: [] };
   const rows = db.prepare(
@@ -2155,21 +2314,34 @@ function listTemplates() {
       let payload = {};
       try { payload = JSON.parse(r.payload); } catch (_e) { payload = {}; }
       const ms = payload && Array.isArray(payload.milestones) ? payload.milestones : [];
-      return {
+      const steps = payload && Array.isArray(payload.steps) ? payload.steps : [];
+      const out = {
         id: String(r.id), name: String(r.name), provenance: String(r.provenance),
         kind: String(r.kind), created: String(r.created),
         n_milestones: ms.length,
         n_work_units: ms.reduce((a, m) => a + (m && Array.isArray(m.work_units) ? m.work_units.length : 0), 0),
       };
+      if (steps.length) {
+        out.n_work_units = steps.length;
+        out.steps = steps.map((s) => ({
+          title: String((s && s.title) || ''),
+          approval: !!(s && s.approval),
+        }));
+      }
+      return out;
     }),
   };
 }
 
 /** POST /api/templates: save the plan subtree at source_node (G or M row)
- *  as a named template. Additive row only - the plan file is not touched. */
+ *  as a named template. Additive row only - the plan file is not touched.
+ *  I-034: as_sop saves the ordered W chain of a MILESTONE source as an SOP
+ *  template (kind 'sop', payload.steps with each step's approval flag carried
+ *  over) so [save W chain as SOP] round-trips through the same apply door. */
 function saveTemplate(input) {
   const name = String((input && input.name) || '').trim();
   const src = String((input && input.source_node) || '').trim();
+  const asSop = !!(input && (input.as_sop === true || input.as === 'sop' || input.kind === 'sop'));
   if (DEGRADED) return readOnly({ id: '', name, source_node: src });
   if (!name) throw new Error('template name required');
   if (name.length > 60) throw new Error('template name too long (max 60)');
@@ -2178,6 +2350,26 @@ function saveTemplate(input) {
   const goal = (plan.goals || []).filter((g) => g && String(g.id) === src)[0];
   const ms = plan.milestones.filter((m) => String(m.id) === src)[0];
   if (!goal && !ms) throw new Error('unknown source node: ' + src);
+  if (asSop) {
+    if (!ms) throw new Error('SOP save requires a milestone source (a W chain lives under one milestone): ' + src);
+    const ids = wuSeqOf(plan, String(ms.id));
+    if (!ids.length) throw new Error('source milestone has no work units to save as an SOP chain');
+    const steps = ids.map((wid) => {
+      const w = plan.work_units.filter((x) => String(x.id) === wid)[0];
+      const step = { title: String((w && w.title) || wid) };
+      if (w && w.approval) step.approval = true;
+      return step;
+    });
+    const id = 'tpl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    const provenance = 'saved W chain from milestone ' + src;
+    const created = iso(new Date());
+    db.prepare(`INSERT INTO wbs_templates(id,name,provenance,kind,payload,created)
+      VALUES(?,?,?,?,?,?)`).run(id, name, provenance, 'sop', JSON.stringify({ steps }), created);
+    return {
+      id, name, provenance, kind: 'sop', created,
+      n_milestones: 0, n_work_units: steps.length,
+    };
+  }
   const milestones = [];
   if (goal) {
     (Array.isArray(goal.milestone_ids) ? goal.milestone_ids : []).forEach((mid) => {
@@ -2384,6 +2576,85 @@ function restore(name) {
   return { ok: true, restored: name };
 }
 
+/* ---- I-035 R35: ops stats (GET /api/stats) ------------------------------
+ * Pure derivation from existing rows: zero writes, zero new stores, no
+ * timestamps in the payload (two calls return identical JSON). Every metric
+ * names its table + filter here - this comment block is the R35 lock's
+ * per-metric source line, mirrored in the handback:
+ *   1. approval pass  - table acks, filter decided rows (state <> 'ACK');
+ *      n = state IN ('IN_PROGRESS','DONE') (passed), m = decided asks;
+ *      pct = round(n/m*100, 1). Same decided-row filter family as human
+ *      wait. No decided rows -> m 0, pct null (renders n/a, never 0%).
+ *   2. human wait     - table acks, filter state <> 'ACK' (decided rows:
+ *      the human closed the ask); mean hours of (updated - created) =
+ *      ask-to-human-ACK. No decided rows -> mean_hours null (renders n/a,
+ *      never 0).
+ *   3. completion     - table tasks, filter status = 'done' (n) over all
+ *      rows (m); pct = round(n/m*100, 1). No tasks -> pct null (n/a).
+ *   4. member load    - table tasks, filter status <> 'done' (open), grouped
+ *      by owner, ordered open DESC then owner ASC (deterministic ties).
+ * Empty sources surface as null / [] so the UI shows 'n/a', never 0%.
+ * ------------------------------------------------------------------------ */
+const STATS_EMPTY = Object.freeze({
+  approval_pass: { n: 0, m: 0, pct: null },
+  human_wait: { decided: 0, mean_hours: null },
+  completion: { n: 0, m: 0, pct: null },
+  member_load: [],
+});
+
+function statsPct(n, m) {
+  if (!(m > 0)) return null;
+  return Math.round((n * 1000) / m) / 10;
+}
+
+function stats() {
+  if (DEGRADED) return JSON.parse(JSON.stringify(STATS_EMPTY));
+  /* 1+2. One decided-row scan feeds both ack metrics: approval pass is the
+     PASS RATE over decided asks (n = state IN ('IN_PROGRESS','DONE'),
+     m = state <> 'ACK'), human wait is the mean ask-to-human-ACK hours.
+     The mockup's pass-rate semantics govern (R35 fix addendum); the policy
+     matrix (approval_actions) is NOT a metric source. */
+  const decided = db.prepare(
+    "SELECT state, created, updated FROM acks WHERE state <> 'ACK' ORDER BY id",
+  ).all();
+  const passed = decided.filter(
+    (r) => r.state === 'IN_PROGRESS' || r.state === 'DONE',
+  ).length;
+  let waitSum = 0;
+  decided.forEach((r) => {
+    const t0 = new Date(String(r.created).replace('T', ' ')).getTime();
+    const t1 = new Date(String(r.updated).replace('T', ' ')).getTime();
+    if (Number.isFinite(t0) && Number.isFinite(t1) && t1 >= t0) {
+      waitSum += (t1 - t0) / 3600000;
+    }
+  });
+  /* 3. completion <- tasks WHERE status = 'done' / all tasks. */
+  const comp = db.prepare(
+    'SELECT COUNT(*) AS m, COALESCE(SUM(CASE WHEN status = \'done\' THEN 1 ELSE 0 END), 0) AS n'
+    + ' FROM tasks',
+  ).get();
+  /* 4. member load <- tasks WHERE status <> 'done', GROUP BY owner DESC/ASC. */
+  const load = db.prepare(
+    "SELECT owner, COUNT(*) AS open FROM tasks WHERE status <> 'done'"
+    + ' GROUP BY owner ORDER BY open DESC, owner ASC',
+  ).all();
+  return {
+    approval_pass: {
+      n: passed, m: decided.length, pct: statsPct(passed, decided.length),
+    },
+    human_wait: {
+      decided: decided.length,
+      mean_hours: decided.length
+        ? Math.round((waitSum / decided.length) * 10) / 10
+        : null,
+    },
+    completion: {
+      n: Number(comp.n) || 0, m: Number(comp.m) || 0, pct: statsPct(Number(comp.n) || 0, Number(comp.m) || 0),
+    },
+    member_load: load.map((r) => ({ owner: String(r.owner || ''), open: Number(r.open) || 0 })),
+  };
+}
+
 function snapshot() {
   const s = state();
   const open = s.issues.filter((x) => x.status !== 'done');
@@ -2430,7 +2701,7 @@ module.exports = {
   createColumn, updateColumn, deleteColumn, moveColumn,
   updateIssue, upsertIssue, setCommand, setCharter, snapshot, importHandoff, importAll,
   plan: readPlan,
-  planStructureUpdate, listTemplates, saveTemplate,
+  planStructureUpdate, listTemplates, saveTemplate, stats,
   createAck, listAcks, updateAck, backup, restore, degradedInfo,
   listTaskDeps, setTaskDep, deleteTaskDep, snapshotBaseline,
   listApprovals, listOwnerScopes,

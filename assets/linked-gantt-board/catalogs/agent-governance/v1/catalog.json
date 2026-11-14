@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/catalogs/agent-governance/v1/catalog.json",
+  "catalogId": "https://example.com/catalogs/agent-governance/v1/catalog.json",
+  "protocolVersion": "1.0",
+  "title": "Agent Governance Catalog",
+  "description": "Decision-surface catalog for multi-agent governance: ask cards, pre-execution review cards, and immutable decision records. Extends the A2UI basic catalog (Column, Row, Text, Button, TextField) - define only the semantic cards unique to agent governance.",
+  "instructions": "You are a governance-aware agent. Use these cards exactly as follows.\n\n## AskCard\nUse when you are BLOCKED on a human decision (acceptance sign-off, dispatch permission, judgment verdict, issue triage). One open AskCard per decision point. `askId` MUST be the real approval-ledger row id - never invent one, never free-text a decision endpoint. Put live values (owner, age, counters) in the data model and bind via `@path`; never hardcode a live number in a property literal.\n\n## ReviewCard\nUse BEFORE any batch execution (acceptance batch, battery run, release gate). `summary` lists exactly what will change; editable fields let the human trim scope; the confirm action is the ONLY path to execution. If the human edits fields, re-read them before executing.\n\n## DecisionRecord\nRead-only audit stamp. Render after a decision lands - never editable, never regenerated. Decision enum maps to ledger states: approve -> decided pass, reject -> decided fail, defer -> kept open.\n\n## Functions\n`recordDecision` (agentOnly) is the ONLY way a decision reaches the ledger; the renderer emits decision events and the agent calls this function. `formatAskAge` (rendererOnly) is display-only. Never swap their call sides.\n\n## Composition\nPlace cards inside basic-catalog `Column`/`List`. Use basic `Button` with an Action event for options and confirmations; use basic `Text` for evidence rows. Do not invent new component types in a surface - if a shape is missing, extend this catalog file instead.",
+  "components": {
+    "AskCard": {
+      "type": "object",
+      "description": "A blocking decision request from an agent to a human, with typed options and evidence rows. Opens an ask in the approval ledger.",
+      "properties": {
+        "component": { "const": "AskCard" },
+        "askId": {
+          "type": "string",
+          "description": "Approval-ledger row id this card is bound to."
+        },
+        "title": { "$ref": "common_types.json#/$defs/DynamicString" },
+        "question": { "$ref": "common_types.json#/$defs/DynamicString" },
+        "evidence": {
+          "$ref": "common_types.json#/$defs/ChildList",
+          "description": "Evidence rows (basic Text components with source links)."
+        },
+        "options": {
+          "$ref": "common_types.json#/$defs/ChildList",
+          "description": "Option buttons (basic Button components, each carrying an Action event to the agent)."
+        }
+      },
+      "required": ["component", "askId", "title", "question", "options"]
+    },
+    "ReviewCard": {
+      "type": "object",
+      "description": "Pre-execution review: what will change, with editable scope fields and confirm actions. Execution happens only after the human confirms.",
+      "properties": {
+        "component": { "const": "ReviewCard" },
+        "reviewId": {
+          "type": "string",
+          "description": "Id of the pending execution this card reviews."
+        },
+        "title": { "$ref": "common_types.json#/$defs/DynamicString" },
+        "summary": {
+          "$ref": "common_types.json#/$defs/DynamicString",
+          "description": "Exact change list that confirmation will authorize."
+        },
+        "fields": {
+          "$ref": "common_types.json#/$defs/ChildList",
+          "description": "Editable scope fields (basic TextField/Checkbox components)."
+        },
+        "actions": {
+          "$ref": "common_types.json#/$defs/ChildList",
+          "description": "Confirm and save-draft buttons (basic Button components with Actions)."
+        }
+      },
+      "required": ["component", "reviewId", "title", "summary", "actions"]
+    },
+    "DecisionRecord": {
+      "type": "object",
+      "description": "Immutable audit stamp for a decided ask. Read-only; never regenerated.",
+      "properties": {
+        "component": { "const": "DecisionRecord" },
+        "askId": {
+          "type": "string",
+          "description": "Approval-ledger row id this decision closed."
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["approve", "reject", "defer"]
+        },
+        "decidedBy": { "$ref": "common_types.json#/$defs/DynamicString" },
+        "decidedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp of the decision."
+        },
+        "note": { "$ref": "common_types.json#/$defs/DynamicString" }
+      },
+      "required": ["component", "askId", "decision", "decidedBy", "decidedAt"]
+    }
+  },
+  "functions": {
+    "recordDecision": {
+      "type": "object",
+      "description": "Records a human decision for an ask into the governance ledger. Called only by the agent after it receives a decision event from the renderer.",
+      "properties": {
+        "@call": { "const": "recordDecision" },
+        "args": {
+          "type": "object",
+          "properties": {
+            "askId": { "type": "string" },
+            "decision": {
+              "type": "string",
+              "enum": ["approve", "reject", "defer"]
+            },
+            "note": { "type": "string" }
+          },
+          "required": ["askId", "decision"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["@call"],
+      "additionalProperties": false,
+      "returnType": "boolean",
+      "allowedCallers": "agentOnly"
+    },
+    "formatAskAge": {
+      "type": "object",
+      "description": "Formats the age of an ask for display (for example '3h 12m'). Pure presentation; no state.",
+      "properties": {
+        "@call": { "const": "formatAskAge" },
+        "args": {
+          "type": "object",
+          "properties": {
+            "openedAt": {
+              "type": "string",
+              "description": "ISO 8601 timestamp when the ask opened."
+            }
+          },
+          "required": ["openedAt"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["@call"],
+      "additionalProperties": false,
+      "returnType": "string",
+      "allowedCallers": "rendererOnly"
+    }
+  },
+  "$defs": {
+    "anyComponent": {
+      "oneOf": [
+        { "$ref": "#/components/AskCard" },
+        { "$ref": "#/components/ReviewCard" },
+        { "$ref": "#/components/DecisionRecord" }
+      ],
+      "discriminator": { "propertyName": "component" }
+    },
+    "anyFunction": {
+      "oneOf": [
+        { "$ref": "#/functions/recordDecision" },
+        { "$ref": "#/functions/formatAskAge" }
+      ],
+      "discriminator": { "propertyName": "@call" }
+    }
+  }
+}

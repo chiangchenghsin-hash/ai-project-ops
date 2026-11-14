@@ -270,12 +270,12 @@
       "title": "Settings page: port, language, color scheme and friends",
       "source": "human chat 2026-11-09, live review of demo page",
       "detail": "Human words, translated from Chinese: make a settings page where port, language (yan-wen, read as yu-yan), color scheme etc. can be adjusted. Acceptance: a dedicated Settings nav page (human said page, not modal) with rows for at least theme, language and port. Constraint to resolve at sign-off: the package gate demands zero CJK in shipped files, so a Chinese UI dictionary conflicts with the gate unless the human lifts it. Port is read at server boot (PANEL_PORT); live change needs a restart cycle. Mockup sign-off before build per I-021.",
-      "reply": "Theme/port/glass/layout rows landed in R27 (120/120). Language row is present but LOCKED: a Chinese UI dictionary violates the zero-CJK shipped-files gate. Lifting that gate is a human decision; keep issue open until the human rules.",
+      "reply": "Human ruling 2026-11-14: English-only. The zero-CJK shipped-files gate stands untouched; no Chinese UI dictionary will ship. Theme/port/glass/layout rows landed in R27 (battery 120/120); the language row stays locked at English, which now matches the ruling. Closed by this ruling; no code change required.",
       "enddate": "",
       "urgent": 0,
-      "status": "open",
+      "status": "done",
       "opened": "2026-11-09T06:11:06.843Z",
-      "updated": "2026-11-10T02:56:47.260Z"
+      "updated": "2026-11-14T09:03:16.589Z"
     },
     {
       "id": "I-024",
@@ -405,8 +405,9 @@
       "reply": "",
       "enddate": "",
       "urgent": 0,
-      "status": "open",
-      "opened": "2026-11-10T04:33:36.205Z"
+      "status": "done",
+      "opened": "2026-11-10T04:33:36.205Z",
+      "updated": "2026-11-12T04:00:39.941Z"
     },
     {
       "id": "I-035",
@@ -416,8 +417,9 @@
       "reply": "",
       "enddate": "",
       "urgent": 0,
-      "status": "open",
-      "opened": "2026-11-10T04:33:36.395Z"
+      "status": "done",
+      "opened": "2026-11-10T04:33:36.395Z",
+      "updated": "2026-11-12T04:00:40.127Z"
     },
     {
       "id": "I-036",
@@ -454,6 +456,18 @@
       "status": "done",
       "opened": "2026-11-10T10:12:51.565Z",
       "updated": "2026-11-10T14:56:01.649Z"
+    },
+    {
+      "id": "I-039",
+      "title": "Work board tabbed presentation (kanban / hour axis) instead of the side-by-side squeeze",
+      "source": "human live-acceptance 2026-11-12",
+      "detail": "Human on the live page: work board and hour axis are squeezed together for no reason; use pagination for style consistency. Judgment + mockup presented; sign-off pending.",
+      "reply": "Closed by the R36 round: two-tab Work board ([Work board] / [Hour axis], cp.wb-tab), explicit cross-view jumps, split + hover retired; battery 236/236 PASS exit 0; judged PASS in docs/TASK-LOG.md 2026-11-14.",
+      "enddate": "",
+      "urgent": 0,
+      "status": "done",
+      "opened": "2026-11-12T04:42:19.946Z",
+      "updated": "2026-11-14T08:55:51.675Z"
     }
   ]
 }

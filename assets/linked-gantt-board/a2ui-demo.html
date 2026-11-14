@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AUI-01 - Agent Governance Cards (A2UI v1.0 demo)</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; max-width: 960px; }
+  h1 { font-size: 1.2em; }
+  .row { display: flex; gap: 24px; align-items: flex-start; }
+  .col { flex: 1; min-width: 0; }
+  .a2ui-card { border: 1px solid #888; border-radius: 8px; padding: 12px 16px; margin: 12px 0; }
+  .a2ui-card-title { margin: 0 0 6px; font-size: 1.05em; }
+  .a2ui-card-question { margin: 4px 0; }
+  .a2ui-evidence, .a2ui-options, .a2ui-fields, .a2ui-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .a2ui-evidence { display: block; }
+  .a2ui-evidence .a2ui-text { color: #555; font-size: 0.9em; margin: 2px 0; }
+  .a2ui-btn { padding: 6px 14px; cursor: pointer; }
+  .a2ui-decision { border-left: 4px solid #2a2; background: #f2faf2; padding: 8px 12px; margin: 12px 0; }
+  .a2ui-decision-reject { border-left-color: #c33; background: #faf2f2; }
+  .a2ui-decision-defer { border-left-color: #ca2; background: #faf6f2; }
+  .a2ui-decision-kind { font-weight: bold; text-transform: uppercase; margin-right: 8px; }
+  .a2ui-decision-by, .a2ui-decision-at { color: #555; margin-right: 8px; font-size: 0.9em; }
+  #wirelog { background: #111; color: #9f9; font: 12px/1.5 monospace; padding: 12px;
+             white-space: pre-wrap; max-height: 420px; overflow: auto; border-radius: 6px; }
+  .metric { font: bold 14px monospace; color: #06c; }
+  button.tool { margin: 4px 8px 4px 0; padding: 6px 12px; }
+</style>
+</head>
+<body>
+<h1>AUI-01 demo - governance decision cards on the A2UI v1.0 contract</h1>
+<p>Left: the rendered surface (layout once). Right: the exact v1.0 wire messages
+("what the agent wrote"). Live values ride <code>{"@path"}</code> data bindings;
+<code>updateDataModel</code> refreshes text without re-rendering structure;
+decision clicks emit agent-side events - the ledger write is the agentOnly
+<code>recordDecision</code> contract, never renderer-side state.</p>
+
+<div class="row">
+  <div class="col">
+    <h2>Surface</h2>
+    <div id="surface"></div>
+    <p>agent-only call this round-trip will make:
+      <code id="agentcall">recordDecision(askId=A-1)</code>
+      &nbsp; ask-to-ACK: <span class="metric" id="ack-ms">n/a</span></p>
+    <button class="tool" id="btn-update">Agent: updateDataModel (owner -&gt; "next")</button>
+    <button class="tool" id="btn-add">Agent: updateComponents (add DecisionRecord)</button>
+    <p id="struct-note"></p>
+  </div>
+  <div class="col">
+    <h2>Wire log</h2>
+    <div id="wirelog"></div>
+  </div>
+</div>
+
+<script src="./dist/a2ui.js"></script>
+<script>
+(function () {
+  var A2UI = CP.A2UI;
+  var logEl = document.getElementById("wirelog");
+  var renderedAt = Date.now();
+
+  function logWire(msg, note) {
+    logEl.textContent += (note ? "# " + note + "\n" : "") +
+      JSON.stringify(msg, null, 1) + "\n\n";
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  var components = [
+    { id: "root", component: "AskCard", askId: "A-1", role: "root",
+      title: "Sign-off: {owner} - Stage A governance cards",
+      question: "Ship the A2UI catalog + emitter + renderer for agent-governance?",
+      evidence: ["ev1", "ev2"],
+      options: ["btn-approve", "btn-reject"] },
+    { id: "ev1", component: "Text", text: "evidence: validator CATALOGS_VALID=true, a2ui-selftest 12/12" },
+    { id: "ev2", component: "Text", text: { "@call": "formatAskAge", args: { openedAt: "2026-11-14T00:00:00Z" } } },
+    { id: "btn-approve", component: "Button", label: "Approve",
+      action: { event: { name: "ask.decide", userMessage: "approve A-1" } } },
+    { id: "btn-reject", component: "Button", label: "Reject",
+      action: { event: { name: "ask.decide", userMessage: "reject A-1" } } }
+  ];
+  // title uses a {owner} placeholder kept literal for readability; real
+  // bindings use {"@path"} - demonstrate one below via the model.
+  components[0].title = { "@path": "/headline" };
+
+  var model = {
+    headline: "Sign-off: chian - Stage A governance cards",
+    owner: "chian",
+    askId: "A-1"
+  };
+
+  logWire(A2UI.createSurface("demo-surface", A2UI.GOVERNANCE_CATALOG_ID, components, model),
+    "createSurface (layout sent once)");
+
+  var events = [];
+  var handle = A2UI.renderSurface(document.getElementById("surface"), components, model, {
+    onEvent: function (name, msg) {
+      events.push([name, msg]);
+      var call = { recordDecision: { askId: "A-1", decision: msg && msg.indexOf("reject") >= 0 ? "reject" : "approve" } };
+      document.getElementById("agentcall").textContent = JSON.stringify(call);
+      var ms = Date.now() - renderedAt;
+      document.getElementById("ack-ms").textContent = ms + " ms (click -> agentOnly recordDecision)";
+      logWire({ agentEvent: { name: name, userMessage: msg } }, "renderer -> agent event (no ledger write here)");
+      logWire({ agentOnlyCall: call }, "agent side: recordDecision - ledger write happens HERE");
+      addDecision(call.recordDecision.decision, ms);
+    }
+  });
+
+  function addDecision(decision, ms) {
+    logWire(A2UI.updateComponents("demo-surface", [{
+      id: "dec-1", component: "DecisionRecord", askId: "A-1",
+      decision: decision, decidedBy: "human@panel", decidedAt: new Date().toISOString(),
+      note: "ask-to-ACK " + ms + " ms"
+    }]), "updateComponents (DecisionRecord lands)");
+    handle.updateDataModel({ lastDecision: decision });
+    // render the record through the same renderer path
+    var tmp = document.createElement("div");
+    CP.A2UI.renderSurface(tmp, [{
+      id: "dec-1", component: "DecisionRecord", askId: "A-1",
+      decision: decision, decidedBy: "human@panel", decidedAt: new Date().toISOString(),
+      note: "ask-to-ACK " + ms + " ms"
+    }], {});
+    document.getElementById("surface").appendChild(tmp.firstChild);
+  }
+
+  document.getElementById("btn-update").onclick = function () {
+    logWire(A2UI.updateDataModel("demo-surface", { owner: "next", headline: "Sign-off: next - Stage A governance cards" }),
+      "updateDataModel (data only - structure untouched)");
+    handle.updateDataModel({ owner: "next", headline: "Sign-off: next - Stage A governance cards" });
+    document.getElementById("struct-note").textContent =
+      "bound text refreshed in place; card nodes were not recreated";
+  };
+
+  document.getElementById("btn-add").onclick = function () {
+    addDecision("defer", Date.now() - renderedAt);
+  };
+})();
+</script>
+</body>
+</html>

@@ -44,3 +44,7 @@ Rules of thumb:
   command). A handback report is a claim, not proof.
 - After landing, the main session re-runs the agent's key verification command
   once; independent re-runs catch confident mistakes.
+- Live-SQLite data discipline (the panel.db trio lesson): never file-copy a
+  live database or its wal/shm - a stale trio mismatch IS a corruption
+  mechanism; restore row-level DML only. Name every quarantine artifact so a
+  cleanup glob cannot swallow it (panel-quarantine-*, never panel.db.*).

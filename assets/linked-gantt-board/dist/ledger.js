@@ -258,6 +258,52 @@ var CP;
         byId('roundTotal').textContent = `Total ${s.rounds.length} rounds | billed ${(s.totals.billed / 1e6).toFixed(1)}M | fresh ${(s.totals.fresh / 1e6).toFixed(1)}M | $${Number(s.totals.cost).toFixed(2)}`;
     }
     CP.patchLedger = patchLedger;
+    /** I-035: fill the four Meter tiles from GET /api/stats. Rendering only -
+     *  the derivation (table + filter per metric) lives in db.js; this function
+     *  adds no counts of its own. An empty source renders 'n/a'.
+     *  `override` is a test seam (R28 CP-seam rule): the selftest feeds an
+     *  empty-source payload to prove the n/a-not-0% render without stubbing
+     *  fetch or writing any row. */
+    async function patchStats(override) {
+        let s;
+        if (override) {
+            s = override;
+        }
+        else {
+            try {
+                const r = await fetch('/api/stats', { cache: 'no-store' });
+                if (!r.ok)
+                    throw new Error('HTTP ' + r.status);
+                s = await r.json();
+            }
+            catch (_e) {
+                return; /* tiles keep their placeholder until the next activation */
+            }
+        }
+        const ap = s.approval_pass;
+        byId('statApproval').textContent =
+            ap && ap.m > 0 && ap.pct !== null ? `${ap.n}/${ap.m} (${ap.pct}%)` : 'n/a';
+        const hw = s.human_wait;
+        byId('statWait').textContent =
+            hw && hw.mean_hours !== null ? `${hw.mean_hours} h` : 'n/a';
+        const cp = s.completion;
+        byId('statCompletion').textContent =
+            cp && cp.m > 0 && cp.pct !== null ? `${cp.n}/${cp.m} (${cp.pct}%)` : 'n/a';
+        const load = Array.isArray(s.member_load) ? s.member_load : [];
+        const box = byId('statLoad');
+        if (!load.length) {
+            box.innerHTML = '<span class="stat-empty">n/a</span>';
+            return;
+        }
+        const max = Math.max(1, ...load.map((row) => row.open));
+        box.innerHTML = load.slice(0, 8).map((row) => {
+            const pct = Math.max(6, Math.round((row.open / max) * 100));
+            return `<div class="load-row"><span class="load-owner">${CP.esc(row.owner || 'Unassigned')}</span>`
+                + `<span class="load-track"><span class="load-bar" style="width:${pct}%"></span></span>`
+                + `<span class="load-n">${row.open}</span></div>`;
+        }).join('');
+    }
+    CP.patchStats = patchStats;
     function initLedger() {
         /* I-028c: own the rendered table - rebuild the thead, wire the resize
            grips and the click-to-expand rows (panel.html's static header is a
@@ -318,6 +364,8 @@ var CP;
         });
         CP.store.subscribe(patchLedger);
         patchLedger();
+        /* I-035: first stats paint at boot; the Meter nav click repaints. */
+        void patchStats();
     }
     CP.initLedger = initLedger;
 })(CP || (CP = {}));

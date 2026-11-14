@@ -36,52 +36,6 @@ var CP;
         }
     }
     CP.paintSelection = paintSelection;
-    /** I-037: cross-surface hover. The kanban card and the hour-axis bar of one
-     *  task light together - one dataset, one highlight, the same
-     *  [data-task-id] selector paintSelection uses. `hoverId` survives the
-     *  className rewrites in reconcile's update step, so a store emit while the
-     *  pointer rests on a card keeps the paired bar lit (repaintLinkHover
-     *  re-subscribes with the selection paint). */
-    let hoverId = null;
-    function linkHoverEls(id) {
-        return document.querySelectorAll(`[data-task-id="${CSS.escape(id)}"]`);
-    }
-    function repaintLinkHover() {
-        if (!hoverId)
-            return;
-        linkHoverEls(hoverId).forEach((el) => el.classList.add('is-link-hover'));
-    }
-    function setLinkHover(id) {
-        const prev = hoverId;
-        hoverId = id;
-        if (prev && prev !== hoverId) {
-            linkHoverEls(prev).forEach((el) => el.classList.remove('is-link-hover'));
-        }
-        if (hoverId)
-            linkHoverEls(hoverId).forEach((el) => el.classList.add('is-link-hover'));
-    }
-    CP.setLinkHover = setLinkHover;
-    /** Document-level delegation: hovering (or dragging) a card highlights its
-     *  bar and vice versa. mouseout only clears when the pointer really left
-     *  the task node, so moving across a card's children never flickers. */
-    function initLinkHover() {
-        document.addEventListener('mouseover', (e) => {
-            const t = e.target;
-            const node = t && typeof t.closest === 'function' ? t.closest('[data-task-id]') : null;
-            setLinkHover(node && node.dataset.taskId ? node.dataset.taskId : null);
-        });
-        document.addEventListener('mouseout', (e) => {
-            const t = e.target;
-            const from = t && typeof t.closest === 'function' ? t.closest('[data-task-id]') : null;
-            if (!from)
-                return;
-            const to = e.relatedTarget;
-            if (to && typeof to.closest === 'function' && from.contains(to))
-                return;
-            setLinkHover(null);
-        });
-        CP.store.subscribe(repaintLinkHover);
-    }
     function closeModal() { layer.classList.add('hidden'); modalOpen = false; editingId = null; }
     function openModal(html) {
         sheet.innerHTML = html;
@@ -321,6 +275,10 @@ var CP;
                 v.classList.toggle('active', v.id === 'view-' + b.dataset.view);
             });
             syncCharterView(b.dataset.view || 'desk');
+            /* I-035: entering the Meter re-derives the ops stats tiles (GET
+               /api/stats is a pure read; two calls are identical by contract). */
+            if (b.dataset.view === 'meter')
+                void CP.patchStats();
             /* Setting scrollLeft on a hidden view does nothing; reposition to NOW
                after switching to the Work board - the hour axis lives there now
                (R32 / I-037 moved it out of the Plan pagination). */
@@ -436,55 +394,44 @@ var CP;
     /** I-027: the plan page paginated between Milestone plan and Hour axis.
      *  R32 / I-037 moved the hour axis to the Work board, so the tab bar and
      *  cp.plan-tab are retired; the Plan page shows the goal tree full-page. */
-    /** I-037: the Work board split. Kanban left, hour axis right, default
-     *  40/60 with the axis keeping the larger share; one draggable separator
-     *  whose width persists in cp.wb-split like every other chrome key. The
-     *  clamp keeps the axis at least as wide as the kanban (25..50 percent
-     *  left). Narrow viewports stack in the stylesheet and ignore --wb-left. */
-    function initWorkBoard() {
-        const page = document.getElementById('workBoard');
-        const grip = document.getElementById('wbSplit');
-        if (!page || !grip)
+    /** R36 / I-039: the Work board is a two-tab view - [Work board] kanban and
+     *  [Hour axis] flat work units - one dataset, one pinned tab bar styled as
+     *  the Command desk sheet tablist. The active tab persists in cp.wb-tab
+     *  (default board). The I-037 split and the I-037 hover cross-highlight
+     *  retire; navigation is explicit (a card's `-> hour axis` control jumps to
+     *  the bar, a bar click jumps back to the card). */
+    function wbTab(tab) {
+        const board = document.getElementById('wbBoardTab');
+        const axis = document.getElementById('ganttPanel');
+        const bar = document.getElementById('wbTabs');
+        if (!board || !axis || !bar)
             return;
-        const clamp = (pct) => Math.max(25, Math.min(50, pct));
-        const apply = (pct) => {
-            page.style.setProperty('--wb-left', clamp(pct) + '%');
-        };
-        const saved = Number(loadChrome('cp.wb-split'));
-        let leftPct = Number.isFinite(saved) && saved ? saved : 40;
-        apply(leftPct);
-        let x0 = 0;
-        let w0 = 0;
-        let active = false;
-        grip.addEventListener('pointerdown', (e) => {
-            active = true;
-            x0 = e.clientX;
-            w0 = page.getBoundingClientRect().width;
-            try {
-                grip.setPointerCapture(e.pointerId);
-            }
-            catch (_err) { /* synthetic pointer */ }
-            document.body.classList.add('is-dragging');
-            e.preventDefault();
+        const active = tab === 'axis' ? 'axis' : 'board';
+        board.hidden = active !== 'board';
+        axis.hidden = active !== 'axis';
+        bar.querySelectorAll('[data-wb-tab]').forEach((b) => {
+            const on = b.getAttribute('data-wb-tab') === active;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-selected', on ? 'true' : 'false');
         });
-        grip.addEventListener('pointermove', (e) => {
-            if (!active || w0 <= 0)
-                return;
-            const base = w0 * clamp(leftPct) / 100;
-            leftPct = clamp(((base + (e.clientX - x0)) / w0) * 100);
-            apply(leftPct);
+        saveChrome('cp.wb-tab', active);
+        /* R36: the hour axis keeps its byte-identical auto-scroll to NOW - the
+           scroll is a no-op while the pane is hidden, so re-apply on activation. */
+        if (active === 'axis')
+            CP.scrollGanttToNow();
+    }
+    function switchWbTab(tab) { wbTab(tab); }
+    CP.switchWbTab = switchWbTab;
+    function initWorkBoard() {
+        const bar = document.getElementById('wbTabs');
+        if (!bar)
+            return;
+        bar.addEventListener('click', (e) => {
+            const b = e.target.closest('[data-wb-tab]');
+            if (b)
+                wbTab(b.getAttribute('data-wb-tab') || 'board');
         });
-        const gripEnd = () => {
-            if (!active)
-                return;
-            active = false;
-            document.body.classList.remove('is-dragging');
-            leftPct = clamp(Math.round(leftPct));
-            apply(leftPct);
-            saveChrome('cp.wb-split', String(leftPct));
-        };
-        grip.addEventListener('pointerup', gripEnd);
-        grip.addEventListener('pointercancel', gripEnd);
+        wbTab(loadChrome('cp.wb-tab') || 'board');
     }
     /** I-023: the Settings page. Theme and glass take effect now; the port is
      *  read at server boot, so the page records the wish and prints the exact
@@ -552,7 +499,7 @@ var CP;
         applyConf(confIn.value, false);
         confIn.addEventListener('change', () => applyConf(confIn.value, true));
         byId('setReset').addEventListener('click', () => {
-            ['cp.side-w', 'cp.side-collapsed', 'cp.charter-open', 'cp.wb-split']
+            ['cp.side-w', 'cp.side-collapsed', 'cp.charter-open']
                 .forEach((k) => { try {
                 localStorage.removeItem(k);
             }
@@ -610,7 +557,6 @@ var CP;
         initFilters();
         initSidebar();
         initWorkBoard();
-        initLinkHover();
         initSettings();
         initKeys();
         layer.addEventListener('click', (e) => { if (e.target === layer)

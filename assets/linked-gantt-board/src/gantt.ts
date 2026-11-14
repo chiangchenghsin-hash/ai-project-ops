@@ -204,8 +204,6 @@ namespace CP {
 
     store.selected = t.id;
     CP.paintSelection(false);
-    /* I-037: dragging the bar lights its kanban card for the whole drag. */
-    CP.setLinkHover(t.id);
     const handle = target.closest('.gbar-handle') as HTMLElement | null;
     drag = {
       id: t.id,
@@ -239,9 +237,6 @@ namespace CP {
       return;
     }
     if (!drag) return;
-    /* I-037: keep the dragged bar's card lit even when the pointer crosses
-       other bars mid-drag (a mouseout would otherwise clear the pair). */
-    CP.setLinkHover(drag.id);
     const delta = Math.round((e.clientX - drag.x0) / HOUR_W);
     if (delta === 0 && !drag.changed) return;
     let s = drag.start;
@@ -301,13 +296,10 @@ namespace CP {
     document.body.classList.remove('is-dragging');
     document.querySelectorAll('.gbar.is-dragging').forEach((el) => el.classList.remove('is-dragging'));
     if (tip) { tip.remove(); tip = null; }
-    /* I-037: re-derive the paired highlight from what sits under the pointer
-       now that the drag session ended. */
-    const released = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-    const releasedNode = released && typeof released.closest === 'function'
-      ? released.closest('[data-task-id]') as HTMLElement | null : null;
-    CP.setLinkHover(releasedNode && releasedNode.dataset.taskId ? releasedNode.dataset.taskId : null);
+    /* R36: a real bar drag must not also navigate - the trailing click is
+       swallowed below so "bar click (no drag)" stays the only jump trigger. */
     if (!d.changed) return;
+    suppressClick = true;
 
     /* R21: everything the dragged bar constrains follows it, by the least
        amount that restores each constraint, and the cascade is persisted. */
@@ -330,6 +322,10 @@ namespace CP {
     return clientX < r.left + r.width / 2 ? 'left' : 'right';
   }
 
+  /** R36: set when a bar drag really moved - the trailing click is swallowed
+   *  so it cannot trigger the cross-view navigation. */
+  let suppressClick = false;
+
   function onClick(e: MouseEvent): void {
     /* R21: clicking a drawn edge removes it, after a confirm. */
     const path = (e.target as HTMLElement).closest('.gdep') as SVGPathElement | null;
@@ -343,7 +339,13 @@ namespace CP {
       return;
     }
     const bar = (e.target as HTMLElement).closest('.gbar') as HTMLElement | null;
-    if (bar && bar.dataset.taskId) CP.select(bar.dataset.taskId, true);
+    if (bar && bar.dataset.taskId) {
+      if (suppressClick) { suppressClick = false; return; }
+      /* R36: bar click (no drag) jumps back to the card - tab 1 + flash. */
+      CP.select(bar.dataset.taskId, true);
+      CP.switchWbTab('board');
+      CP.gotoCard(bar.dataset.taskId);
+    }
   }
 
   export function initGantt(): void {

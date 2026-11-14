@@ -10,7 +10,19 @@
  * Node >= 22 (global WebSocket + fetch). Every assertion prints
  * "PASS  <english label> :: <evidence>"; a FAIL prints "FAIL" and the script
  * exits non-zero (1 failed assertion, 2 fatal harness error).
- * VERSION: 3.1.0 - R31 section 32 adds the I-032 hour-axis humanization
+ * VERSION: 3.3.0 - R35 section 37 adds the I-035 ops stats gates
+ * (/api/stats demo JSON paste, two-calls-identical zero-write proof,
+ * per-metric table+filter source scan, empty-source n/a render through the
+ * patchStats override seam, SQL cross-check, Meter tiles DOM above the token
+ * meter with desc member-load bars).
+ * 3.2.0 - R35 section 36 adds the I-034 SOP template pack gates
+ * (library listing with the lock step names, [use] apply output line with
+ * 4 units + 3 FS links lag 0 nature mandatory + pending, writeNodeStores
+ * commit checks, save-chain round-trip, APPROVAL badges exactly on 3 review
+ * / 3 verify, gateFromScope approval floor incl. a provisioned human fixture
+ * card, goal refusal 400, six WBS templates unchanged, gates after every
+ * apply, byte-identical finally restore with row-level DML only).
+ * 3.1.0 - R31 section 32 adds the I-032 hour-axis humanization
  * gates (purpose header, NOW flag, tooltip, past-hours shade, shared status
  * palette) and the I-033 card AI-field gates (model/confidence/gate badge,
  * confidence threshold + Settings row, per-card audit popover, red-line-1
@@ -179,10 +191,12 @@ async function main() {
   PASS('UI never reads raw JSON: /data/ returns 403 and no /data/ resources',
     init.handoff === 403 && init.resources === 0, `status=${init.handoff} resources=${init.resources}`);
 
-  /* 2. Hour axis / cost-first / placeholders / lanes. R32 retarget (I-037):
-     the hour axis moved to the Work board, so the block re-activates that
-     view; every assertion intent below is unchanged. */
+  /* 2. Hour axis / cost-first / placeholders / lanes. R36 retarget: the hour
+     axis sits under the [Hour axis] tab of the Work board, so the block
+     activates that view AND that tab (measurements run against the ACTIVE
+     tab); every assertion intent below is unchanged. */
   await js(`document.querySelector('[data-view=board]').click()`);
+  await js(`CP.switchWbTab('axis')`);
   await sleep(180);
   const axis = await js(`(() => {
     const bars = Array.from(document.querySelectorAll('.gbar'));
@@ -219,6 +233,7 @@ async function main() {
     JSON.stringify(axis.placeholders.map((p) => p.t)));
   PASS('Work board auto-scrolls to NOW, time bars in viewport (R32 retarget: axis moved from the Plan view)',
     axis.scrollLeft > 100 && axis.visibleBars > 0, `scrollLeft=${axis.scrollLeft} visibleBars=${axis.visibleBars}`);
+  await js(`CP.switchWbTab('board')`);
 
   /* 3. Incremental update (DOM node identity preserved) */
   const incr = await js(`(() => {
@@ -844,8 +859,11 @@ async function main() {
   await js(`CP.store.load()`);
   await sleep(500);
   /* R32 retarget (I-037): the canvas link authoring runs on the Work board,
-     where the hour axis now lives; the gesture itself is unchanged. */
+     where the hour axis now lives; the gesture itself is unchanged.
+     R36: gestures land on the [Hour axis] tab - measurements run against the
+     ACTIVE tab. */
   await js(`document.querySelector('[data-view="board"]').click()`);
+  await js(`CP.switchWbTab('axis')`);
   await sleep(500);
   /* Show only the probe rows so every bar sits inside the visible slice of
      the gantt, and the pointer coordinates cannot drift off the panel. */
@@ -1687,14 +1705,13 @@ async function main() {
   PASS('Sidebar width survives a reload',
     sideBack.w === sideDrag.w && sideBack.width > 300, JSON.stringify(sideBack));
 
-  /* I-027 -> R32 recorded correction (I-037): the pinned two-tab pagination
-     assertions are re-targeted to the moved feature - the Hour axis left the
-     Plan page, so the Plan view shows the goal tree full-pane and the Work
-     board holds kanban + hour axis behind one persisted split. Assertion
-     intents stay identical: exactly one content configuration per view, the
-     layout choice persisting in a cp.* chrome key, no divider/fold chrome,
-     and the goal tree living in the Plan view under a header that stays put
-     while the layer scrolls. */
+  /* I-027 -> R32 -> R36 recorded corrections: the pinned two-tab pagination
+     assertions are re-targeted once more - the Work board split retires and
+     the board becomes a two-tab view ([Work board] / [Hour axis]) like the
+     desk sheet tablist. Assertion intents stay identical: exactly one content
+     configuration per view, the layout choice persisting in a cp.* chrome key
+     (cp.wb-tab), no divider/fold chrome, and the goal tree living in the
+     Plan view under a header that stays put while the layer scrolls. */
   await js(`document.querySelector('[data-view="plan"]').click()`);
   await sleep(150);
   const planTab0 = await js(`(() => {
@@ -1721,35 +1738,39 @@ async function main() {
 
   const planTab1 = await js(`(() => {
     document.querySelector('[data-view="board"]').click();
+    CP.switchWbTab('board');
     const page = document.getElementById('workBoard');
-    const kb = document.querySelector('.wb-kanban');
+    const kb = document.getElementById('wbBoardTab');
     const ax = document.getElementById('ganttPanel');
-    const grip = document.getElementById('wbSplit');
+    const bar = document.getElementById('wbTabs');
     const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
-    if (!page || !kb || !ax || !grip) return { ok: false, reason: 'missing board chrome' };
-    const before = Math.round(kb.getBoundingClientRect().width);
+    if (!page || !kb || !ax || !bar) return { ok: false, reason: 'missing board chrome' };
+    const labels = Array.from(bar.querySelectorAll('[data-wb-tab]')).map((b) => b.textContent.trim());
     const total = Math.round(page.getBoundingClientRect().width);
-    const gr = grip.getBoundingClientRect();
-    const sx = gr.left + Math.max(2, gr.width / 2);
-    const sy = gr.top + Math.max(2, gr.height / 2);
-    const ev = (t, x) => grip.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: x, clientY: sy, bubbles: true }));
-    ev('pointerdown', sx); ev('pointermove', sx + 46); ev('pointerup', sx + 46);
-    const after = Math.round(kb.getBoundingClientRect().width);
-    const stored = localStorage.getItem('cp.wb-split');
+    const before = { kbVis: vis(kb), axVis: vis(ax), kbW: Math.round(kb.getBoundingClientRect().width) };
+    bar.querySelector('[data-wb-tab="axis"]').click();
+    const afterAxis = {
+      kbVis: vis(kb), axVis: vis(ax),
+      axW: Math.round(ax.getBoundingClientRect().width),
+      stored: localStorage.getItem('cp.wb-tab'),
+      selAxis: bar.querySelector('[data-wb-tab="axis"]').getAttribute('aria-selected'),
+      selBoard: bar.querySelector('[data-wb-tab="board"]').getAttribute('aria-selected')
+    };
+    bar.querySelector('[data-wb-tab="board"]').click();
     return {
-      ok: true, both: vis(kb) && vis(ax), before, after, total, stored,
-      varLeft: page.style.getPropertyValue('--wb-left'),
-      kbPct: total > 0 ? Math.round(after / total * 100) : -1,
-      axPct: total > 0 ? Math.round(ax.getBoundingClientRect().width / total * 100) : -1
+      ok: true, labels, total, before, afterAxis,
+      storedBack: localStorage.getItem('cp.wb-tab')
     };
   })()`);
-  PASS('Work board shows kanban + hour axis side by side; the split drag resizes them and persists cp.wb-split (I-027 retarget -> I-037)',
-    planTab1.ok && planTab1.both
-      && planTab1.before > 0 && planTab1.after - planTab1.before >= 20
-      && /^(2[5-9]|[3-5][0-9])$/.test(planTab1.stored || '')
-      && planTab1.varLeft === planTab1.stored + '%'
-      && planTab1.kbPct >= 25 && planTab1.kbPct <= 52
-      && planTab1.axPct >= 45,
+  PASS('Work board is a two-tab view ([Work board] / [Hour axis]); one full-width pane per tab; cp.wb-tab persists (R36 retarget of the I-027->I-037 split assertions)',
+    planTab1.ok && planTab1.labels.join('|') === '[Work board]|[Hour axis]'
+      && planTab1.before.kbVis && !planTab1.before.axVis
+      && planTab1.before.kbW >= planTab1.total * 0.9
+      && !planTab1.afterAxis.kbVis && planTab1.afterAxis.axVis
+      && planTab1.afterAxis.axW >= planTab1.total * 0.9
+      && planTab1.afterAxis.stored === 'axis'
+      && planTab1.afterAxis.selAxis === 'true' && planTab1.afterAxis.selBoard === 'false'
+      && planTab1.storedBack === 'board',
     JSON.stringify(planTab1));
 
   const planGoalMini = (() => {
@@ -2107,8 +2128,10 @@ async function main() {
   await js(`CP.store.load()`);
   await sleep(450);
   /* R32 retarget (I-037): the canvas lives on the Work board now; the
-     nature write path assertion below is untouched. */
+     nature write path assertion below is untouched. R36: the [Hour axis]
+     tab is activated first (measurements run against the ACTIVE tab). */
   await js(`document.querySelector('[data-view="board"]').click()`);
+  await js(`CP.switchWbTab('axis')`);
   await sleep(300);
   await js(`CP.store.query = 'NAT '; CP.store.emit();`);
   await sleep(400);
@@ -2940,8 +2963,10 @@ async function main() {
 
   /* --- I-032: purpose header, NOW flag, past shade, tooltip, palette.
      R32 retarget (I-037): the hour axis panel moved to the Work board; every
-     I-032 measurement below stays byte-identical. --- */
+     I-032 measurement below stays byte-identical. R36: the [Hour axis] tab
+     is activated first (measurements run against the ACTIVE tab). --- */
   await js(`document.querySelector('[data-view="board"]').click()`);
+  await js(`CP.switchWbTab('axis')`);
   await sleep(300);
   const r32Head = await js(`(() => {
     const hint = document.querySelector('#ganttPanel .panel-head .hint');
@@ -3348,88 +3373,137 @@ async function main() {
   PASS('Section 32 added no JS exceptions or console errors',
     errors.length === r32Err, 'errors before=' + r32Err + ' after=' + errors.length);
 
-  /* 33. R32 / I-037 - the Work board merge: kanban + hour axis on ONE page
-     behind one persisted split, stacked fallback on narrow viewports, and
-     the cross-surface hover/select highlight over one dataset. Additive
-     section (assertions 33+). Lessons obeyed: re-activate the board view
-     after any Page.reload before measuring, layout checks measure heights
-     and visibility (never DOM counts), unique r33* locals, and cp.wb-split
-     is removed in finally so the battery and the next run start pristine. */
+  /* 33. R36 / I-039 - the Work board two-tab view: [Work board] kanban and
+     [Hour axis] flat work units over one dataset, explicit cross-view
+     navigation (card `-> hour axis` -> bar flash; bar click -> card flash),
+     narrow viewports keep the same tab structure. Additive section
+     (assertions 33+). Lessons obeyed: re-activate the board view AND the
+     right tab after any Page.reload before measuring, layout checks measure
+     heights and visibility (never DOM counts), unique r33* locals, and
+     cp.wb-tab is removed in finally so the battery and the next run start
+     pristine. Retargeted with the R32 split: the hover cross-highlight
+     assertions become the jump tests below; the stacked-fallback assertion
+     becomes the narrow-viewport tab-structure test. */
   const r33Err = errors.length;
   try {
     await js(`document.querySelector('[data-view="board"]').click()`);
+    await js(`CP.switchWbTab('board')`);
     await sleep(300);
     const r33Merge = await js(`(() => {
       const page = document.getElementById('workBoard');
-      const kb = document.querySelector('.wb-kanban');
+      const kb = document.getElementById('wbBoardTab');
       const ax = document.getElementById('ganttPanel');
       const sc = document.getElementById('ganttScroll');
-      const grip = document.getElementById('wbSplit');
+      const bar = document.getElementById('wbTabs');
       const board = document.getElementById('view-board');
       const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
       const r = (el) => el ? el.getBoundingClientRect() : null;
-      const pr = r(page); const kr = r(kb); const ar = r(ax);
-      const stored = localStorage.getItem('cp.wb-split');
+      const pr = r(page); const kr = r(kb);
+      const axisOn = (() => {
+        bar.querySelector('[data-wb-tab="axis"]').click();
+        const out = { axVis: vis(ax), kbVis: vis(kb), axH: ax ? Math.round(ax.getBoundingClientRect().height) : -1 };
+        bar.querySelector('[data-wb-tab="board"]').click();
+        return out;
+      })();
       return {
         onBoard: !!(board && board.classList.contains('active')),
-        kbVis: vis(kb), axVis: vis(ax), gripVis: vis(grip),
+        kbVis: vis(kb), axHidden: !vis(ax),
+        tablist: !!bar && bar.getAttribute('role') === 'tablist',
         bothInBoard: !!(kb && kb.closest('#view-board')) && !!(ax && ax.closest('#view-board')),
         ganttNotInPlan: !!(sc && sc.closest('#view-plan') === null && sc.closest('#view-board')),
         kbH: kr ? Math.round(kr.height) : -1,
-        axH: ar ? Math.round(ar.height) : -1,
         pageH: pr ? Math.round(pr.height) : -1,
-        kbPct: pr && kr ? Math.round(kr.width / pr.width * 100) : -1,
-        axPct: pr && ar ? Math.round(ar.width / pr.width * 100) : -1,
-        stored
+        kbFull: pr && kr ? kr.width >= pr.width * 0.9 : false,
+        axisOn
       };
     })()`);
-    PASS('I-037: Work board holds kanban + hour axis side by side (both real heights, gantt not in the Plan view)',
-      r33Merge.onBoard && r33Merge.kbVis && r33Merge.axVis && r33Merge.gripVis
+    PASS('R36: Work board is a two-tab view - kanban pane and hour axis live on it (real heights per ACTIVE tab, gantt not in the Plan view)',
+      r33Merge.onBoard && r33Merge.kbVis && r33Merge.axHidden && r33Merge.tablist
         && r33Merge.bothInBoard && r33Merge.ganttNotInPlan
-        && r33Merge.kbH > 100 && r33Merge.axH > 100 && r33Merge.pageH > 150
-        && r33Merge.kbPct >= 30 && r33Merge.kbPct <= 52
-        && r33Merge.axPct >= r33Merge.kbPct,
+        && r33Merge.kbH > 100 && r33Merge.pageH > 150 && r33Merge.kbFull
+        && r33Merge.axisOn.axVis && !r33Merge.axisOn.kbVis && r33Merge.axisOn.axH > 100,
       JSON.stringify(r33Merge));
 
-    /* Cross-surface highlight: hover card <-> hover bar, select lights both,
-       mouseout clears - the same [data-task-id] the selection paint uses. */
-    const r33Hov = await js(`(() => {
+    /* R36 jump tests (replace the R32 hover cross-highlight assertions):
+       a card's `-> hour axis` control switches to tab 2 and flashes the bar;
+       a bar click (no drag) switches back to tab 1 and flashes the card;
+       selection still lights both surfaces over one dataset. */
+    const r33Jump = await js(`(() => {
       const card = document.querySelector('.kb-card[data-task-id="t3"]');
+      const btn = card ? card.querySelector('.kb-jump-axis') : null;
       const bar = document.querySelector('.gbar[data-task-id="t3"]');
-      if (!card || !bar) return { ok: false, reason: 'missing t3 card/bar' };
-      card.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      const cardOn = card.classList.contains('is-link-hover');
-      const barOn = bar.classList.contains('is-link-hover');
-      card.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
-      const clearAfterCard = !card.classList.contains('is-link-hover') && !bar.classList.contains('is-link-hover');
-      bar.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-      const barOn2 = bar.classList.contains('is-link-hover');
-      const cardOn2 = card.classList.contains('is-link-hover');
+      if (!card || !btn || !bar) return { ok: false, reason: 'missing t3 card/jump/bar' };
+      const label = btn.textContent.trim();
+      btn.click();
+      const onAxis = getComputedStyle(document.getElementById('ganttPanel')).display !== 'none';
+      const barFlashed = bar.classList.contains('kb-flash');
+      bar.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const onBoard = getComputedStyle(document.getElementById('wbBoardTab')).display !== 'none';
+      const cardFlashed = card.classList.contains('kb-flash');
       CP.select('t3', false);
       const selCard = card.classList.contains('is-selected');
       const selBar = bar.classList.contains('is-selected');
-      bar.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
-      const cleared = !bar.classList.contains('is-link-hover');
       CP.select(null, false);
-      return { ok: true, cardOn, barOn, clearAfterCard, barOn2, cardOn2, selCard, selBar, cleared };
+      return { ok: true, label, onAxis, barFlashed, onBoard, cardFlashed, selCard, selBar };
     })()`);
-    PASS('I-037: hover a card lights its bar and vice versa; selection lights both surfaces; mouseout clears',
-      r33Hov.ok && r33Hov.cardOn && r33Hov.barOn && r33Hov.clearAfterCard
-        && r33Hov.barOn2 && r33Hov.cardOn2 && r33Hov.selCard && r33Hov.selBar && r33Hov.cleared,
-      JSON.stringify(r33Hov));
+    PASS('R36: -> hour axis jumps to the bar and flashes it; a bar click jumps back and flashes the card; selection lights both surfaces',
+      r33Jump.ok && r33Jump.label === '-> hour axis'
+        && r33Jump.onAxis && r33Jump.barFlashed
+        && r33Jump.onBoard && r33Jump.cardFlashed
+        && r33Jump.selCard && r33Jump.selBar,
+      JSON.stringify(r33Jump));
 
-    /* Linked drag keeps the pair lit for the whole drag (dragstart sets it;
-       no drop runs here, so no task row is mutated). The dragstart ghost is
-       scheduled on a timer, so the dragend lands after it and cleanup()
-       clears both the ghost and the pair highlight. */
+    /* R36: a moved bar drag swallows its trailing click (no navigation).
+       The probe drags a dep-free leaf row and restores it immediately
+       (row-level restore only); no other row is touched. */
+    const r33BarDrag = await js(`(() => {
+      CP.switchWbTab('axis');
+      const sc = document.getElementById('ganttScroll');
+      const deps = (CP.store.state && CP.store.state.task_deps) || [];
+      const leaf = (CP.store.state.tasks || []).find((t) => !deps.some((d) => d.from === t.id));
+      const bar = leaf ? document.querySelector('.gbar[data-task-id="' + CSS.escape(leaf.id) + '"]') : null;
+      if (!sc || !bar) return { ok: false, reason: 'no leaf bar' };
+      /* capture immutable originals BEFORE dispatch - the optimistic update
+         mutates the store row in place. */
+      window.__leaf = { id: leaf.id, start: String(leaf.start), end: String(leaf.end) };
+      const r = bar.getBoundingClientRect();
+      const x0 = r.left + Math.min(20, r.width / 2), y = r.top + r.height / 2;
+      /* down lands on the bar; move/up go to document like a real pointer
+         (the lanes may repaint mid-gesture and detach the old bar node). */
+      bar.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 9, clientX: x0, clientY: y, bubbles: true }));
+      document.dispatchEvent(new PointerEvent('pointermove', { pointerId: 9, clientX: x0 + 260, clientY: y, bubbles: true }));
+      document.dispatchEvent(new PointerEvent('pointerup', { pointerId: 9, clientX: x0 + 260, clientY: y, bubbles: true }));
+      return { ok: true, id: leaf.id };
+    })()`);
+    await sleep(350);
+    const r33Swallow = await js(`(() => {
+      const leaf = window.__leaf;
+      const cur = CP.store.state.tasks.filter((t) => t.id === leaf.id)[0];
+      const moved = !!cur && (cur.start !== leaf.start || cur.end !== leaf.end);
+      const bar = document.querySelector('.gbar[data-task-id="' + CSS.escape(leaf.id) + '"]');
+      bar.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const axisStill = getComputedStyle(document.getElementById('ganttPanel')).display !== 'none';
+      CP.store.commit('PUT', '/api/tasks/' + encodeURIComponent(leaf.id),
+        { start: leaf.start, end: leaf.end }, 'Row restored after the drag-suppression probe');
+      return { axisStill, moved };
+    })()`);
+    await sleep(300);
+    PASS('R36: a moved bar drag swallows its trailing click (no navigation) and the row is restored (one dataset, one move)',
+      r33BarDrag.ok && r33Swallow.moved && r33Swallow.axisStill,
+      JSON.stringify({ drag: r33BarDrag, after: r33Swallow }));
+
+    /* Card drag lifecycle keeps its live-layout invariants (dragstart ghost,
+       dragend cleanup) - no drop runs here, so no task row is mutated. The
+       hover cross-highlight assertions retire with the R32 feature; the
+       retired class must not appear anywhere. */
     const r33DragStart = await js(`(() => {
+      CP.switchWbTab('board');
       const card = document.querySelector('.kb-card[data-task-id="t6"]');
       const bar = document.querySelector('.gbar[data-task-id="t6"]');
       if (!card || !bar) return { ok: false, reason: 'missing t6 card/bar' };
       const dt = new DataTransfer();
       card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      return { ok: true,
-        hoverDuring: card.classList.contains('is-link-hover') && bar.classList.contains('is-link-hover') };
+      return { ok: true, ghostScheduled: true };
     })()`);
     await sleep(40);
     const r33DragEnd = await js(`(() => {
@@ -3439,70 +3513,83 @@ async function main() {
       const dt = new DataTransfer();
       card.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
       CP.patchBoard();
+      const cr = card.getBoundingClientRect();
+      CP.switchWbTab('axis');
+      const br = bar.getBoundingClientRect();
+      CP.switchWbTab('board');
       return { ok: true,
-        after: !card.classList.contains('is-link-hover') && !bar.classList.contains('is-link-hover'),
-        ghostGone: !card.classList.contains('is-ghost') };
+        ghostGone: !card.classList.contains('is-ghost'),
+        noHoverClass: !document.querySelector('.is-link-hover'),
+        cardBox: cr.width > 0 && cr.height > 0,
+        barBox: br.width > 0 && br.height > 0 };
     })()`);
-    PASS('I-037: dragging a card lights its bar for the whole drag, then clears (one dataset, one move)',
-      r33DragStart.ok && r33DragStart.hoverDuring && r33DragEnd.ok
-        && r33DragEnd.after && r33DragEnd.ghostGone,
+    PASS('R36: card drag lifecycle keeps live-layout invariants (ghost cleared, card and bar keep real boxes, hover class retired)',
+      r33DragStart.ok && r33DragEnd.ok && r33DragEnd.ghostGone
+        && r33DragEnd.noHoverClass && r33DragEnd.cardBox && r33DragEnd.barBox,
       JSON.stringify({ start: r33DragStart, end: r33DragEnd }));
 
-    /* Stacked fallback: narrow the viewport, the page becomes a column, the
-       split handle retires, both panes keep real heights. */
+    /* Narrow viewport: the two-tab structure is unchanged (the stacked split
+       fallback retires with the split) - tab bar stays pinned, the active
+       pane keeps a real height, and no split handle exists at any width. */
     await cmd('Emulation.setDeviceMetricsOverride', { width: 900, height: 900, deviceScaleFactor: 1, mobile: false });
     await sleep(350);
-    const r33Stack = await js(`(() => {
+    const r33Narrow = await js(`(() => {
       const page = document.getElementById('workBoard');
-      const kb = document.querySelector('.wb-kanban');
-      const ax = document.getElementById('ganttPanel');
-      const grip = document.getElementById('wbSplit');
+      const kb = document.getElementById('wbBoardTab');
+      const bar = document.getElementById('wbTabs');
       const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
       const kr = kb ? kb.getBoundingClientRect() : null;
-      const ar = ax ? ax.getBoundingClientRect() : null;
       return {
-        dir: page ? getComputedStyle(page).flexDirection : '',
-        gripHidden: !!grip && getComputedStyle(grip).display === 'none',
-        kbH: kr ? Math.round(kr.height) : -1,
-        axH: ar ? Math.round(ar.height) : -1,
-        kbAbove: !!(kr && ar) && ar.top >= kr.top + kr.height - 2,
-        axVis: vis(ax)
+        noSplit: !document.getElementById('wbSplit'),
+        tabsPinned: !!bar && vis(bar) && !!kr && bar.getBoundingClientRect().bottom <= kr.top + 4,
+        kbVis: vis(kb),
+        kbH: kr ? Math.round(kr.height) : -1
       };
     })()`);
     await cmd('Emulation.clearDeviceMetricsOverride');
     await sleep(350);
-    PASS('I-037: narrow viewport stacks the two panes vertically and hides the split handle',
-      r33Stack.dir === 'column' && r33Stack.gripHidden && r33Stack.kbH > 50
-        && r33Stack.axH > 50 && r33Stack.kbAbove && r33Stack.axVis,
-      JSON.stringify(r33Stack));
+    PASS('R36: narrow viewport keeps the same tab structure (no split handle, tab bar pinned, active pane keeps its height)',
+      r33Narrow.noSplit && r33Narrow.tabsPinned && r33Narrow.kbVis && r33Narrow.kbH > 50,
+      JSON.stringify(r33Narrow));
 
-    /* Reload persistence: cp.wb-split comes back; the board view is
+    /* Reload persistence: cp.wb-tab comes back; the board view is
        re-activated after the reload BEFORE any measurement (R29 lesson). */
-    await js(`localStorage.setItem('cp.wb-split', '47'); true`);
+    await js(`localStorage.setItem('cp.wb-tab', 'axis'); true`);
     await cmd('Page.reload', { ignoreCache: true });
     await sleep(950);
     await ready();
     await js(`document.querySelector('[data-view="board"]').click()`);
     await sleep(320);
     const r33Keep = await js(`(() => {
-      const page = document.getElementById('workBoard');
-      const kb = document.querySelector('.wb-kanban');
-      const total = page ? Math.round(page.getBoundingClientRect().width) : -1;
+      const ax = document.getElementById('ganttPanel');
+      const kb = document.getElementById('wbBoardTab');
+      const vis = (el) => !!el && getComputedStyle(el).display !== 'none';
       return {
-        stored: localStorage.getItem('cp.wb-split'),
-        varLeft: page ? page.style.getPropertyValue('--wb-left') : '',
-        kbPct: total > 0 && kb ? Math.round(kb.getBoundingClientRect().width / total * 100) : -1
+        stored: localStorage.getItem('cp.wb-tab'),
+        axVis: vis(ax), kbHidden: !vis(kb),
+        axH: ax ? Math.round(ax.getBoundingClientRect().height) : -1
       };
     })()`);
-    PASS('I-037: split width survives a reload (cp.wb-split re-applied, board view re-activated before measuring)',
-      r33Keep.stored === '47' && r33Keep.varLeft === '47%' && Math.abs(r33Keep.kbPct - 47) <= 2,
+    PASS('R36: the active tab survives a reload (cp.wb-tab re-applied, board view re-activated before measuring)',
+      r33Keep.stored === 'axis' && r33Keep.axVis && r33Keep.kbHidden && r33Keep.axH > 50,
       JSON.stringify(r33Keep));
+
+    /* R36 pinned literals (C13 audit): the added UI strings stay
+       byte-identical and the removed split chrome is gone from the sources. */
+    const r36Panel = fs.readFileSync(path.join(OUT, 'panel.html'), 'utf8');
+    const r36BoardSrc = fs.readFileSync(path.join(OUT, 'src', 'board.ts'), 'utf8');
+    const r36AppSrc = fs.readFileSync(path.join(OUT, 'src', 'app.ts'), 'utf8');
+    PASS('R36 pinned literals: tab labels and the -> hour axis control byte-identical; split chrome retired from the sources',
+      r36Panel.indexOf('[Work board]') >= 0 && r36Panel.indexOf('[Hour axis]') >= 0
+        && r36BoardSrc.indexOf('-> hour axis') >= 0
+        && r36Panel.indexOf('wbSplit') < 0 && r36AppSrc.indexOf('cp.wb-split') < 0
+        && r36AppSrc.indexOf('is-link-hover') < 0,
+      'panel/board/app literals verified');
   } finally {
     try {
       await js(`(() => {
-        localStorage.removeItem('cp.wb-split');
-        const page = document.getElementById('workBoard');
-        if (page) page.style.setProperty('--wb-left', '40%');
+        localStorage.removeItem('cp.wb-tab');
+        CP.switchWbTab('board');
         return true;
       })()`);
     } catch (_e) { /* page may be mid-navigation */ }
@@ -4029,6 +4116,601 @@ async function main() {
   PASS('Section 35 added no JS exceptions or console errors (expected structure-400 refusals allowlisted)',
     unexpectedErrors().length === r35Err,
     'unexpected=' + unexpectedErrors().length + ' (raw=' + errors.length + ', before=' + r35Err
+      + ', allowlisted=' + (errors.length - unexpectedErrors().length) + ')');
+
+  /* 36. R35 / I-034 - SOP template pack: the library gains a SOP category
+     with exactly two seeded templates (Code review / Research, lock step
+     names + approval flags), [use] on a milestone applies one work unit per
+     step through the writeNodeStores four-store commit (status 'pending',
+     FS links in order into task_deps with lag 0 / nature mandatory, approval
+     flag plan-only additive + mirrored to tasks.approval), APPROVAL badges
+     render on the plan row and the Work board card with the gateFromScope
+     approval floor, [save W chain as SOP] round-trips, and the six builtin
+     WBS templates keep byte-identical list/apply behavior. Additive section.
+     Discipline: plan/evidence/PRD bytes snapshotted and restored in finally;
+     SQLite mutations restored with ROW-LEVEL DML only (created task ids,
+     their task_deps edges, the section's template rows, the fixture task -
+     never a file copy of panel.db or its wal/shm); no seed-tasks inside the
+     section (INSERT OR REPLACE would reset the approval/nature columns the
+     section proves); views re-activated after anything that could re-render;
+     the refusal400 is Node-side (api()) so it adds no console noise. */
+  const i36Err = unexpectedErrors().length;
+  const i36PlanFile = path.join(dataDir(), 'milestone-plan.json');
+  const i36MsFile = path.join(pbRepo, 'docs', 'evidence', 'milestones.json');
+  const i36PrdFile = path.join(pbRepo, 'docs', 'PRD.md');
+  const i36PlanBak = fs.readFileSync(i36PlanFile, 'utf8');
+  const i36MsBak = fs.readFileSync(i36MsFile, 'utf8');
+  const i36PrdBak = fs.readFileSync(i36PrdFile, 'utf8');
+  /* Gates WITHOUT seed-tasks: seed-tasks INSERT OR REPLACEs task/task_deps
+     rows and would zero the approval flag and the mandatory nature this
+     section proves. The base plan's W rows already carry task rows from the
+     earlier sections' seeds; each SOP apply writes its own rows atomically. */
+  const i36Gate = () => {
+    const a = i31Run([path.join(pbRepo, 'scripts', 'prd-to-action.js')]);
+    const b = i31Run([path.join(pbRepo, 'scripts', 'plan-sync.js'), '--check']);
+    const al = (a.out.split('\n').filter((l) => l.indexOf('PRD-TO-ACTION GATE') >= 0)[0] || '').trim();
+    const bl = (b.out.split('\n').filter((l) => l.indexOf('PLAN-SYNC CHECK') >= 0)[0] || '').trim();
+    return {
+      ok: a.code === 0 && al === 'PRD-TO-ACTION GATE: 10/10 passed'
+        && b.code === 0 && /^PLAN-SYNC CHECK: \d+\/\d+ passed$/.test(bl),
+      al: al + ' (exit ' + a.code + ')',
+      bl: bl + ' (exit ' + b.code + ')',
+    };
+  };
+  const i36Read = () => JSON.parse(fs.readFileSync(i36PlanFile, 'utf8'));
+  const i36Created = [];
+  const i36TplIds = [];
+  let i36Conn = null;
+  let i36Fixture = '';
+  const i36GateLog = [];
+  const i36Apply = async (target, templateId) => {
+    const res = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target, template_id: templateId });
+    if (res.status === 200 && res.body) {
+      (res.body.added_work_units || []).forEach((id) => i36Created.push(String(id)));
+    }
+    const g = i36Gate();
+    i36GateLog.push(g);
+    return res;
+  };
+
+  try {
+    /* Re-activate the plan view and clear folds before any DOM measure
+       (R29 lesson); section 35 left the plan on screen with folds cleared. */
+    await js(`document.querySelector('#nav [data-view="plan"]').click()`);
+    await sleep(250);
+    await js(`(() => { try { localStorage.removeItem('cp.tree-fold'); } catch (e) {} return true; })()`);
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(350);
+
+    /* ---- Library listing: six WBS built-ins byte-identical + two SOPs ---- */
+    const i36Tpl = await api('GET', '/api/templates');
+    const i36List = (i36Tpl.body && i36Tpl.body.templates) || [];
+    const i36Built = i36List.filter((t) => t.kind === 'builtin');
+    const i36Sops = i36List.filter((t) => t.kind === 'sop');
+    const i36Prov = 'inspired by Teambition public template categories; content authored fresh';
+    const i36Code = i36Sops.filter((t) => t.id === 'sop-code-review')[0];
+    const i36Res = i36Sops.filter((t) => t.id === 'sop-research')[0];
+    const i36StepSig = (t) => (t && Array.isArray(t.steps)
+      ? t.steps.map((s) => s.title + (s.approval ? '!' : '')).join(',') : '');
+    PASS('Section 36: library lists the six WBS built-ins unchanged (exact provenance) and exactly two SOP templates with the lock step names + approval flags',
+      i36Tpl.status === 200 && i36Built.length === 6
+        && i36Built.every((t) => t.provenance === i36Prov)
+        && i36Sops.length === 2 && !!i36Code && !!i36Res
+        && i36StepSig(i36Code) === 'lint,test,review!,merge'
+        && i36StepSig(i36Res) === 'question,gather,verify!,write-up'
+        && i36Sops.every((t) => t.n_work_units === 4 && t.n_milestones === 0),
+      JSON.stringify({ builtins: i36Built.map((t) => t.name), sops: i36Sops.map((t) => t.id),
+        code: i36StepSig(i36Code), research: i36StepSig(i36Res) }));
+
+    /* ---- Modal UI at M7: SOP category, [use], steps preview, save-chain ---- */
+    await js(`(() => {
+      const btn = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M7"] .ms-tpl-btn');
+      if (btn) btn.click();
+      return !!btn;
+    })()`);
+    await sleep(500);
+    const i36Modal = await js(`(() => {
+      const layer = document.getElementById('modalLayer');
+      const sheet = document.getElementById('modalSheet');
+      const text = sheet ? sheet.textContent : '';
+      const sops = sheet ? sheet.querySelectorAll('.tpl-item-sop').length : 0;
+      const kinds = sheet ? sheet.querySelectorAll('.tpl-kind-sop').length : 0;
+      const useBtns = sheet ? Array.from(sheet.querySelectorAll('[data-tpl-apply]'))
+        .filter((b) => b.textContent.trim() === '[use]').length : 0;
+      const saveSop = sheet ? sheet.querySelector('[data-tpl-save-sop]') : null;
+      const close = sheet ? sheet.querySelector('[data-action="close"]') : null;
+      const opened = !!layer && !layer.classList.contains('hidden');
+      if (close) close.click();
+      return {
+        opened, sops, kinds, useBtns,
+        preview: text.indexOf('1 lint -> 2 test -> 3 review (APPROVAL) -> 4 merge') >= 0,
+        saveSop: !!saveSop, saveSopLabel: saveSop ? saveSop.textContent.trim() : '',
+        closed: !!layer && layer.classList.contains('hidden'),
+      };
+    })()`);
+    PASS('Section 36: the M-row library modal carries the SOP category ([use] buttons, steps preview, [save W chain as SOP] control) and closes cleanly',
+      i36Modal.opened && i36Modal.closed && i36Modal.sops === 2 && i36Modal.kinds === 2
+        && i36Modal.useBtns === 8 && i36Modal.preview
+        && i36Modal.saveSop && i36Modal.saveSopLabel === '[save W chain as SOP]',
+      JSON.stringify(i36Modal));
+
+    /* ---- A1: API [use] apply at M7 - THE apply output line ---- */
+    const i36A1 = await i36Apply('M7', 'sop-code-review');
+    PASS('Section 36: apply output line - 4 units created + 3 FS links (lag 0, nature mandatory) + status pending',
+      i36A1.status === 200 && Array.isArray(i36A1.body && i36A1.body.added_work_units)
+        && i36A1.body.added_work_units.length === 4
+        && Array.isArray(i36A1.body.added_deps) && i36A1.body.added_deps.length === 3
+        && i36A1.body.added_deps.every((d) => d.type === 'FS' && Number(d.lag) === 0
+          && d.nature === 'mandatory')
+        && i36A1.body.status === 'pending'
+        && JSON.stringify(i36A1.body.approval_steps) === JSON.stringify(['review']),
+      JSON.stringify(i36A1.body));
+
+    const i36Plan1 = i36Read();
+    const i36W1 = i36Plan1.work_units.filter((w) => i36Created.indexOf(String(w.id)) >= 0);
+    i36Conn = new (require('node:sqlite').DatabaseSync)(path.join(dataDir(), 'panel.db'));
+    const i36TaskRows = i36Created.map((id) => {
+      const r = i36Conn.prepare('SELECT id, status, approval FROM tasks WHERE id=?').get(id);
+      return r ? { id: r.id, s: r.status, a: Number(r.approval) } : null;
+    }).filter(Boolean);
+    const i36DepRows = i36Conn.prepare(
+      'SELECT from_id, to_id, type, lag, nature FROM task_deps WHERE from_id IN ('
+      + i36Created.map(() => '?').join(',') + ')').all(...i36Created);
+    PASS('Section 36: SOP apply lands pending plan units + task rows + FS task_deps in one commit; approval flag only on the review step; gates green after the apply',
+      i36W1.length === 4 && i36W1.every((w) => w.status === 'pending' && w.milestone_id === 'M7')
+        && i36W1.filter((w) => w.approval === true).length === 1
+        && i36W1.filter((w) => w.approval === true)[0].title === 'review'
+        && i36TaskRows.length === 4 && i36TaskRows.every((r) => r.s === 'pending')
+        && i36TaskRows.filter((r) => Number(r.a) === 1).length === 1
+        && i36DepRows.length === 3
+        && i36DepRows.every((d) => d.type === 'FS' && Number(d.lag) === 0 && d.nature === 'mandatory')
+        && i36GateLog[0] && i36GateLog[0].ok,
+      JSON.stringify({ units: i36W1.map((w) => w.id + ':' + w.title + ':' + w.status
+        + (w.approval ? ':APPROVAL' : '')), tasks: i36TaskRows, deps: i36DepRows.length })
+        + ' | ' + (i36GateLog[0] ? i36GateLog[0].al + ' | ' + i36GateLog[0].bl : 'no gate'));
+
+    /* ---- Round-trip: [save W chain as SOP] then re-apply the same shape ---- */
+    const i36Save = await api('POST', '/api/templates',
+      { name: 'I36 RT chain', source_node: 'M7', as_sop: true });
+    if (i36Save.status === 200 && i36Save.body && i36Save.body.id) {
+      i36TplIds.push(String(i36Save.body.id));
+    }
+    const i36A2 = i36Save.status === 200
+      ? await i36Apply('M7', i36Save.body.id) : { status: 0, body: null };
+    const i36Plan2 = i36Read();
+    const i36RtUnits = i36Plan2.work_units.filter(
+      (w) => i36A2.body && (i36A2.body.added_work_units || []).indexOf(String(w.id)) >= 0);
+    PASS('Section 36: save W chain as SOP + re-apply round-trip - same 4-step shape, approval still on step 3, 3 FS links, pending; gates green',
+      i36Save.status === 200 && i36Save.body && i36Save.body.kind === 'sop'
+        && i36Save.body.n_work_units === 4
+        && i36A2.status === 200 && (i36A2.body.added_work_units || []).length === 4
+        && (i36A2.body.added_deps || []).length === 3
+        && JSON.stringify(i36A2.body.approval_steps) === JSON.stringify(['review'])
+        && i36RtUnits.length === 4
+        && JSON.stringify(i36RtUnits.map((w) => w.title)) ===
+          JSON.stringify(['lint', 'test', 'review', 'merge'])
+        && i36RtUnits.filter((w) => w.approval === true).length === 1
+        && i36RtUnits.filter((w) => w.approval === true)[0].title === 'review'
+        && i36GateLog[1] && i36GateLog[1].ok,
+      JSON.stringify({ save: { kind: i36Save.body && i36Save.body.kind,
+        n: i36Save.body && i36Save.body.n_work_units, id: i36Save.body && i36Save.body.id },
+        apply: i36A2.body && i36A2.body.added_work_units,
+        titles: i36RtUnits.map((w) => w.title) })
+        + ' | ' + (i36GateLog[1] ? i36GateLog[1].al + ' | ' + i36GateLog[1].bl : 'no gate'));
+
+    /* ---- A3: human path - modal [use] on the Research SOP ---- */
+    await js(`(() => {
+      const btn = document.querySelector('.ms-goal-row[data-kind=ms][data-node="M7"] .ms-tpl-btn');
+      if (btn) btn.click();
+      return !!btn;
+    })()`);
+    await sleep(500);
+    await js(`(() => {
+      const btn = document.querySelector('#modalSheet [data-tpl-apply="sop-research"]');
+      if (btn) btn.click();
+      return !!btn;
+    })()`);
+    await sleep(1100);
+    const i36AfterModal = i36Read();
+    /* The modal apply went through the browser path (not i36Apply), so its
+       task/dep rows are collected from the plan delta: M7 research units not
+       already tracked, then one gate run for this apply like every other. */
+    i36AfterModal.work_units.forEach((w) => {
+      if (String(w.milestone_id) === 'M7'
+        && ['question', 'gather', 'verify', 'write-up'].indexOf(String(w.title)) >= 0
+        && i36Created.indexOf(String(w.id)) < 0) {
+        i36Created.push(String(w.id));
+      }
+    });
+    const i36ResearchAll = i36AfterModal.work_units.filter(
+      (w) => String(w.milestone_id) === 'M7'
+        && ['question', 'gather', 'verify', 'write-up'].indexOf(String(w.title)) >= 0);
+    i36GateLog.push(i36Gate());
+    const i36A3 = await i36Apply('M7', 'sop-code-review');
+    const i36A4 = await i36Apply('M7', 'sop-research');
+    const i36A5 = await i36Apply('M7', 'sop-research');
+
+    const i36GatesAllOk = i36GateLog.length === 6 && i36GateLog.every((g) => g.ok);
+    PASS('Section 36: gates green after EVERY SOP apply (A1, round-trip, modal [use], three API applies - 6/6: prd-to-action 10/10 + plan-sync --check each time)',
+      i36GatesAllOk && i36A3.status === 200 && i36A4.status === 200 && i36A5.status === 200
+        && i36ResearchAll.length === 4,
+      i36GateLog.map((g, i) => 'apply' + (i + 1) + ': ' + g.al + ' | ' + g.bl).join(' ;; ')
+        + ' | modalResearchUnits=' + i36ResearchAll.length
+        + ' | a3=' + i36A3.status + ' a4=' + i36A4.status + ' a5=' + i36A5.status);
+
+    /* ---- APPROVAL badges: exactly the flagged steps (3 review / 3 verify) ---- */
+    await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+    await sleep(350);
+    const i36PlanBadges = await js(`(() => {
+      const rows = Array.from(document.querySelectorAll('.ms-goal-row[data-kind=wu]'));
+      const badged = rows.filter((r) => r.querySelector('.ms-approval'));
+      return {
+        total: rows.length,
+        badged: badged.length,
+        titles: badged.map((r) => (r.querySelector('.ms-a-title') || {}).textContent || ''),
+        review: badged.filter((r) => ((r.querySelector('.ms-a-title') || {}).textContent || '')
+          .indexOf('review') >= 0).length,
+        verify: badged.filter((r) => ((r.querySelector('.ms-a-title') || {}).textContent || '')
+          .indexOf('verify') >= 0).length,
+      };
+    })()`);
+    await js(`document.querySelector('#nav [data-view="board"]').click()`);
+    await sleep(300);
+    /* The SOP applies went through fetch (not store.commit), so the board's
+       task list is stale until one explicit reload - reload BEFORE measuring
+       the cards (R29 re-activate lesson, applied to state as well as views). */
+    await js(`(async () => { await CP.store.load(); return true; })()`);
+    await sleep(450);
+    const i36Cards = await js(`(() => {
+      const cards = Array.from(document.querySelectorAll('.kb-card'));
+      const badged = cards.filter((c) => {
+        const el = c.querySelector('.kb-approval');
+        return el && !el.hidden;
+      });
+      return {
+        badged: badged.length,
+        gates: badged.map((c) => {
+          const g = c.querySelector('.kb-gate');
+          return g ? g.textContent : '';
+        }),
+        titles: badged.map((c) => {
+          const t = c.querySelector('.kb-title');
+          return t ? t.textContent : '';
+        }),
+      };
+    })()`);
+    PASS('Section 36: APPROVAL badge on exactly the flagged steps (3 review / 3 verify) on the plan rows and the Work board cards; no other row/card carries it',
+      i36PlanBadges.badged === 6 && i36PlanBadges.review === 3 && i36PlanBadges.verify === 3
+        && i36PlanBadges.titles.every((t) => t.indexOf('review') >= 0 || t.indexOf('verify') >= 0)
+        && i36Cards.badged === 6
+        && i36Cards.titles.every((t) => t.indexOf('review') >= 0 || t.indexOf('verify') >= 0),
+      JSON.stringify({ plan: i36PlanBadges, cards: { badged: i36Cards.badged,
+        titles: i36Cards.titles } }));
+
+    /* ---- Gate floor: approval cards never answer autonomous / n/a ---- */
+    const i36Floor = await js(`(() => ({
+      humanApproval: CP.gateFromScope(
+        { owner_type: 'human', may_act_alone: 'all', needs_ack: 'n/a', never_automatic: 'n/a' },
+        null, 0.7, true),
+      humanPlain: CP.gateFromScope(
+        { owner_type: 'human', may_act_alone: 'all', needs_ack: 'n/a', never_automatic: 'n/a' },
+        null, 0.7, false),
+      mainApproval: CP.gateFromScope(
+        { owner_type: 'main', may_act_alone: 'plan', needs_ack: 'change', never_automatic: 'approve' },
+        null, 0.7, true)
+    }))()`);
+    let i36FixGate = { found: false };
+    if (i36Conn) {
+      i36Fixture = 'w36f' + Math.random().toString(36).slice(2, 8);
+      i36Conn.prepare(`INSERT INTO tasks(id,title,owner,owner_type,role,handoff,status,start,end,
+        progress,placeholder,tier,billed,cost,sort,parent_id,approval)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
+        .run(i36Fixture, 'I36 approval fixture', 'Fixture Human', 'human', '', 'provisioned by section 36',
+          'pending', '2026-11-12T09:00', '2026-11-12T10:00', 0, 0, 'S', 0, 0, 9999, '', 1);
+      await js(`(async () => { await CP.store.load(); return true; })()`);
+      await sleep(450);
+      i36FixGate = await js(`(() => {
+        const card = document.querySelector('.kb-card[data-task-id="${i36Fixture}"]');
+        if (!card) return { found: false };
+        const g = card.querySelector('.kb-gate');
+        const a = card.querySelector('.kb-approval');
+        return { found: true, gate: g ? g.textContent : '', approval: !!(a && !a.hidden) };
+      })()`);
+    }
+    PASS('Section 36: gate-floor proof - an approval card never shows autonomous or n/a (direct derivation + the human fixture card floored to needs-ack; SOP cards answer never-auto/needs-ack)',
+      i36Floor.humanApproval === 'needs-ack' && i36Floor.humanPlain === 'autonomous'
+        && i36Floor.mainApproval === 'never-auto'
+        && i36Cards.gates.length === 6
+        && i36Cards.gates.every((g) => g !== 'autonomous' && g !== 'n/a')
+        && i36FixGate.found && i36FixGate.gate === 'needs-ack' && i36FixGate.approval === true,
+      JSON.stringify({ direct: i36Floor, sopCardGates: i36Cards.gates, fixture: i36FixGate }));
+
+    /* ---- Refusal: SOP apply on a goal is 400 with zero writes ---- */
+    const i36BeforeRefusal = fs.readFileSync(i36PlanFile, 'utf8');
+    const i36Refusal = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'G1', template_id: 'sop-research' });
+    PASS('Section 36: SOP apply on a goal refuses 400 with zero writes (the chain lands on one milestone)',
+      i36Refusal.status === 400
+        && fs.readFileSync(i36PlanFile, 'utf8') === i36BeforeRefusal
+        && !!(i36Refusal.body && i36Refusal.body.error),
+      JSON.stringify({ status: i36Refusal.status, error: i36Refusal.body && i36Refusal.body.error }));
+
+    /* ---- The six WBS templates still list and apply unchanged ---- */
+    const i36WbsApply = await api('PUT', '/api/plan/structure',
+      { kind: 'apply-template', target: 'G2', template_id: 'builtin-launch' });
+    const i36WbsPlan = i36Read();
+    const i36WbsNewM = (i36WbsApply.body && i36WbsApply.body.added_milestones) || [];
+    const i36WbsNewW = (i36WbsApply.body && i36WbsApply.body.added_work_units) || [];
+    const i36WbsUnits = i36WbsPlan.work_units.filter((w) => i36WbsNewW.indexOf(String(w.id)) >= 0);
+    const i36List2 = await api('GET', '/api/templates');
+    const i36Built2 = ((i36List2.body && i36List2.body.templates) || []).filter((t) => t.kind === 'builtin');
+    PASS('Section 36: the six WBS templates still list and apply unchanged (exact provenance; builtin apply -> fresh M ids + todo/0 placeholders on the plan-only path, no SOP mode/deps)',
+      i36Built2.length === 6 && i36Built2.every((t) => t.provenance === i36Prov)
+        && i36WbsApply.status === 200 && i36WbsNewM.length === 3
+        && !(i36WbsApply.body && i36WbsApply.body.mode)
+        && !(i36WbsApply.body && i36WbsApply.body.added_deps)
+        && i36WbsNewW.length === 6
+        && i36WbsUnits.length === 6
+        && i36WbsUnits.every((w) => w.status === 'todo' && Number(w.cost) === 0
+          && Number(w.progress) === 0 && !w.approval),
+      JSON.stringify({ builtins: i36Built2.length, added_milestones: i36WbsNewM,
+        added_work_units: i36WbsNewW.length,
+        statuses: i36WbsUnits.map((w) => w.status) }));
+  } finally {
+    fs.writeFileSync(i36PlanFile, i36PlanBak);
+    fs.writeFileSync(i36MsFile, i36MsBak);
+    fs.writeFileSync(i36PrdFile, i36PrdBak);
+    if (i36Conn) {
+      try {
+        /* Row-level DML only - the panel.db trio is never file-copied. */
+        const uniq = Array.from(new Set(i36Created));
+        uniq.forEach((id) => {
+          i36Conn.prepare('DELETE FROM tasks WHERE id=?').run(id);
+          i36Conn.prepare('DELETE FROM task_deps WHERE from_id=? OR to_id=?').run(id, id);
+        });
+        if (i36Fixture) i36Conn.prepare('DELETE FROM tasks WHERE id=?').run(i36Fixture);
+        i36TplIds.forEach((id) => {
+          i36Conn.prepare('DELETE FROM wbs_templates WHERE id=?').run(id);
+        });
+      } catch (_e) { /* restore still runs */ }
+      try { i36Conn.close(); } catch (_e) { /* already closed */ }
+      i36Conn = null;
+    }
+    try {
+      await js(`(() => {
+        const layer = document.getElementById('modalLayer');
+        if (layer && !layer.classList.contains('hidden')) {
+          const close = document.querySelector('#modalSheet [data-action="close"]');
+          if (close) close.click();
+        }
+        document.querySelector('#nav [data-view="plan"]').click();
+        return true;
+      })()`);
+    } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  const i36PlanAfter = fs.readFileSync(i36PlanFile, 'utf8');
+  const i36MsAfter = fs.readFileSync(i36MsFile, 'utf8');
+  const i36PrdAfter = fs.readFileSync(i36PrdFile, 'utf8');
+  PASS('Section 36 restored: plan / evidence / PRD bytes identical (finally block, row-level DML for SQLite)',
+    i36PlanAfter === i36PlanBak && i36MsAfter === i36MsBak && i36PrdAfter === i36PrdBak,
+    'plan=' + (i36PlanAfter === i36PlanBak) + ' evidence=' + (i36MsAfter === i36MsBak)
+      + ' prd=' + (i36PrdAfter === i36PrdBak));
+
+  await js(`(async () => { await CP.refreshPlan(); return true; })()`);
+  await sleep(250);
+  const i36EndGate = i36Gate();
+  PASS('Gates green on the restored stores after section 36: prd-to-action 10/10 + plan-sync --check',
+    i36EndGate.ok, i36EndGate.al + ' | ' + i36EndGate.bl);
+
+  PASS('Section 36 added no JS exceptions or console errors',
+    unexpectedErrors().length === i36Err,
+    'unexpected=' + unexpectedErrors().length + ' (raw=' + errors.length
+      + ', unexpectedBefore=' + i36Err
+      + ', allowlisted=' + (errors.length - unexpectedErrors().length) + ')');
+
+  /* 37. R35 / I-035 - ops stats: GET /api/stats pure derivation + the four
+     Meter tiles above the token meter. READ-ONLY section: no fixture rows
+     (nothing to restore); the derivation's zero-write claim is proven by
+     row counts snapped around the two GET calls. Per-metric table+filter
+     markers are asserted in db.js source (the lock's code-comment line);
+     the demo JSON is pasted; two calls must be byte-identical (no
+     timestamps); the empty-source n/a-not-0% rule is driven through the
+     patchStats override seam (R28 CP-seam rule - no fetch stub, no writes);
+     tile numbers cross-check against direct SQL on the same rows; the Meter
+     view is re-activated with the tiles reset first so the nav-triggered
+     repaint is what is measured. */
+  const i37Err = unexpectedErrors().length;
+  let i37Conn = null;
+  try {
+    i37Conn = new (require('node:sqlite').DatabaseSync)(path.join(dataDir(), 'panel.db'));
+    const i37Counts = () => ({
+      tasks: i37Conn.prepare('SELECT COUNT(*) AS n FROM tasks').get().n,
+      acks: i37Conn.prepare('SELECT COUNT(*) AS n FROM acks').get().n,
+      actions: i37Conn.prepare('SELECT COUNT(*) AS n FROM approval_actions').get().n,
+      events: i37Conn.prepare('SELECT COUNT(*) AS n FROM desk_events').get().n,
+    });
+    const i37Before = i37Counts();
+    const s1 = await api('GET', '/api/stats');
+    const s2 = await api('GET', '/api/stats');
+    const i37After = i37Counts();
+    const b1 = s1.body || {};
+
+    PASS('Section 37: the /api/stats JSON for the demo rows (paste)',
+      s1.status === 200 && !!b1.approval_pass && !!b1.human_wait
+        && !!b1.completion && Array.isArray(b1.member_load)
+        && typeof b1.approval_pass.n === 'number' && typeof b1.approval_pass.m === 'number'
+        && typeof b1.completion.n === 'number' && typeof b1.completion.m === 'number'
+        && typeof b1.human_wait.decided === 'number',
+      JSON.stringify(b1));
+
+    PASS('Section 37: two GET /api/stats calls return byte-identical JSON and the derivation writes nothing (row counts unchanged across both calls)',
+      s1.status === 200 && s2.status === 200
+        && JSON.stringify(s1.body) === JSON.stringify(s2.body)
+        && JSON.stringify(i37Before) === JSON.stringify(i37After),
+      'identical=' + (JSON.stringify(s1.body) === JSON.stringify(s2.body))
+        + ' countsBefore=' + JSON.stringify(i37Before)
+        + ' countsAfter=' + JSON.stringify(i37After));
+
+    /* Per-metric table + filter lines live in db.js's I-035 comment block;
+       the scan asserts each metric still names its exact table + filter. */
+    const i37Src = fs.readFileSync(path.join(OUT, 'db.js'), 'utf8');
+    const i37Markers = [
+      "1. approval pass  - table acks, filter decided rows (state <> 'ACK')",
+      "2. human wait     - table acks, filter state <> 'ACK'",
+      "3. completion     - table tasks, filter status = 'done'",
+      "4. member load    - table tasks, filter status <> 'done'",
+    ];
+    PASS('Section 37: every metric names its table + filter in the db.js source comment (approval pass / human wait / completion / member load)',
+      i37Markers.every((m) => i37Src.indexOf(m) >= 0),
+      i37Markers.map((m) => (i37Src.indexOf(m) >= 0 ? 'hit' : 'MISS') + ':' + m).join(' | '));
+
+    /* Empty-source rule: null pct/mean renders n/a, never 0%. Driven
+       through the patchStats override seam with a synthetic empty payload
+       (no nav click yet - the meter activation below owns the real repaint,
+       so no fetch can race this render); then the real payload's null rules
+       are asserted too. */
+    const i37Empty = {
+      approval_pass: { n: 0, m: 0, pct: null },
+      human_wait: { decided: 0, mean_hours: null },
+      completion: { n: 0, m: 0, pct: null },
+      member_load: [],
+    };
+    await js(`CP.patchStats(${JSON.stringify(i37Empty)})`);
+    await sleep(150);
+    const i37EmptyDom = await js(`(() => ({
+      approval: (document.getElementById('statApproval') || {}).textContent,
+      wait: (document.getElementById('statWait') || {}).textContent,
+      completion: (document.getElementById('statCompletion') || {}).textContent,
+      load: (document.getElementById('statLoad') || {}).textContent
+    }))()`);
+    const i37RuleOk = (b1.approval_pass.m === 0 ? b1.approval_pass.pct === null : typeof b1.approval_pass.pct === 'number')
+      && (b1.completion.m === 0 ? b1.completion.pct === null : typeof b1.completion.pct === 'number')
+      && (b1.human_wait.decided === 0 ? b1.human_wait.mean_hours === null : typeof b1.human_wait.mean_hours === 'number');
+    PASS('Section 37: an empty source renders n/a, not 0% (override seam drives all four tiles to n/a; live payload keeps null on empty and a number on non-empty)',
+      i37EmptyDom.approval === 'n/a' && i37EmptyDom.wait === 'n/a'
+        && i37EmptyDom.completion === 'n/a' && i37EmptyDom.load.trim() === 'n/a'
+        && i37RuleOk
+        && String(i37EmptyDom.approval).indexOf('0%') < 0
+        && String(i37EmptyDom.wait).indexOf('0') < 0
+        && String(i37EmptyDom.completion).indexOf('0%') < 0,
+      JSON.stringify({ emptyDom: i37EmptyDom,
+        live: { approval: b1.approval_pass, wait: b1.human_wait, completion: b1.completion } }));
+
+    /* Cross-check every tile number against direct SQL (same table + filter).
+       Approval pass = pass rate over acks decided asks (R35 fix addendum:
+       n = IN_PROGRESS/DONE, m = state <> 'ACK'). */
+    const i37Exp = {
+      ap: i37Conn.prepare(
+        "SELECT COUNT(*) AS m, COALESCE(SUM(CASE WHEN state IN ('IN_PROGRESS','DONE')"
+        + " THEN 1 ELSE 0 END), 0) AS n FROM acks WHERE state <> 'ACK'").get(),
+      comp: i37Conn.prepare(
+        "SELECT COUNT(*) AS m, COALESCE(SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END), 0) AS n"
+        + ' FROM tasks').get(),
+      decided: i37Conn.prepare(
+        "SELECT COUNT(*) AS n FROM acks WHERE state <> 'ACK'").get().n,
+      load: i37Conn.prepare(
+        "SELECT owner, COUNT(*) AS open FROM tasks WHERE status <> 'done'"
+        + ' GROUP BY owner ORDER BY open DESC, owner ASC').all(),
+    };
+    const i37Pct = (n, m) => (m > 0 ? Math.round((n * 1000) / m) / 10 : null);
+    const i37ExpLoad = i37Exp.load.map((r) => ({ owner: String(r.owner || ''), open: Number(r.open) }));
+    PASS('Section 37: tile numbers match direct SQL on the same rows (approval pass = passed/decided asks from acks, completion done/all, member load open-per-owner desc, human wait decided count)',
+      b1.approval_pass.n === Number(i37Exp.ap.n) && b1.approval_pass.m === Number(i37Exp.ap.m)
+        && b1.approval_pass.pct === i37Pct(Number(i37Exp.ap.n), Number(i37Exp.ap.m))
+        && b1.completion.n === Number(i37Exp.comp.n) && b1.completion.m === Number(i37Exp.comp.m)
+        && b1.completion.pct === i37Pct(Number(i37Exp.comp.n), Number(i37Exp.comp.m))
+        && b1.human_wait.decided === Number(i37Exp.decided)
+        && (Number(i37Exp.decided) === 0
+          ? b1.human_wait.mean_hours === null
+          : typeof b1.human_wait.mean_hours === 'number')
+        && JSON.stringify(b1.member_load) === JSON.stringify(i37ExpLoad),
+      JSON.stringify({ api: { approval_pass: b1.approval_pass, completion: b1.completion,
+        human_wait: b1.human_wait, member_load: b1.member_load },
+        sql: { ap: i37Exp.ap, comp: i37Exp.comp, decided: i37Exp.decided, load: i37ExpLoad } }));
+
+    /* DOM: reset the tiles, then activate the Meter so the nav-triggered
+       repaint (app.ts initNav -> CP.patchStats) is what gets measured. */
+    await js(`(() => {
+      document.getElementById('statApproval').textContent = '-';
+      document.getElementById('statWait').textContent = '-';
+      document.getElementById('statCompletion').textContent = '-';
+      document.getElementById('statLoad').innerHTML = '<span class="stat-empty">n/a</span>';
+      return true;
+    })()`);
+    await js(`document.querySelector('#nav [data-view="meter"]').click()`);
+    let i37Waited = '';
+    for (let i = 0; i < 40; i += 1) {
+      i37Waited = await js(`(document.getElementById('statApproval') || {}).textContent || ''`);
+      if (i37Waited && i37Waited !== '-') break;
+      await sleep(150);
+    }
+    const i37Dom = await js(`(() => {
+      const tiles = document.getElementById('statsTiles');
+      const view = document.getElementById('view-meter');
+      const token = tiles ? tiles.nextElementSibling : null;
+      const load = document.getElementById('statLoad');
+      const rows = load ? Array.from(load.querySelectorAll('.load-row')) : [];
+      const txt = (id) => (document.getElementById(id) || {}).textContent || '';
+      return {
+        inMeter: !!(tiles && view && tiles.parentElement === view),
+        aboveToken: !!(token && (token.textContent || '').indexOf('Token meter') >= 0),
+        tileCount: tiles ? tiles.querySelectorAll('.stat-tile').length : 0,
+        approval: txt('statApproval'),
+        wait: txt('statWait'),
+        completion: txt('statCompletion'),
+        loadRows: rows.length,
+        loadFirst: rows[0]
+          ? ((rows[0].querySelector('.load-owner') || {}).textContent || '') + ':'
+            + ((rows[0].querySelector('.load-n') || {}).textContent || '')
+          : '',
+        loadOrder: rows.map((r) => Number((r.querySelector('.load-n') || {}).textContent)),
+      };
+    })()`);
+    const i37WaitText = b1.human_wait.mean_hours !== null && b1.human_wait.mean_hours !== undefined
+      ? b1.human_wait.mean_hours + ' h' : 'n/a';
+    const i37ApprovalText = b1.approval_pass.m > 0 && b1.approval_pass.pct !== null
+      ? b1.approval_pass.n + '/' + b1.approval_pass.m + ' (' + b1.approval_pass.pct + '%)'
+      : 'n/a';
+    const i37CompletionText = b1.completion.m > 0 && b1.completion.pct !== null
+      ? b1.completion.n + '/' + b1.completion.m + ' (' + b1.completion.pct + '%)'
+      : 'n/a';
+    const i37Desc = i37Dom.loadOrder.every((v, i, a) => i === 0 || a[i - 1] >= v);
+    const i37First = b1.member_load.length
+      ? b1.member_load[0].owner + ':' + b1.member_load[0].open : '';
+    PASS('Section 37: Meter page shows the four tiles above the token meter (nav-triggered repaint); member-load bars descend by open count and match the payload',
+      i37Dom.inMeter && i37Dom.aboveToken && i37Dom.tileCount === 4
+        && i37Dom.approval === i37ApprovalText
+        && i37Dom.wait === i37WaitText
+        && i37Dom.completion === i37CompletionText
+        && (b1.member_load.length === 0
+          ? i37Dom.loadRows === 0
+          : i37Dom.loadRows > 0 && i37Dom.loadRows <= 8 && i37Desc
+            && i37Dom.loadFirst === i37First),
+      JSON.stringify({ dom: i37Dom, want: { approval: i37ApprovalText, wait: i37WaitText,
+        completion: i37CompletionText, first: i37First } }));
+
+    /* Zero-write close-out: the same three counts, taken again after every
+       stats read and both renders. */
+    const i37Final = i37Counts();
+    PASS('Section 37 left the source rows untouched (tasks / acks / approval_actions / desk_events counts unchanged across the whole section)',
+      JSON.stringify(i37Final) === JSON.stringify(i37Before),
+      'before=' + JSON.stringify(i37Before) + ' after=' + JSON.stringify(i37Final));
+  } finally {
+    if (i37Conn) {
+      try { i37Conn.close(); } catch (_e) { /* already closed */ }
+      i37Conn = null;
+    }
+    /* Re-paint with the REAL payload so the battery leaves live numbers on
+       the tiles (the override seam left the synthetic empty state). */
+    try { await js(`CP.patchStats()`); } catch (_e) { /* page may be mid-navigation */ }
+  }
+
+  PASS('Section 37 added no JS exceptions or console errors',
+    unexpectedErrors().length === i37Err,
+    'unexpected=' + unexpectedErrors().length + ' (raw=' + errors.length
+      + ', unexpectedBefore=' + i37Err
       + ', allowlisted=' + (errors.length - unexpectedErrors().length) + ')');
 
   PASS('No JS exceptions / console errors at runtime (expected structure-400 refusals allowlisted)',

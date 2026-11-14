@@ -263,13 +263,17 @@
         </div>
       </section>
 
-      <!-- Work board (I-037 / R32): kanban left + hour axis right on ONE
-           linked page over one dataset. One draggable split (#wbSplit),
-           width persisted in cp.wb-split (40/60 default, axis the larger
-           share); narrow viewports stack through the stylesheet. -->
+      <!-- Work board (R36 / I-039): a two-tab view - [Work board] kanban and
+           [Hour axis] flat work units - one dataset, one pinned tab bar
+           styled as the Command desk sheet tablist. The active tab persists
+           in cp.wb-tab (default board); cross-view navigation is explicit. -->
       <section class="view" id="view-board">
         <div class="board-page" id="workBoard">
-          <div class="card panel wb-pane wb-kanban">
+          <div class="desk-tabs wb-tabs" id="wbTabs" role="tablist" aria-label="Work board tabs">
+            <button type="button" class="desk-tab wb-tab active" data-wb-tab="board" role="tab" aria-selected="true" aria-controls="wbBoardTab">[Work board]</button>
+            <button type="button" class="desk-tab wb-tab" data-wb-tab="axis" role="tab" aria-selected="false" aria-controls="ganttPanel">[Hour axis]</button>
+          </div>
+          <div class="card panel wb-pane wb-kanban" id="wbBoardTab" role="tabpanel" aria-label="Work board">
             <div class="panel-head"><h2>Work board</h2>
               <span class="hint">one drag = one move | double-click to edit</span></div>
             <div class="board-area">
@@ -279,9 +283,7 @@
               </div>
             </div>
           </div>
-          <div class="wb-split" id="wbSplit" role="separator" aria-orientation="vertical" tabindex="0"
-            title="Drag to resize the kanban and the hour axis"></div>
-          <div class="card panel wb-pane wb-axis" id="ganttPanel" role="region" aria-label="Hour axis">
+          <div class="card panel wb-pane wb-axis" id="ganttPanel" role="tabpanel" aria-label="Hour axis">
             <div class="panel-head"><h2>Hour axis (flat work units)</h2>
               <span class="hint">drag bars to reschedule (hour-snapped) - cost first</span>
               <div class="panel-tools">
@@ -337,6 +339,31 @@
 
       <!-- Meter -->
       <section class="view" id="view-meter">
+        <!-- I-035: ops stats tiles, above the token meter. Values arrive from
+             GET /api/stats (pure derivation; per-metric table + filter lives
+             in db.js). An empty source renders n/a, never 0%. -->
+        <div class="stats-tiles" id="statsTiles">
+          <div class="card stat-tile" data-stat="approval_pass">
+            <span class="stat-label">approval pass</span>
+            <strong class="stat-value" id="statApproval">-</strong>
+            <span class="stat-sub">passed / decided asks</span>
+          </div>
+          <div class="card stat-tile" data-stat="human_wait">
+            <span class="stat-label">human wait</span>
+            <strong class="stat-value" id="statWait">-</strong>
+            <span class="stat-sub">mean ask-to-human-ACK (h)</span>
+          </div>
+          <div class="card stat-tile" data-stat="completion">
+            <span class="stat-label">completion</span>
+            <strong class="stat-value" id="statCompletion">-</strong>
+            <span class="stat-sub">done / total tasks</span>
+          </div>
+          <div class="card stat-tile" data-stat="member_load">
+            <span class="stat-label">member load</span>
+            <div class="load-bars" id="statLoad"><span class="stat-empty">n/a</span></div>
+            <span class="stat-sub">open tasks per owner</span>
+          </div>
+        </div>
         <div class="card">
           <div class="panel-head"><h2>Token meter</h2><span class="hint">Read-only meter import; never hand-counted.</span></div>
           <table class="grid-table"><thead><tr><th>Round</th><th>Name</th><th>Window</th><th>billed</th><th>fresh</th><th>$</th></tr></thead>

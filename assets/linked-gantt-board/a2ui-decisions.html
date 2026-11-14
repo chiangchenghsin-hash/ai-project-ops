@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Decision queue - A2UI governance cards</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 24px; max-width: 860px; }
+  h1 { font-size: 1.15em; }
+  .hint { color: #555; }
+  .a2ui-card { border: 1px solid #888; border-radius: 8px; padding: 12px 16px; margin: 14px 0; }
+  .a2ui-card-title { margin: 0 0 6px; font-size: 1.02em; }
+  .a2ui-card-question { margin: 4px 0; }
+  .a2ui-evidence { margin-top: 6px; }
+  .a2ui-evidence .a2ui-text { color: #555; font-size: 0.88em; margin: 2px 0; }
+  .a2ui-options { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .a2ui-btn { padding: 6px 14px; cursor: pointer; }
+  .a2ui-decision { border-left: 4px solid #2a2; background: #f2faf2; padding: 8px 12px; margin: 10px 0 0; }
+  .a2ui-decision-reject { border-left-color: #c33; background: #faf2f2; }
+  .a2ui-decision-defer { border-left-color: #ca2; background: #faf6f2; }
+  .a2ui-decision-kind { font-weight: bold; text-transform: uppercase; margin-right: 8px; }
+  .a2ui-decision-by, .a2ui-decision-at { color: #555; margin-right: 8px; font-size: 0.88em; }
+  .a2ui-decision-note { margin: 4px 0 0; color: #333; font-size: 0.9em; }
+  #receipt { width: 100%; height: 130px; font: 12px/1.5 monospace; margin-top: 8px; }
+  button.copy { padding: 6px 12px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>Decision queue - one AskCard per open call</h1>
+<p class="hint">Click one option per card. Each click lands a DecisionRecord and
+fills the receipt below - paste the receipt back in chat and I execute the
+decisions in order. Options map to the governance catalog enum:
+<b>approve</b> (do the recommended action) / <b>reject</b> (do the opposite) /
+<b>defer</b> (hold).</p>
+
+<div id="queue"></div>
+
+<h2>Receipt</h2>
+<textarea id="receipt" readonly>Pending - decide each card above.</textarea>
+<br>
+<button class="copy" id="btn-copy">Copy receipt</button>
+
+<script src="./dist/a2ui.js"></script>
+<script>
+(function () {
+  var A2UI = CP.A2UI;
+  var decidedAt = new Date().toISOString();
+  var decisions = {};
+
+  var QUEUE = [
+    {
+      askId: "A-1", title: "A-1 R36 takeover",
+      question: "R36 stalled after item 1 (tab shell). Take over and finish items 2-5 (retire hover/split, retarget ~20 selftest assertions, run gates, close the round)?",
+      evidence: [
+        "evidence: is-link-hover and cp.wb-split still live in app.ts:50-59/411-513 and selftest.js:1758/3413",
+        "recommendation: approve - finish it now, checkpoint per item"
+      ],
+      approve: "take over and finish R36 now",
+      reject: "not me - human fixes it",
+      defer: "hold R36 for now"
+    },
+    {
+      askId: "A-2", title: "A-2 battery baseline",
+      question: "Run the full selftest battery (verify.js, panel.db wiped first) to lock the current-tree baseline?",
+      evidence: [
+        "evidence: classifier blocked the run twice (transient); baseline is required for the R36 judgment anyway",
+        "recommendation: approve - run it right away"
+      ],
+      approve: "run verify.js battery now",
+      reject: "skip the baseline run",
+      defer: "run it after R36 closes"
+    },
+    {
+      askId: "A-3", title: "A-3 official SDK conformance",
+      question: "Execute the downloaded A2UI official tooling (CLI --help + a2ui_core PayloadValidator against our catalog and demo messages)?",
+      evidence: [
+        "evidence: packages already extracted and inspected read-only; run needs your go (downloaded code)",
+        "recommendation: approve - official conformance beats my hand-rolled validator"
+      ],
+      approve: "execute official tooling now",
+      reject: "skip official conformance",
+      defer: "decide later"
+    },
+    {
+      askId: "A-4", title: "A-4 Stage B scheduling",
+      question: "Wire the governance cards into sheet-acks right after the 1.10.0 release?",
+      evidence: [
+        "evidence: AUI-01 locked panel wiring as Stage B, post-release; 1.10.0 is human-gated",
+        "recommendation: approve - schedule Stage B immediately after the release"
+      ],
+      approve: "schedule Stage B after 1.10.0",
+      reject: "cancel Stage B",
+      defer: "decide after the release"
+    },
+    {
+      askId: "A-5", title: "A-5 catalogId publish URI",
+      question: "Keep the example.com catalogId placeholder until real publication?",
+      evidence: [
+        "evidence: catalog.json ships with an example.com URI; publishing needs a domain you own",
+        "recommendation: approve - keep the placeholder, swap at publication"
+      ],
+      approve: "keep example.com placeholder",
+      reject: "choose the publish URI now",
+      defer: "decide at publication time"
+    }
+  ];
+
+  function receiptText() {
+    var lines = ["A2UI decision receipt " + decidedAt];
+    for (var i = 0; i < QUEUE.length; i++) {
+      var q = QUEUE[i];
+      var d = decisions[q.askId];
+      lines.push(q.askId + " " + q.title.slice(4) + ": " +
+        (d ? d.kind + " (" + d.label + ")" : "PENDING"));
+    }
+    return lines.join("\n");
+  }
+
+  function renderCard(q) {
+    var host = document.createElement("div");
+    document.getElementById("queue").appendChild(host);
+    var comps = [
+      { id: "root", component: "AskCard", askId: q.askId, role: "root",
+        title: q.title, question: q.question,
+        evidence: ["ev-0", "ev-1"],
+        options: ["opt-approve", "opt-reject", "opt-defer"] },
+      { id: "ev-0", component: "Text", text: q.evidence[0] },
+      { id: "ev-1", component: "Text", text: q.evidence[1] },
+      { id: "opt-approve", component: "Button", label: "Approve: " + q.approve,
+        action: { event: { name: "ask.decide", userMessage: q.askId + "|approve" } } },
+      { id: "opt-reject", component: "Button", label: "Reject: " + q.reject,
+        action: { event: { name: "ask.decide", userMessage: q.askId + "|reject" } } },
+      { id: "opt-defer", component: "Button", label: "Defer: " + q.defer,
+        action: { event: { name: "ask.decide", userMessage: q.askId + "|defer" } } }
+    ];
+    A2UI.renderSurface(host, comps, {}, {
+      onEvent: function (name, msg) {
+        if (name !== "ask.decide" || !msg) return;
+        var parts = msg.split("|");
+        var kind = parts[1];
+        if (decisions[parts[0]]) return;
+        decisions[parts[0]] = { kind: kind, label: q[kind] };
+        A2UI.renderSurface(host, [{
+          id: "dec", component: "DecisionRecord", askId: q.askId,
+          decision: kind, decidedBy: "human@decision-panel",
+          decidedAt: new Date().toISOString(), note: q[kind]
+        }], {});
+        document.getElementById("receipt").value = receiptText();
+      }
+    });
+  }
+
+  for (var i = 0; i < QUEUE.length; i++) renderCard(QUEUE[i]);
+  document.getElementById("receipt").value = receiptText();
+
+  document.getElementById("btn-copy").onclick = function () {
+    var el = document.getElementById("receipt");
+    el.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(el.value);
+  };
+})();
+</script>
+</body>
+</html>
