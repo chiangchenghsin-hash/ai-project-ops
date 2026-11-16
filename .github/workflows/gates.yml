@@ -73,7 +73,7 @@ jobs:
       - name: Unit tests (node --test, skipped until tests/ exists)
         if: hashFiles('tests/**') != ''
         shell: bash
-        run: node --test tests/
+        run: node --test "tests/**/*.test.js"
 
   e2e:
     name: panel e2e (Chrome CDP)

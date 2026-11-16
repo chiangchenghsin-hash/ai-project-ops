@@ -9,6 +9,6 @@
     "stop": "node panel.js stop",
     "open": "node panel.js open",
     "verify": "node selftest.js",
-    "test": "node --test tests/"
+    "test": "node --test \"tests/**/*.test.js\""
   }
 }
