@@ -23,7 +23,7 @@ frontmatter in [SKILL.md](../SKILL.md).
 | 4 | `description` | What the skill does + trigger phrases + a "Not for" negative-trigger clause. | see SKILL.md |
 | 5 | `description_zh` | Short Chinese-market gloss. | English gloss (release is English-only) |
 | 6 | `description_en` | Short English gloss. | see SKILL.md |
-| 7 | `version` | Semver string. | `1.2.0` |
+| 7 | `version` | Semver string. | see `SKILL.md` frontmatter |
 | 8 | `author` | Author identifier. | `Chiang Chenghsin` |
 
 Optional but recommended and present here: `examples_zh`, `examples_en` (3 each),

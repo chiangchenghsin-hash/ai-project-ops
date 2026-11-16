@@ -61,7 +61,8 @@ not be executed at all (UNCERTAIN, via E12).
   (no 3-signal presence), or was shipped ENABLED by default.
 - **Detection command or signal:** `status.json` shows a real run (not
   `skipped: not present`) while transcript mtimes are older than the window and
-  observatory ports are closed; the job registry shows default-enabled.
+  the panel port is closed (env `PANEL_PORT`, default 4174); the job registry
+  shows default-enabled.
 - **Required PDCA state:** **FAIL**.
 - **Remediation:** Ship the job DISABLED, add the 3-signal presence check,
   re-verify the skip path (VC14), and purge any spend from the run.

@@ -12,6 +12,10 @@ opens daily — an AI that merely documents the panel has not delivered it.
 
 ## Views (top-nav, dashboard style)
 
+Day-one subset: view 1 (Command desk), view 3 (Issue ledger) and the
+scheduled-job status table. SKILL.md section 8's Done line is the binding
+day-one acceptance; views 2 and 4-7 grow in as the project needs them.
+
 1. **Command desk** — KPI tiles (span in hours, billed tokens, $, round count) +
    "next command" textarea + [Send update (copy snapshot)] + [Generate only] +
    notification inbox + scheduled-job status table + one-line collaboration rules.
@@ -68,6 +72,7 @@ The human pastes it to Claude — that IS the direction channel.
 ## Data contracts (jobs → panel)
 
 - `rounds.json`: `{rounds:[{id,name,outcome,start,end,ongoing,req,in,out,cacheR,billed,fresh,cost}], total, asof}`
+  (`asof` = ISO 8601 string or `null`)
 - `notifications.json`: `[{ts,title,body,level,read}]` (newest first, cap 50)
 - `status.json`: `{jobName:{last_run,ok,summary}}`
 - `module-notes.json`: `{name:{domain,disp,what,why}}` (zero-omission over the
@@ -76,6 +81,9 @@ The human pastes it to Claude — that IS the direction channel.
 Jobs write these; the service imports them into SQLite (`POST /api/import/*`)
 so the panel stays a pure consumer. SQLite is the only store for panel state;
 the JSON files are the job↔service handoff format, never a second store.
+Day one ships the first three as EMPTY shapes (valid state). The starter kit's
+`selftest.js` asserts against its own seeded demo data — retarget its fixtures
+to your data before claiming a green run on a fresh project.
 
 ## Presence gate
 
@@ -83,10 +91,10 @@ Every scheduled job starts with a cheap check (any signal = present):
 
 1. project session transcripts (`~/.claude/projects/<slug>/*.jsonl`) mtime < 6h, or
 2. any git-tracked file mtime < 6h (direct IDE edits count), or
-3. observatory ports accepting connections (panel in use).
+3. the panel's HTTP port accepting connections (default 4174, env `PANEL_PORT`).
 
 Absent → record `skipped: not present` in status.json and exit 0 silently
-(no notify, no spend). Window via env (e.g. `PRESENCE_HOURS`, your pick). Stateless and
+(no notify, no spend). Window = `PRESENCE_HOURS` hours (env, default 6). Stateless and
 self-healing — prefer this over enable/disable task toggling, which leaks state
 after crashes.
 

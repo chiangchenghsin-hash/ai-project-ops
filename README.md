@@ -14,7 +14,7 @@ unattended automation. Ships as a Claude Code / WorkBuddy skill.
 
 | File | What it gives you |
 |---|---|
-| `SKILL.md` | The 12 core disciplines, loaded when the skill triggers; 8-field frontmatter |
+| `SKILL.md` | The 14 core disciplines, loaded when the skill triggers; 8-field frontmatter |
 | `references/task-log-pdca.md` | PDCA ledger template + scoring rules (`docs/TASK-LOG.md`) |
 | `references/subagent-brief.md` | Task-brief template for delegating to subagents |
 | `references/metering.md` | Token/cost metering rules + measured on/off protocol |
@@ -38,7 +38,7 @@ unattended automation. Ships as a Claude Code / WorkBuddy skill.
 | `templates/registry.json` | Versioned master registry with publish roles, instances and benchmark provenance |
 | `docs/DISCIPLINE-ISSUES.md` | Skill's own defect ledger: twelve issues from real usage; I-006 plus I-008..I-012 OPEN pending main-session verification |
 | `docs/RELEASE-CHECKLIST.md` | Pre-publish gates + post-publish trigger-regression reminder |
-| `docs/TRIGGER-REGRESSION.md` | 20 positive / 10 negative trigger phrases + pass rule |
+| `docs/TRIGGER-REGRESSION.md` | 25 positive / 10 negative trigger phrases + pass rule |
 | `CHANGELOG.md` | Release history |
 
 **New in 1.5.0 (C7).** The PRD-to-action backbone makes `docs/PRD.md`,
@@ -60,10 +60,14 @@ transparency slider, and colored sidebar icons. See
 4. **Command panel** — command snapshot / issue ledger / work-division board / hour-axis gantt; SQLite is the single source of truth, the panel is a TypeScript UI over the service API. It is a BUILD deliverable, not documentation.
 5. **Presence gate** — scheduled jobs run only while the human is active in the project.
 6. **Measured on/off switches** — token-spending automation ships disabled; probe, meter, score, then decide.
-7. **Structure gates** — optional symbol-graph structural rules for rewrites.
+7. **Structure gates** — default-ON structural rules for codebases: dependency cycles and dangling ids block the turn (symbol-graph rules for rewrites).
 8. **Day-one bootstrap** — ordered checklist to stand the discipline up on a fresh project.
 9. **Rework, replanning & sync loops** — rework = new PDCA entry + its own gantt bar; deterministic sync scripts; memory↔todos boundary; git for artifacts, SQLite for state.
 10. **Script-value judgment** — repeated deterministic flows become versioned scripts (BACKGROUND / CONDITIONS / VERSION header); the AI proactively proposes scripting.
+11. **Response style** — softened ASD-STE100 controlled style for every surface a human reads, behind a fact-retention gate.
+12. **Hooks** — project-level UserPromptSubmit + Stop hooks make the discipline unbypassable: issue-ledger touch, per-turn PDCA growth, invariants I1-I10.
+13. **PRD-to-action** — the plan backbone (I9): PRD + milestones.json + milestone-plan.json are one source; adversarial milestone gate blocks vague plans.
+14. **Competitive research is a gate** — research lands in templates and a benchmark-adoption chain (I10), never as a standalone report.
 
 ## Install
 

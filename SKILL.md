@@ -5,7 +5,7 @@ display_name_en: 'AI Project Ops'
 description: 'Operating discipline for AI-led engineering projects (especially clean-room rewrites and reverse-engineering-driven development) where a human directs and an AI executes. Use when starting or running such a project, or when the user asks about PDCA task logging, subagent task briefs, token/cost metering, a human-AI command panel (command snapshot / issue ledger / linked gantt), presence-gated scheduled jobs, or measured on/off decisions for token-spending automation. Triggers include "PDCA", "task ledger", "subagent brief", "token metering", "token spend", "command snapshot", "issue ledger", "presence gate", "scheduled tasks", "is it worth enabling", "rework", "re-planning", "linked gantt board", "day-one bootstrap", "script proposal", "when to script", "ASD-STE100", "simplified technical English", "aircraft maintenance manual style", "short sentences", "80% STE", "discipline gate", "Stop hook", "session start hook", "issue ledger update", "scaffold plan", "task dependency DAG", "PRD to action", "milestone main line", "work breakdown structure", "macOS 27 Golden Gate", "Liquid Glass", "transparency slider", "benchmark adoption", "template registry", "master instance publish", "competitive research landing". Not for: pure report or document generation, multi-tenant authentication or authorization systems, 3D or spatial views, cloud file sync, or answering conceptual questions about what skills are or how the skill system works.'
 description_zh: 'Operating discipline for AI-led engineering projects: PDCA task logs, subagent briefs, token metering, a human-AI command panel, and presence-gated scheduled automation. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or conceptual questions about skills.'
 description_en: 'Apply traceability, cost-control, and safe-automation rules to AI-led engineering projects: a single PDCA ledger, self-contained subagent briefs, measured token metering, a built command panel, and measured on/off switches. Not for: pure report generation, multi-tenant auth systems, 3D views, cloud sync, or answering conceptual questions about skills.'
-version: '1.10.0'
+version: '1.10.1'
 author: 'Chiang Chenghsin'
 agent_created: true
 allowed-tools:
@@ -13,6 +13,8 @@ allowed-tools:
   - Grep
   - Glob
   - Bash
+  - Write
+  - Edit
 examples_zh:
   - 'Start a clean-room rewrite and stand up the PDCA task log'
   - 'Draft a subagent brief with mutually exclusive file ownership'
@@ -36,7 +38,10 @@ live in [scripts/](scripts/).
 
 ## 1. PDCA task log (single ledger, `docs/TASK-LOG.md`)
 
-Every task — especially every subagent package — appends one entry on completion:
+Every turn that does work appends exactly one entry on completion — a subagent
+package is one entry; a Q&A-only turn appends a one-line note. The Stop gate
+(I2) enforces PER-TURN growth: a new entry or +80 bytes versus the turn start,
+or the turn blocks (escape hatches in `hooks/INSTALL.md`). Entry shape:
 
 - **P**lan: goal / acceptance criteria / explicit non-goals
 - **Do**: method (tools, order) / output files
@@ -139,9 +144,10 @@ evidence; paste verification output (the CDP suite prints PASS lines).
 
 Scheduled work runs ONLY while the human is active in the project. Gate every job
 with a cheap 3-signal check (any = present): project session transcripts written
-recently; tracked-file mtimes changed recently; observatory port accepting
-connections. Window ~6h, env-overridable. Absent → quiet skip, record
-`skipped: not present`, zero notifications, zero spend.
+recently; tracked-file mtimes changed recently; the panel's HTTP port accepting
+connections (default 4174, env `PANEL_PORT`). Window = `PRESENCE_HOURS` hours
+(default 6). Absent → quiet skip, record `skipped: not present`, zero
+notifications, zero spend.
 Pattern: [references/panel.md](references/panel.md#presence-gate).
 
 ## 6. Measured on/off switches
@@ -175,9 +181,16 @@ before any other bootstrap step. It instantiates `docs/TASK-LOG.md` and
 hook checks invariant I3; a hand-written plan without the
 `ai-project-ops.plan/1.0` marker is FAIL.
 
-Create, in order: `docs/TASK-LOG.md` (header block from
+Project root: every script resolves it as `AIOPS_ROOT` (env) or, as fallback,
+the parent of `scripts/`. For a project OUTSIDE this package, set
+`AIOPS_ROOT=<your project root>` before running `scaffold.js` or any hook —
+otherwise the files land in the package root, not your project.
+
+Create, in order: `docs/TASK-LOG.md` (scaffold already instantiated it — verify
+its header block against
 [references/task-log-pdca.md](references/task-log-pdca.md)); `tools/usage_probe.py`
-against YOUR meter DB (introspect the schema first — the join in
+against YOUR meter DB (not shipped — start from
+`tools/usage_probe.py.example`; introspect the schema first — the join in
 [references/metering.md](references/metering.md) is one working example, not a
 standard); empty `rounds.json` / `notifications.json` / `status.json` per the
 data contracts in [references/panel.md](references/panel.md); BUILD the web panel
@@ -186,9 +199,13 @@ the JSON files directly; a tiny service over SQLite is the target and the sole
 state store). Day-one minimum views: command desk (snapshot button) + issue
 ledger + job status; add gantt / tokens / modules only when needed. Done = the
 page opens, one click copies a command snapshot, a reply cell survives reload.
+Then: install the discipline hooks at PROJECT level (section 12,
+`hooks/INSTALL.md`) and paste the rollout check output as Check evidence.
 Then: scheduled jobs in whatever scheduler the OS provides (cron /
 schtasks / launchd; typical starters: usage refresh, test regression, red-line
-guard, git patrol, snapshot), each gated per section 5 and shipped per section 6. Briefs live inside the assignment message
+guard, git patrol, snapshot). Day one registers ZERO jobs — add starters one at
+a time, each gated per section 5 and shipped per section 6. Briefs live inside
+the assignment message
 itself (template in [references/subagent-brief.md](references/subagent-brief.md))
 — no brief directory is required.
 
@@ -266,11 +283,12 @@ Install at PROJECT level only; see `hooks/INSTALL.md`.
   Every turn either changes an issue or records a deliberate `no-new`. Silence
   is a FAIL (I1). The complaint that opened this round became entry I-001 in
   `docs/DISCIPLINE-ISSUES.md`.
-- End of turn: `scripts/discipline-gate.js` (Stop) recomputes eight invariants
-  (`docs/DISCIPLINE-INVARIANTS.md`). Missing I1-I6 -> exit 2; the turn is
-  blocked with a concrete fix hint. I7/I8 are UNCERTAIN and never block.
+- End of turn: `scripts/discipline-gate.js` (Stop) recomputes the invariants
+  I1-I10 (`docs/DISCIPLINE-INVARIANTS.md`). Missing I1-I6, I9 or I10 -> exit 2;
+  the turn is blocked with a concrete fix hint. I7/I8 are UNCERTAIN and never
+  block.
 - Templates: `scripts/scaffold.js`. Section 7 defaults ON.
-- Negative control: `node scripts/selftest-discipline.js` must print 12/12.
+- Negative control: `node scripts/selftest-discipline.js` must print 15/15.
   A gate that never fires is decoration.
 - Release: `python scripts/package.py --out <zip>` — reproducible exclusions,
   UTF-8 names, checksum outside the archive.
@@ -286,9 +304,11 @@ Three files are the single source for milestone structure: `docs/PRD.md`,
 `assets/linked-gantt-board/data/milestone-plan.json`. The main line is the
 ordered milestones; sub-lines are the work units per milestone; relations are
 the dependency edges. `scripts/prd-to-action.js` enforces falsifiable
-Completion fields and concrete Verify commands by reusing the adversarial gate
-of the locally installed `prd-to-action` skill (user-level skills directory,
-`prd-to-action/SKILL.md`, Phase 0 INGEST and the Milestone template). A turn
+Completion fields and concrete Verify commands by adapting the adversarial
+gate of the `prd-to-action` skill (Phase 0 INGEST and the Milestone template,
+READ as a method reference from the user-level skills directory — provenance,
+NOT a runtime dependency: `scripts/prd-to-action.js` is self-contained and
+runs without that skill installed). A turn
 that edits the plan MUST re-run that gate: invariant I9, HARD/blocking. See
 `docs/DISCIPLINE-INVARIANTS.md`.
 

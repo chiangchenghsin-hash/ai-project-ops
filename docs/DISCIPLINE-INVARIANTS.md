@@ -56,7 +56,7 @@ PASS, any other exit -> hard FAIL (blocks the turn), absent PRD artifacts ->
 UNCERTAIN (non-blocking three-state, never a false block). Real output:
 `PASS I9 :: prd-to-action.js exit 0 (10/10 gates)`,
 `DISCIPLINE GATE PASS (7 hard / 2 soft)`, `GATE_EXIT=0`.
-`scripts/selftest-discipline.js` now reports 14/14 and includes a case proving
+`scripts/selftest-discipline.js` now reports 15/15 and includes a case proving
 I9 is UNCERTAIN when the PRD artifacts are intentionally absent.
 
 ## Three-state behaviour and fail-open
@@ -78,8 +78,8 @@ I9 is UNCERTAIN when the PRD artifacts are intentionally absent.
 1. **Skipped turn** — no issue update, no PDCA entry, no templates. Gate MUST
    return exit 2 with I1/I2/I3 failing and a concrete fix hint on stderr.
 2. **Compliant turn** — same start, then `issue.js no-new`, `scaffold.js`, one
-   PDCA entry with pasted evidence. Gate MUST return exit 0 with all six
-   hook-wired hard invariants (I1-I6, I9 and I10) green where artifacts exist.
+   PDCA entry with pasted evidence. Gate MUST return exit 0 with all
+   hook-wired hard invariants (I1-I6, I9, I10) green where artifacts exist.
    Stop hook wires `scripts/prd-to-action.js` (see "I9 wiring status" above).
 
 A gate that never fires is decoration. Run this after changing any invariant.

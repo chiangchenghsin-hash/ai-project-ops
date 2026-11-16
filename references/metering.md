@@ -8,7 +8,8 @@
   it READ-ONLY (`file:...?mode=ro`). Never write it; never echo secrets/config rows.
 - Attribute spend to projects via session transcripts (example join on one
   tool's schema — adapt to yours: `session_log_sync.file_path LIKE '%' ||
-  session_id || '%'` → project slug).
+  session_id || '%'` → project slug). Slug rule: one stable slug per project —
+  the project root directory name, lowercase.
   Per-run attribution: each `claude -p` invocation is its own session — measure
   per session id, not by guessing.
 - Columns to report: ONE small table with exactly six columns —

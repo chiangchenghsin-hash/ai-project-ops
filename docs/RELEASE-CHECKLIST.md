@@ -35,6 +35,10 @@ rules (8-field frontmatter, `@references` layout, zip rules, red lines) are in
       `*.db-wal`, `.chrome-check*`, no browser profiles, no `.git/`.
 - [ ] Zip built with UTF-8 filenames and the UTF-8 filename flag (`0x800`);
       arcnames relative; no packaged `*.zip`.
+- [ ] Release archive built via `python scripts/package.py --out
+      release/ai-project-ops-<version>.zip` (gates print `PACKAGE PASS`);
+      the sibling `<zip>.sha256` exists outside the archive; spot-check the
+      zip carries the bumped `version` and no forbidden entries.
 - [ ] Install paths documented for BOTH Claude Code and WorkBuddy in README.
 - [ ] `CHANGELOG.md` has an entry for the version being released; handoffs
       archived.
@@ -42,7 +46,7 @@ rules (8-field frontmatter, `@references` layout, zip rules, red lines) are in
 ## Post-publish reminder
 
 - Re-run the trigger regression in
-  [TRIGGER-REGRESSION.md](TRIGGER-REGRESSION.md): all 20 positive phrases must
+  [TRIGGER-REGRESSION.md](TRIGGER-REGRESSION.md): all 25 positive phrases must
   activate the skill, all 10 negative phrases must not. Do this after ANY
   edit to `description` (or `description_en` / `description_zh`), because a
   trigger-list change can silently break routing. A missed positive or a

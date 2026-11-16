@@ -54,7 +54,7 @@ command is not duplicated.
 | hook | script | behaviour |
 |---|---|---|
 | `UserPromptSubmit` | `scripts/session-start.js` | Writes `docs/evidence/session.json` (start snapshot) and injects a <120-token reminder with the open-issue count and the three mandatory closing actions. Always exit 0. |
-| `Stop` | `scripts/discipline-gate.js` | Recomputes the eight invariants in `docs/DISCIPLINE-INVARIANTS.md`. Missing I1-I6 -> exit 2 with a fix hint on stderr, which blocks the turn. I7/I8 are UNCERTAIN and never block. |
+| `Stop` | `scripts/discipline-gate.js` | Recomputes the invariants I1-I10 in `docs/DISCIPLINE-INVARIANTS.md`. Missing I1-I6, I9 or I10 -> exit 2 with a fix hint on stderr, which blocks the turn. I7/I8 are UNCERTAIN and never block. |
 
 ## Escape hatches
 
@@ -65,7 +65,7 @@ command is not duplicated.
 ## Rollout check (paste as PDCA Check evidence)
 
 ```
-node scripts/selftest-discipline.js        # expect 12/12 passed, RESULT: PASS, exit 0
+node scripts/selftest-discipline.js        # expect 15/15 passed, RESULT: PASS, exit 0
 node scripts/session-start.js              # expect the reminder block
 node scripts/issue.js list                 # expect the open-issue table
 node scripts/scaffold.js                   # expect two PASS lines

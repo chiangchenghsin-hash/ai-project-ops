@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""BACKGROUND: Token spend numbers must come from the meter DB, never from
+estimates (SKILL.md section 3). This file is the SHIPPED EXAMPLE of
+tools/usage_probe.py: copy it to tools/usage_probe.py and adapt the join to
+YOUR meter schema. It replaces hand-counted spend tables.
+
+CONDITIONS: Python 3 stdlib only. Open the meter DB READ-ONLY
+(file:...?mode=ro); never write it, never echo secrets/config rows. No meter
+DB exists -> read the per-call usage fields the API returns instead; never
+estimate. Exit 0 on success, 1 on a real error. Run with `python -I` for
+interpreter isolation.
+
+VERSION: 1.0.0 - example probe skeleton (COLD-FIX-01).
+"""
+import os
+import sys
+
+
+def main() -> int:
+    db = os.environ.get("METER_DB", "")
+    if not db or not os.path.exists(db):
+        # Day one often has no meter DB yet. That is not an error: fall back to
+        # the per-call usage fields the API returns. Never estimate.
+        print("no meter DB found -> read per-call usage fields (never estimate)")
+        return 0
+    # Adapt to your schema (introspect first: sqlite3 .schema, or the tool docs).
+    # Example shape of the join in references/metering.md:
+    #   session transcripts -> project slug (root directory name, lowercase)
+    #   -> sum in / out / cache-read / $ per slug over the requested window.
+    # Print the six-column table + ONE conclusion line (SKILL.md section 3);
+    # billed / fresh are formula notes, never columns.
+    import sqlite3  # noqa: F401  # kept: the adapted script opens the DB here
+
+    conn = sqlite3.connect("file:" + db + "?mode=ro", uri=True)
+    conn.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

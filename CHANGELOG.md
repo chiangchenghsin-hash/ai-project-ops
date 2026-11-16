@@ -4,6 +4,38 @@ All notable changes to this skill package. Versions follow semver.
 
 ## Unreleased
 
+## 1.10.1 - 2026-11-16 (cold-reader fix round)
+
+Docs-only release. Three zero-context cold readers audited the package
+(COLD-01: effectiveness PASS - usable cold) and the findings fix round
+(COLD-FIX-01) closed all 19 items. No product code changed.
+
+- **Number sync**: the selftest expectation pins `15/15` (the count the
+  command prints) in SKILL.md, hooks/INSTALL.md, DISCIPLINE-INVARIANTS.md
+  and one live ref the readers missed (references/prd-to-action.md).
+- **First-use traps closed**: AIOPS_ROOT root-resolution stated in the
+  day-one section (new projects no longer write into the package root by
+  accident); scaffold-vs-create order clarified; `tools/usage_probe.py.example`
+  shipped as the probe skeleton.
+- **Contradictions closed**: PDCA cadence now states the per-turn growth
+  rule the Stop gate enforces (with escape hatches); README says 14
+  disciplines with the list complete and structure gates "default ON"; the
+  hard-invariant set is named exactly (I1-I6, I9, I10 block; I7/I8 never
+  do); prd-to-action is method provenance, not a runtime dependency.
+- **Spec pins**: presence signal #3 = panel port (`PANEL_PORT`, default
+  4174), `PRESENCE_HOURS` default 6, `asof` = ISO 8601 or null, meter slug
+  = project root directory name, day one registers zero jobs, day-one
+  panel subset named (command desk + issue ledger + job status).
+- **Trigger regression**: the keyword list now covers every description
+  trigger (+22 keywords, coverage rule added) with 5 new positive phrases
+  (25 positive / 10 negative).
+- **Scope ruling - Stage B cancelled (2026-11-14)**: governance cards will
+  NOT be wired into the panel's sheet-acks (human ruling: no real effect).
+  The decision-card experience stays a one-off Artifact (AskCards +
+  receipt) for multi-item decisions, never permanent panel surface.
+- **Release checklist**: the archive step (package.py + sibling .sha256 +
+  zip spot-check) is now a named gate - the 1.10.0 lesson.
+
 ## 1.10.0 - 2026-11-14 (SOP pack + ops stats + tabbed work board + A2UI Stage A)
 
 Ships R35, R36 and AUI-01 Stage A: the SOP template pack on the milestone

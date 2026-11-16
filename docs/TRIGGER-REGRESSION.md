@@ -1,4 +1,4 @@
-# Trigger regression (20 positive / 10 negative)
+# Trigger regression (25 positive / 10 negative)
 
 Guard the `description` trigger surface of [SKILL.md](../SKILL.md). Re-run this
 regression after ANY edit to `description`, `description_en` or
@@ -15,16 +15,25 @@ checkable without a live model. Define:
   `token spend`, `token/cost`, `metering`, `command snapshot`, `issue ledger`,
   `presence gate`, `scheduled job`, `scheduled task`, `is it worth enabling`,
   `rework`, `re-planning`, `linked gantt`, `day-one bootstrap`,
-  `script proposal`, `when to script`, `command panel`, `measured on/off`.
+  `script proposal`, `when to script`, `command panel`, `measured on/off`,
+  `asd-ste100`, `simplified technical english`, `aircraft maintenance manual`,
+  `short sentences`, `80% ste`, `discipline gate`, `stop hook`,
+  `session start hook`, `issue ledger update`, `scaffold plan`,
+  `task dependency`, `prd to action`, `milestone main`, `work breakdown`,
+  `macos 27`, `golden gate`, `liquid glass`, `transparency slider`,
+  `benchmark adoption`, `template registry`, `master instance publish`,
+  `competitive research landing`.
+  Coverage rule: every trigger phrase in the SKILL.md `description` maps to
+  >= 1 keyword above; re-check this on every description edit.
 - EXCLUSION topics (the "Not for" red line): pure report/document generation,
   multi-tenant auth systems, 3D or spatial views, cloud file sync, conceptual
   questions about skills.
 
 A phrase ACTIVATES the skill iff it contains >= 1 TRIGGER keyword and 0
-EXCLUSION signals. The regression PASSES iff all 20 positives ACTIVATE and all
+EXCLUSION signals. The regression PASSES iff all 25 positives ACTIVATE and all
 10 negatives do NOT. Every negative must also concern >= 1 EXCLUSION topic.
 
-## 20 positive phrases (must match)
+## 25 positive phrases (must match)
 
 | # | Phrase | Trigger keyword present |
 |---|---|---|
@@ -48,6 +57,11 @@ EXCLUSION signals. The regression PASSES iff all 20 positives ACTIVATE and all
 | 18 | Estimate work in token tiers S/M/L/XL and meter token spend | token spend |
 | 19 | Linked gantt board with hour-based placeholder bars | linked gantt |
 | 20 | Rework must be its own gantt bar and PDCA entry | rework, pdca |
+| 21 | Apply the ASD-STE100 short sentences style to my PDCA Check lines | asd-ste100, short sentences, pdca |
+| 22 | Wire the Stop hook and session start hook so the discipline gate cannot be skipped | stop hook, session start hook, discipline gate |
+| 23 | Run PRD to action on the milestone main line and the work breakdown structure | prd to action, milestone main, work breakdown |
+| 24 | Close the benchmark adoption chain and the template registry master instance publish | benchmark adoption, template registry, master instance publish |
+| 25 | Restyle the panel with macOS 27 Liquid Glass and a transparency slider | macos 27, liquid glass, transparency slider |
 
 ## 10 negative phrases (must NOT match)
 
@@ -66,7 +80,7 @@ EXCLUSION signals. The regression PASSES iff all 20 positives ACTIVATE and all
 
 ## Pass rule
 
-- All 20 positive phrases contain >= 1 TRIGGER keyword and 0 EXCLUSION signals
+- All 25 positive phrases contain >= 1 TRIGGER keyword and 0 EXCLUSION signals
   -> the router MUST activate the skill for each.
 - All 10 negative phrases contain 0 TRIGGER keywords and >= 1 EXCLUSION topic
   -> the router MUST NOT activate the skill for any.
