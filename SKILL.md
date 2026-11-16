@@ -288,7 +288,7 @@ Install at PROJECT level only; see `hooks/INSTALL.md`.
   the turn is blocked with a concrete fix hint. I7/I8 are UNCERTAIN and never
   block.
 - Templates: `scripts/scaffold.js`. Section 7 defaults ON.
-- Negative control: `node scripts/selftest-discipline.js` must print 15/15.
+- Negative control: `node scripts/selftest-discipline.js` must print 18/18.
   A gate that never fires is decoration.
 - Release: `python scripts/package.py --out <zip>` — reproducible exclusions,
   UTF-8 names, checksum outside the archive.

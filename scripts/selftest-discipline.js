@@ -3,12 +3,15 @@
  * BACKGROUND: A gate that never fires is decoration. This self-test builds two
  * throwaway sandboxes and proves the discipline gate has DISCRIMINATION: a turn
  * that skips the issue ledger / PDCA / templates MUST be blocked (exit 2), and
- * the same turn after doing the three steps MUST pass (exit 0). This is the
+ * the same turn after doing the three steps MUST pass (exit 0). Scenario B also
+ * proves I3 fires on an UNFILLED scaffold (placeholder tokens present) and only
+ * passes after the plan is filled - the MAT-01 conformance hole. This is the
  * failure-cell check required by the skill's three-state discipline.
  * CONDITIONS: Node >= 18, stdlib only. No network, no Chrome, no SQLite, no
- * writes outside os.tmpdir(). Exit 0 when both scenarios behave as frozen,
+ * writes outside os.tmpdir(). Exit 0 when all scenarios behave as frozen,
  * 1 otherwise. Prints one PASS/FAIL line per assertion with real output.
- * VERSION: 1.0.0 - initial negative/positive gate discrimination test.
+ * VERSION: 1.1.0 - I3 unfilled-plan negative control + compliant plan fill.
+ * 1.0.0 - initial negative/positive gate discrimination test.
  */
 'use strict';
 const fs = require('fs');
@@ -55,6 +58,50 @@ function gate(d) {
   return { code: r.status, out: (r.stdout || '') + (r.stderr || ''), report };
 }
 
+/* Filled plan a compliant turn writes after scaffold: real marker text, zero
+   angle-bracket placeholder tokens (I3 placeholder detector must stay quiet). */
+const COMPLIANT_PLAN = [
+  'ai-project-ops.plan/1.0 - filled plan (scaffold then fill in the same turn).',
+  '',
+  '# Project plan',
+  '',
+  '## 1. Purpose and non-goals',
+  '- Purpose: Prove the discipline gate discriminates incomplete from complete turns.',
+  '- Explicit non-goals: no network; no package installs; no writes outside the sandbox.',
+  '',
+  '## 2. Acceptance criteria (locked before work)',
+  '| id | criterion | machine check | failure cell |',
+  '|---|---|---|---|',
+  '| A1 | Incomplete turn blocked | gate exit 2 with I1/I2/I3 named | gate exit 0 |',
+  '| A2 | Complete turn passes | gate exit 0, no hard FAIL | any hard FAIL |',
+  '',
+  '## 3. Work breakdown (linked, not flat)',
+  '| task id | owner | owner_type | depends_on | acceptance | evidence path |',
+  '|---|---|---|---|---|---|',
+  '| T1 | main | main | -> | both controls green | selftest stdout |',
+  '',
+  '## 4. Structure gate (section 7, default ON)',
+  '- Symbol-level graph: assets/linked-gantt-board/data/module-deps.json',
+  '- Structural rules: zero cycles; zero dangling ids.',
+  '- Rebuild at: any module-deps.json edit.',
+  '',
+  '## 5. PDCA and issue ledger',
+  '- Ledger: docs/TASK-LOG.md (main session owns the scoreboard).',
+  '- Issues: node scripts/issue.js list at session start.',
+  '- Every Check section pastes real command output.',
+  '',
+  '## 6. Delegation',
+  '- One self-contained brief per package; exclusive file ownership.',
+  '- A handback report is a claim, not proof. Re-run its key command.',
+  '',
+  '## 7. PRD-to-action backbone (I9)',
+  '- Main line: M1 - M2 (sandbox stub; real package uses docs/PRD.md stores).',
+  '- Sub-lines: M1: W1; M2: W2.',
+  '- Relations: W1 to W2 (FS); acyclic.',
+  '- Gate: node scripts/prd-to-action.js (absent here -> I9 UNCERTAIN, non-blocking).',
+  '',
+].join('\n');
+
 try {
   /* ---- Scenario A: a turn that skips everything (must be BLOCKED) ---- */
   const a = sandbox('skipped');
@@ -83,6 +130,22 @@ try {
   const sc = run(b, 'scaffold.js');
   PASS('B: templates instantiated', sc.status === 0 && /docs\/PLAN\.md/.test(sc.stdout),
     (sc.stdout || '').trim().split('\n').slice(-1)[0]);
+  /* Negative control: scaffold leaves an UNFILLED plan (placeholder tokens).
+     I3 must fire with placeholders named - not pass on the marker alone. */
+  const gu = gate(b);
+  PASS('B: unfilled scaffold blocked by I3 (placeholder control)',
+    gu.code === 2 && /FAIL\s+I3/.test(gu.out) && /placeholders=[1-9]/.test(gu.out),
+    (gu.out.match(/FAIL\s+I3[^\n]*/) || ['not found'])[0]);
+  PASS('B: I3 fix hint names the fill step',
+    /replace every placeholder/.test(gu.out),
+    'fix hint present=' + /replace every placeholder/.test(gu.out));
+  /* What a compliant turn does next: fill the plan in the same turn. */
+  fs.writeFileSync(path.join(b, 'docs/PLAN.md'), COMPLIANT_PLAN);
+  PASS('B: compliant plan has zero angle-bracket tokens',
+    (COMPLIANT_PLAN.match(/</g) || []).length === 0 &&
+    /ai-project-ops\.plan\/1\.0/.test(COMPLIANT_PLAN),
+    'lt_count=' + (COMPLIANT_PLAN.match(/</g) || []).length +
+    ' marker=' + /ai-project-ops\.plan\/1\.0/.test(COMPLIANT_PLAN));
   const log = path.join(b, 'docs/TASK-LOG.md');
   fs.appendFileSync(log, '\n### 2026-11-08 selftest entry (tier S, by: main session)\n' +
     '- C Check: PASS 30/30 exit_code=0 sha256 MATCH\n' +

@@ -106,9 +106,11 @@ after crashes.
   script (e.g. `panel.bat start|stop|open`) including a `/shutdown` endpoint so
   the UI can stop its own server gracefully.
 - Clipboard copy always has a `execCommand` fallback and both paths are tested.
-- The panel must never stutter: lean bundle (no heavyweight framework unless it
-  earns its place), virtualize long tables, update views from data without
-  full-page re-renders.
+- Stay smooth at demo scale: lean bundle (no heavyweight framework unless it
+  earns its place), update views from data without full-page re-renders, and
+  keep list inputs debounced with row caps. The kit ships plain long tables;
+  virtualized long tables stay an open production-panel requirement, not a
+  shipped feature (gap 4 in linked-board-reference.md).
 - **Useful only**: a view, column, or control ships only after it earns its place
   — if it never changes a decision, it does not ship. No speculative widgets.
 

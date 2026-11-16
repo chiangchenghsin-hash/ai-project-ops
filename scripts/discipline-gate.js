@@ -12,7 +12,9 @@
  * DISCIPLINE_GATE_DRYRUN=1 to report without blocking. Internal exceptions are
  * fail-open (exit 0 + GATE-DEGRADED), matching the local CDP gate convention.
  * Exit: 0 pass/degraded, 2 invariant failed (blocks the Stop hook).
- * VERSION: 1.0.0 - initial six hard + two soft invariants (C5 discipline layer).
+ * VERSION: 1.1.0 - I3 also fails on unresolved PLAN placeholders (marker alone
+ * is not enough; an unfilled scaffold used to pass its own gate).
+ * 1.0.0 - initial six hard + two soft invariants (C5 discipline layer).
  */
 'use strict';
 const fs = require('fs');
@@ -93,12 +95,33 @@ function run() {
   const grew = !!session && (entries > session.pdca_entries || log.length > session.pdca_bytes + 80);
   add('I2', grew, 'PDCA entries now=' + entries + ', snapshot=' + (session ? session.pdca_entries : 'ABSENT'));
 
-  /* I3 - templates instantiated, never handwritten */
+  /* I3 - templates instantiated, never handwritten, and FILLED.
+     The old check passed an unfilled scaffold because the raw template
+     contains its own marker ("Plan template" / ai-project-ops.plan/1.0).
+     A marker alone is decoration: the plan must also carry zero unresolved
+     angle-bracket placeholder tokens (templates/PLAN.template.md shape).
+     HTML comments are stripped first so a kept marker comment never trips
+     the detector; ranges like I1-I10 contain no angle brackets. */
   const plan = exists('docs/PLAN.md') ? fs.readFileSync(p('docs/PLAN.md'), 'utf8') : '';
+  const planPlaceholders = (text) => {
+    const body = String(text).replace(/<!--[\s\S]*?-->/g, '');
+    const hits = [];
+    const re = /<([^<>\n]+)>/g;
+    let m;
+    while ((m = re.exec(body)) !== null) {
+      const inner = m[1].trim();
+      if (inner) hits.push(inner.slice(0, 60));
+    }
+    return hits;
+  };
+  const ph = planPlaceholders(plan);
+  const planMarker = /ai-project-ops\.plan\/1\.0/.test(plan);
   const scaffolded = exists('docs/TASK-LOG.md') && exists('docs/PLAN.md') &&
-    /ai-project-ops\.plan\/1\.0|Plan template/.test(plan);
+    planMarker && ph.length === 0;
   add('I3', scaffolded, 'docs/TASK-LOG.md=' + exists('docs/TASK-LOG.md') +
-    ' docs/PLAN.md=' + exists('docs/PLAN.md') + ' template-marker=' + /ai-project-ops\.plan\/1\.0|Plan template/.test(plan));
+    ' docs/PLAN.md=' + exists('docs/PLAN.md') +
+    ' template-marker=' + planMarker +
+    ' placeholders=' + ph.length + (ph.length ? ' [' + ph.slice(0, 3).join(' | ') + ']' : ''));
 
   /* I4/I5 - structure gate and task relationships, RECOMPUTED here, never
      trusted from an AI-written declaration */
@@ -202,7 +225,7 @@ function run() {
       '\n    fix: ' + ({
         I1: 'node scripts/issue.js list ; then add/update, or no-new --reason "..."',
         I2: 'append one PDCA entry to docs/TASK-LOG.md',
-        I3: 'node scripts/scaffold.js',
+        I3: 'node scripts/scaffold.js then replace every placeholder in docs/PLAN.md',
         I4: 'fix a cycle in data/module-deps.json',
         I5: 'fix dangling dependency ids in data/module-deps.json',
         I6: 'paste real command output in the Check section',

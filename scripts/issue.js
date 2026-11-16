@@ -8,11 +8,13 @@
  * Stop hook checks. It best-effort mirrors into SQLite only when the DB already
  * exists; it never creates a database as a side effect.
  * CONDITIONS: Node >= 18. Root = AIOPS_ROOT or the parent of scripts/.
- * Commands: list | add | update | close | no-new. Exit 0 on success, 1 on bad
- * input, 2 on ledger write failure. Every write appends to
+ * Commands: list | add | update | close | no-new | regen-doc. Exit 0 on
+ * success, 1 on bad input, 2 on ledger write failure. Every write appends to
  * docs/evidence/issue-delta.json. Never edits docs/TASK-LOG.md (main session
  * owns it). Set AIOPS_SESSION to override the session id.
- * VERSION: 1.1.0 - I-028: the SQLite mirror upserts (INSERT missing rows,
+ * VERSION: 1.2.0 - regen-doc: renders docs/DISCIPLINE-ISSUES.md from
+ * docs/evidence/issues.json (counts and row table derived, deterministic).
+ * 1.1.0 - I-028: the SQLite mirror upserts (INSERT missing rows,
  * refresh existing ones) through db.js upsertIssue, so every add/update/close
  * lands in panel.db instead of reporting "issue not found"; still only when
  * the DB file already exists (no implicit database create).
@@ -82,6 +84,59 @@ function render(data) {
   return ['| id | status | title | source | reply |', '|---|---|---|---|---|'].concat(rows).join('\n');
 }
 
+function cell(v) {
+  return String(v == null || v === '' ? '-' : v)
+    .replace(/\|/g, '\\|').replace(/\r?\n/g, ' ').trim() || '-';
+}
+function counts(data) {
+  const open = data.issues.filter(i => i.status !== 'done').length;
+  return { total: data.issues.length, done: data.issues.length - open, open };
+}
+/* Deterministic: no timestamps, ledger order preserved, every number derived
+   from docs/evidence/issues.json. */
+function renderDoc(data) {
+  const c = counts(data);
+  const rows = data.issues.map(i =>
+    `| ${i.id} | ${cell(i.status)} | ${cell(i.title)} | ${cell(i.reply)} |`);
+  const table = ['| id | status | title | reply |', '|---|---|---|---|'].concat(rows).join('\n');
+  return `# Discipline deficit ledger (skill's own defects)
+
+> Machine source: \`docs/evidence/issues.json\`. This human-readable snapshot is
+> GENERATED from that file by the main session; edit issues with
+> \`node scripts/issue.js ...\`, never by hand.
+> This is a committable artifact ABOUT the skill itself, not the project's
+> in-flight SQLite issue ledger (section 9 keeps those apart).
+
+Regenerate with \`node scripts/issue.js regen-doc\`.
+
+Source: two human reports from real usage (2026-11-08) plus defects found by the main session. ${c.total} registered, ${c.done} done, ${c.open} open.
+
+${table}
+OPEN = ${c.open}.
+
+## What this ledger proves
+
+The complaint "you refuse to update the issue ledger" was itself entry I-001.
+Registering it was the fix, not a description of the fix. C7 added I-008..I-012
+from the second human report and I-013 from the main session's re-check; every
+one carries a reply with pasted evidence, and only the main session closed
+them. I-006 was CORRECTED at C9: the arrow-line overlay was ALREADY built
+(\`gantt.ts:139-154\`, \`:308\`). Current state is always the count line above
+(${c.total} registered, ${c.done} done, ${c.open} open) - never a cached
+sentence. A stale open item is itself a defect: re-check the code before
+asserting "still open", and never report a partial fix as done.
+
+## Rules
+
+1. Session start: \`node scripts/issue.js list\`. Read it before planning.
+2. Any new question, defect or scope change gets an \`add\` in the SAME turn.
+3. Any answered question gets an \`update\` or \`close\` with a reason.
+4. No new issue -> \`no-new --reason\`, still a ledger event.
+5. I1 in the Stop hook blocks a turn that leaves the ledger untouched.
+6. Only the main session closes an issue, after pasted verification evidence.
+`;
+}
+
 function main() {
   const a = args();
   const cmd = a._[0];
@@ -90,6 +145,14 @@ function main() {
   if (cmd === 'list') {
     console.log(render(data));
     console.log('OPEN=' + data.issues.filter(i => i.status !== 'done').length);
+    return 0;
+  }
+  if (cmd === 'regen-doc') {
+    const doc = renderDoc(data);
+    fs.writeFileSync(path.join(ROOT, 'docs/DISCIPLINE-ISSUES.md'), doc);
+    const c = counts(data);
+    console.log('PASS  regen-doc :: docs/DISCIPLINE-ISSUES.md | ' +
+      c.total + ' registered, ' + c.done + ' done, ' + c.open + ' open');
     return 0;
   }
   if (cmd === 'no-new') {
@@ -132,7 +195,7 @@ function main() {
     console.log('PASS  issue ' + cmd + ' :: ' + a.id + ' | ' + mirrorSQLite(it));
     return 0;
   }
-  console.error('usage: issue.js list|add|update|close|no-new [--id --title --source --detail --reply --status --urgent --enddate --reason]');
+  console.error('usage: issue.js list|add|update|close|no-new|regen-doc [--id --title --source --detail --reply --status --urgent --enddate --reason]');
   return 1;
 }
 try { process.exit(main()); } catch (e) { console.error('issue.js FAILED: ' + e.message); process.exit(2); }

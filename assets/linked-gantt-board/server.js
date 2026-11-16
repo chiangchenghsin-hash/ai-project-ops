@@ -8,6 +8,14 @@
  * backups under ./data/backups/; POST /shutdown exits 0 after responding.
  * GET /healthz is unauthenticated liveness. Errors surface as HTTP 400 + {error}
  * so callers can see the error code. Exit 1 on unhandled request error.
+ * TRUST BOUNDARY (loopback human-AI tool): the socket binds 127.0.0.1 only;
+ * Host must be localhost:PORT or 127.0.0.1:PORT (DNS-rebinding guard);
+ * mutations (PUT/POST/DELETE) allow only same-origin Origin or no Origin
+ * (curl / Node fetch / battery api() send none) and refuse any other Origin
+ * with 403 {error}; GET stays open on the loopback socket. Request bodies
+ * cap at 1 MiB -> 413 {error} with stream abort (never buffer past the cap).
+ * Responses carry X-Content-Type-Options: nosniff. CSP is DEFERRED as a named
+ * follow-up (inline-handler audit risk in panel UI) - not set here.
  * VERSION: 2.5.0 - I-035 R35: GET /api/stats serves store.stats - the pure
  * ops-stats derivation (approval pass / human wait / completion / member
  * load) with zero writes; additive route, no frozen contract changed.
@@ -31,7 +39,11 @@ const store = require('./db');
 
 const ROOT = __dirname;
 const PORT = Number(process.env.PANEL_PORT || 4174);
-const VERSION = '2.5.0';
+const VERSION = require('./package.json').version; /* one panel version: package.json is the single source */
+/* Trust boundary: max JSON request body. Over this -> 413, stream aborted. */
+const MAX_BODY_BYTES = 1024 * 1024; /* 1 MiB */
+const LOOPBACK_HOSTS = ['localhost:' + PORT, '127.0.0.1:' + PORT];
+const SAME_ORIGIN = ['http://localhost:' + PORT, 'http://127.0.0.1:' + PORT];
 /* I-019: the four desk sheets are the allowed desk_events units. */
 const EVENT_UNITS = ['command', 'ack', 'signal', 'job'];
 const MIME = {
@@ -44,16 +56,70 @@ const MIME = {
 };
 
 function send(res, code, body, type) {
-  res.writeHead(code, { 'Content-Type': type || 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' });
+  res.writeHead(code, {
+    'Content-Type': type || 'application/json; charset=utf-8',
+    'Cache-Control': 'no-cache',
+    'X-Content-Type-Options': 'nosniff',
+  });
   res.end(body);
 }
 function json(res, code, obj) { send(res, code, JSON.stringify(obj)); }
+
+/* Host guard (all methods): only the panel's own loopback names. Blocks
+   DNS-rebinding (Host: evil.example -> 127.0.0.1). */
+function hostAllowed(req) {
+  return LOOPBACK_HOSTS.indexOf(String(req.headers.host || '')) >= 0;
+}
+
+/* Exact Origin rule for mutations (PUT/POST/DELETE), evaluated before any
+   body read:
+     - no Origin header (Node fetch, curl, battery api() helper) -> allow;
+     - Origin http://localhost:PORT or http://127.0.0.1:PORT -> allow
+       (same-origin browser panel);
+     - any other Origin (including "null") -> refuse 403 {error}.
+   GET/HEAD are not Origin-gated; the loopback bind is their boundary. */
+function mutationOriginAllowed(req) {
+  const origin = req.headers.origin;
+  if (origin === undefined) return true; /* non-browser client */
+  return SAME_ORIGIN.indexOf(String(origin)) >= 0;
+}
+
 function body(req) {
   return new Promise((resolve, reject) => {
+    /* Fast path: declared length already over the cap - refuse, drain, never
+       buffer. Streaming/chunked bodies are caught in the data handler. */
+    const declared = Number(req.headers['content-length'] || 0);
+    if (declared > MAX_BODY_BYTES) {
+      const err = new Error('request body exceeds 1MB limit');
+      err.statusCode = 413;
+      req.resume(); /* drain without accumulating */
+      reject(err);
+      return;
+    }
     let s = '';
-    req.on('data', (c) => { s += c; });
-    req.on('end', () => { try { resolve(s ? JSON.parse(s) : {}); } catch (e) { reject(e); } });
-    req.on('error', reject);
+    let size = 0;
+    let refused = false;
+    req.on('data', (c) => {
+      if (refused) return; /* already over the cap: stop accumulating */
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        /* Abort the stream once past the cap - do not buffer unbounded. */
+        refused = true;
+        s = '';
+        const err = new Error('request body exceeds 1MB limit');
+        err.statusCode = 413;
+        reject(err);
+        req.pause();
+        setImmediate(() => { try { req.resume(); } catch (_e) { /* socket gone */ } });
+        return;
+      }
+      s += c; /* bounded: only while size <= MAX_BODY_BYTES */
+    });
+    req.on('end', () => {
+      if (refused) return;
+      try { resolve(s ? JSON.parse(s) : {}); } catch (e) { reject(e); }
+    });
+    req.on('error', (e) => { if (!refused) reject(e); });
   });
 }
 
@@ -62,6 +128,16 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const p = url.pathname;
     const method = req.method || 'GET';
+
+    /* Trust boundary first: Host (all methods), then Origin on mutations. */
+    if (!hostAllowed(req)) {
+      return json(res, 403, { error: 'forbidden host' });
+    }
+    if (method === 'PUT' || method === 'POST' || method === 'DELETE') {
+      if (!mutationOriginAllowed(req)) {
+        return json(res, 403, { error: 'cross-origin mutation refused' });
+      }
+    }
 
     if (p === '/shutdown' && method === 'POST') {
       json(res, 200, { ok: true, stopping: true });
@@ -181,10 +257,15 @@ const server = http.createServer(async (req, res) => {
       send(res, 200, data, MIME[path.extname(file)] || 'application/octet-stream');
     });
   } catch (e) {
+    /* New control statuses only: 413 = body over the 1 MiB cap. */
+    if (e && e.statusCode === 413) {
+      return json(res, 413, { error: String(e.message || 'request body exceeds 1MB limit') });
+    }
     json(res, 400, { error: String(e.message || e) });
   }
 });
 
-server.listen(PORT, () => {
+/* Loopback only - never all interfaces. */
+server.listen(PORT, '127.0.0.1', () => {
   console.log(`command-panel ready: http://localhost:${PORT}/  (POST /shutdown to stop)`);
 });

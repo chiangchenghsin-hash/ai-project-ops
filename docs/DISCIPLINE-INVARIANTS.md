@@ -56,7 +56,7 @@ PASS, any other exit -> hard FAIL (blocks the turn), absent PRD artifacts ->
 UNCERTAIN (non-blocking three-state, never a false block). Real output:
 `PASS I9 :: prd-to-action.js exit 0 (10/10 gates)`,
 `DISCIPLINE GATE PASS (7 hard / 2 soft)`, `GATE_EXIT=0`.
-`scripts/selftest-discipline.js` now reports 15/15 and includes a case proving
+`scripts/selftest-discipline.js` now reports 18/18 and includes a case proving
 I9 is UNCERTAIN when the PRD artifacts are intentionally absent.
 
 ## Three-state behaviour and fail-open

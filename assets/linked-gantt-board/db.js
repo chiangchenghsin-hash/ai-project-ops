@@ -470,8 +470,50 @@ function task(id) {
   return db.prepare('SELECT * FROM tasks WHERE id=?').get(id);
 }
 
+/* Server-side input validation. Caps mirror the shipped UI maxlength attrs
+ * (src/app.ts: fTitle=60, cname/newColName=20) and the vocabularies already
+ * frozen here / in src/types.ts. Every refusal throws, so the HTTP door
+ * answers 400 with the existing {error} shape and writes nothing. */
+const CAP_TITLE = 60; /* src/app.ts fTitle maxlength="60" */
+const CAP_COL_LABEL = 20; /* src/app.ts cname / newColName maxlength="20" */
+const CAP_OWNER = 80; /* structureUpdateNode truncates owner at 80 */
+const CAP_ROLE = 500; /* long-text ceiling (ndNotes maxlength=500) */
+const CAP_HANDOFF = 500;
+const CAP_COMMAND = 4000;
+const CAP_HASH = 128; /* hashText() emits "h" + <=8 hex chars */
+const CAP_REPLY = 4000;
+const CAP_ENDDATE = 40; /* YYYY-MM-DD (date input) with slack */
+const OWNER_TYPE_VOCAB = ['human', 'main', 'subagent', 'team']; /* src/types.ts OWNER_TYPES */
+const ISSUE_STATUS_VOCAB = ['open', 'done']; /* ledger select + scripts/issue.js */
+
+function capText(v, max, label) {
+  const s = v === undefined || v === null ? '' : String(v);
+  if (s.length > max) throw new Error(label + ' too long (max ' + max + ')');
+  return s;
+}
+function assertIn(v, vocab, label) {
+  if (vocab.indexOf(String(v)) < 0) throw new Error(label + ' must be one of: ' + vocab.join(', '));
+}
+/** Task status vocabulary: the live column ids plus the frozen plan statuses
+ *  (the plan door mirrors plan status onto task rows) and the 'todo'
+ *  placeholder that template instances carry. */
+function assertTaskStatus(v) {
+  const cols = db.prepare('SELECT id FROM columns').all().map((r) => r.id);
+  assertIn(v, cols.concat(PLAN_STATUSES, ['todo']), 'status');
+}
+function assertTaskPatchCaps(patch) {
+  if (!patch) return;
+  if (Object.prototype.hasOwnProperty.call(patch, 'title') && patch.title !== null && patch.title !== undefined) capText(patch.title, CAP_TITLE, 'title');
+  if (Object.prototype.hasOwnProperty.call(patch, 'owner') && patch.owner !== null && patch.owner !== undefined) capText(patch.owner, CAP_OWNER, 'owner');
+  if (Object.prototype.hasOwnProperty.call(patch, 'role') && patch.role !== null && patch.role !== undefined) capText(patch.role, CAP_ROLE, 'role');
+  if (Object.prototype.hasOwnProperty.call(patch, 'handoff') && patch.handoff !== null && patch.handoff !== undefined) capText(patch.handoff, CAP_HANDOFF, 'handoff');
+  if (Object.prototype.hasOwnProperty.call(patch, 'owner_type') && patch.owner_type !== null && patch.owner_type !== undefined && patch.owner_type !== '') assertIn(patch.owner_type, OWNER_TYPE_VOCAB, 'owner_type');
+  if (Object.prototype.hasOwnProperty.call(patch, 'status') && patch.status !== null && patch.status !== undefined && patch.status !== '') assertTaskStatus(patch.status);
+}
+
 function updateTask(id, patch) {
   if (DEGRADED) return readOnly({ id, patch });
+  assertTaskPatchCaps(patch);
   const cur = task(id);
   if (!cur) throw new Error('task not found: ' + id);
   /* R20: a parent must exist and must not be the task itself, otherwise the
@@ -509,6 +551,7 @@ function updateTask(id, patch) {
 
 function createTask(input) {
   if (DEGRADED) return readOnly({ id: 'demo_readonly' });
+  assertTaskPatchCaps(input);
   const id = 't_' + Math.random().toString(36).slice(2, 9);
   const sort = db.prepare('SELECT COALESCE(MAX(sort),0)+1 AS n FROM tasks').get().n;
   /* R22: a child must not point at a parent that does not exist. */
@@ -628,6 +671,7 @@ function deleteTask(id) {
 
 function createColumn(input) {
   if (DEGRADED) return readOnly({ id: 'demo_readonly' });
+  if (input && input.label !== undefined && input.label !== null && input.label !== '') capText(input.label, CAP_COL_LABEL, 'label');
   const id = 'c_' + Math.random().toString(36).slice(2, 8);
   const sort = db.prepare('SELECT COALESCE(MAX(sort),0)+1 AS n FROM columns').get().n;
   db.prepare('INSERT INTO columns(id,label,color,sort) VALUES(?,?,?,?)').run(id, input.label || 'New status', input.color || '#8e8e93', sort);
@@ -636,6 +680,7 @@ function createColumn(input) {
 
 function updateColumn(id, patch) {
   if (DEGRADED) return readOnly({ id });
+  if (patch && patch.label !== undefined && patch.label !== null) capText(patch.label, CAP_COL_LABEL, 'label');
   const cur = db.prepare('SELECT * FROM columns WHERE id=?').get(id);
   if (!cur) throw new Error('column not found');
   db.prepare('UPDATE columns SET label=?, color=? WHERE id=?').run(patch.label ?? cur.label, patch.color ?? cur.color, id);
@@ -669,6 +714,11 @@ function updateIssue(id, patch) {
   if (DEGRADED) return readOnly({ id });
   const cur = db.prepare('SELECT * FROM issues WHERE id=?').get(id);
   if (!cur) throw new Error('issue not found');
+  /* I-028 vocab: the ledger select and scripts/issue.js both freeze the
+     issue status at open/done; reply/enddate get length ceilings too. */
+  if (patch && patch.status !== undefined && patch.status !== null) assertIn(patch.status, ISSUE_STATUS_VOCAB, 'status');
+  if (patch && patch.reply !== undefined && patch.reply !== null) capText(patch.reply, CAP_REPLY, 'reply');
+  if (patch && patch.enddate !== undefined && patch.enddate !== null) capText(patch.enddate, CAP_ENDDATE, 'enddate');
   db.prepare('UPDATE issues SET reply=?,enddate=?,urgent=?,status=? WHERE id=?').run(
     patch.reply ?? cur.reply, patch.enddate ?? cur.enddate,
     patch.urgent === undefined ? cur.urgent : (patch.urgent ? 1 : 0),
@@ -711,6 +761,7 @@ function upsertIssue(row) {
 function setCommand(text) {
   const next = String(text || '');
   if (DEGRADED) return readOnly({ next_command: next });
+  capText(next, CAP_COMMAND, 'command');
   const cur = db.prepare("SELECT value FROM meta WHERE key='next_command'").get();
   db.prepare('INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)').run('next_command', next);
   /* I-019 desk log: only a real change of meta.next_command is history, so a
@@ -2436,8 +2487,8 @@ function createAck(input) {
   if (DEGRADED) return readOnly({ id: 'demo_readonly', state: 'ACK' });
   const id = 'ack_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
   const now = iso(new Date());
-  const hash = String(input.snapshot_hash || '');
-  const command = String(input.command || '');
+  const hash = capText(String(input.snapshot_hash || ''), CAP_HASH, 'snapshot_hash');
+  const command = capText(String(input.command || ''), CAP_COMMAND, 'command');
   db.prepare('INSERT INTO acks(id,snapshot_hash,command,state,reject_reason,created,updated) VALUES(?,?,?,?,?,?,?)')
     .run(id, hash, command, 'ACK', '', now, now);
   /* I-019 desk log: one ack/send event per ACK created. */

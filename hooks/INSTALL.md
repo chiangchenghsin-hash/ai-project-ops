@@ -65,7 +65,7 @@ command is not duplicated.
 ## Rollout check (paste as PDCA Check evidence)
 
 ```
-node scripts/selftest-discipline.js        # expect 15/15 passed, RESULT: PASS, exit 0
+node scripts/selftest-discipline.js        # expect 18/18 passed, RESULT: PASS, exit 0
 node scripts/session-start.js              # expect the reminder block
 node scripts/issue.js list                 # expect the open-issue table
 node scripts/scaffold.js                   # expect two PASS lines

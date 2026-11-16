@@ -4,6 +4,23 @@ All notable changes to this skill package. Versions follow semver.
 
 ## Unreleased
 
+- **MATFIX-01 Phase 1 (industrialization quick wins)**: the I3 plan gate now
+  refuses placeholder plans (docs/PLAN.md filled with real state; selftest
+  18/18 with a new negative control); the issue snapshot regenerates
+  reproducibly from its machine source (`issue.js regen-doc`, 39/38/1);
+  server-side input caps + vocab validation cover all seven write paths;
+  the panel version is single-sourced in package.json (2.5.0); the panel
+  spec's performance over-claim is demoted to an honest demo-scale contract;
+  releases carry annotated tags (v1.9.0-v1.10.1) and the release checklist
+  verifies uploaded assets against their sha256.
+- **MATFIX-02 Phase 2 (ML4 keys)**: CI (`.github/workflows/gates.yml`, two
+  jobs: fast gates + Chrome CDP e2e) runs the whole checklist suite on every
+  push - official actions only, zero npm; a unit-test layer (node:test, 34
+  cases over time/graph/policy) with builtin coverage reporting (83% lines
+  over the pure core); and the trust boundary closed (loopback-only bind,
+  Origin + Host guards, 1 MiB body cap -> 413, nosniff). CSP and a
+  title-cap asymmetry are named follow-ups.
+
 ## 1.10.1 - 2026-11-16 (cold-reader fix round)
 
 Docs-only release. Three zero-context cold readers audited the package

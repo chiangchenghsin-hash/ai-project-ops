@@ -1,0 +1,130 @@
+# CI gate suite: turns the release-checklist gates from a point-in-time
+# human attestation into a system property. Zero npm dependencies by policy:
+# only Node standard library and Python standard library execute here.
+# Supply chain: official actions only (actions/checkout, actions/setup-node).
+name: gates
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: fast gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 (package requires >= 22.5)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: "Skill validator (checklist: exit 0)"
+        shell: bash
+        run: python3 scripts/validate_skill.py
+
+      - name: "English-only gate (checklist: CJK_COUNT=0)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/localize_check.py | tee "$RUNNER_TEMP/localize-out.txt"
+          grep -q '^CJK_COUNT=0$' "$RUNNER_TEMP/localize-out.txt"
+
+      - name: "Python syntax (checklist: py_compile both scripts)"
+        shell: bash
+        run: python3 -m py_compile scripts/validate_skill.py scripts/localize_check.py
+
+      - name: "JavaScript syntax (checklist: node --check, superset of verify.js)"
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(scripts/*.js assets/linked-gantt-board/*.js)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "node --check: no JavaScript files matched; refusing a vacuous pass"
+            exit 1
+          fi
+          for f in "${files[@]}"; do
+            echo "node --check $f"
+            node --check "$f"
+          done
+
+      - name: Discipline selftest (exit 0 is the assertion; count is not grepped)
+        shell: bash
+        run: node scripts/selftest-discipline.js
+
+      - name: Issue doc determinism (regen-doc must be a no-op)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/issue.js regen-doc
+          git diff --exit-code docs/DISCIPLINE-ISSUES.md
+
+      - name: Unit tests (node --test, skipped until tests/ exists)
+        if: hashFiles('tests/**') != ''
+        shell: bash
+        run: node --test tests/
+
+  e2e:
+    name: panel e2e (Chrome CDP)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 (package requires >= 22.5)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The ubuntu-24.04 runner image ships Google Chrome (listed under
+      # Browsers and Drivers in the runner-images readme). If a future image
+      # drops it, this step prints an explicit SKIP line and fails the job
+      # with the fix named; a missing browser must never pass silently.
+      - name: Locate Chrome
+        id: chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidates=()
+          if [ -n "${CHROME_PATH:-}" ]; then candidates+=("$CHROME_PATH"); fi
+          if [ -n "${CHROME_BIN:-}" ]; then candidates+=("$CHROME_BIN"); fi
+          for name in google-chrome google-chrome-stable chromium chromium-browser; do
+            if command -v "$name" >/dev/null 2>&1; then
+              candidates+=("$(command -v "$name")")
+            fi
+          done
+          candidates+=(/usr/bin/google-chrome /opt/google/chrome/chrome /usr/bin/chromium /usr/bin/chromium-browser)
+          found=""
+          for c in "${candidates[@]}"; do
+            if [ -n "$c" ] && [ -x "$c" ]; then
+              found="$c"
+              break
+            fi
+          done
+          if [ -z "$found" ]; then
+            echo "SKIP e2e :: chrome not found on runner"
+            echo "::error::E2E gate blocked: no Chrome/Chromium binary on this runner. Fix: use an image that ships Google Chrome (the ubuntu-24.04 image lists Google Chrome under Browsers and Drivers: https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md) or set CHROME_PATH. This job fails on purpose so a missing browser can never pass silently."
+            exit 1
+          fi
+          echo "Chrome binary: $found"
+          echo "path=$found" >> "$GITHUB_OUTPUT"
+
+      - name: "Run E2E gate (checklist: verify.js, ports 4174 / 9224)"
+        shell: bash
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}
+          PANEL_PORT: '4174'
+          CDP_PORT: '9224'
+        run: node scripts/verify.js
