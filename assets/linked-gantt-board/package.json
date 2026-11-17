@@ -3,6 +3,9 @@
   "version": "2.5.0",
   "private": true,
   "description": "Hour-axis gantt x work-division kanban over a SQLite single source of truth",
+  "engines": {
+    "node": ">=22.16.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node panel.js start",

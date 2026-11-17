@@ -1,7 +1,10 @@
 # CI gate suite: turns the release-checklist gates from a point-in-time
 # human attestation into a system property. Zero npm dependencies by policy:
 # only Node standard library and Python standard library execute here.
-# Supply chain: official actions only (actions/checkout, actions/setup-node).
+# Supply chain: official actions only (actions/checkout, actions/setup-node),
+# pinned to full commit SHAs (A-2 hardening recipe; resolved from their v4
+# tags on 2026-11-17). Determinism: TZ/LC pinned at workflow level so the
+# regen-doc git-diff step and any sorting behave the same on every runner.
 name: gates
 
 on:
@@ -10,6 +13,11 @@ on:
 
 permissions:
   contents: read
+
+env:
+  TZ: UTC
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
 
 concurrency:
   group: gates-${{ github.ref }}
@@ -22,12 +30,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Setup Node.js 22 (package requires >= 22.5)
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 22 (floor >= 22.16.0 per A-2 recipe)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+
+      - name: "Node floor assertion (>= 22.16.0)"
+        shell: bash
+        run: |
+          node -e "const [a,b]=process.versions.node.split('.').map(Number);if(a<22||(a===22&&b<16)){console.error('node >= 22.16.0 required, got '+process.version);process.exit(1)}console.log('node floor ok: '+process.version)"
 
       - name: "Skill validator (checklist: exit 0)"
         shell: bash
@@ -70,10 +83,16 @@ jobs:
           node scripts/issue.js regen-doc
           git diff --exit-code docs/DISCIPLINE-ISSUES.md
 
-      - name: Unit tests (node --test, skipped until tests/ exists)
+      - name: "Unit tests + coverage floor (node --test; floor 80% lines)"
         if: hashFiles('tests/**') != ''
         shell: bash
-        run: node --test "tests/**/*.test.js"
+        run: |
+          set -euo pipefail
+          node --test --experimental-test-coverage "tests/**/*.test.js" 2>&1 | node scripts/coverage-floor.js
+
+      - name: "Trust boundary probe (boot, refuse, shutdown clean)"
+        shell: bash
+        run: node scripts/trust-probe.js
 
   e2e:
     name: panel e2e (Chrome CDP)
@@ -81,12 +100,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Setup Node.js 22 (package requires >= 22.5)
-        uses: actions/setup-node@v4
+      - name: Setup Node.js 22 (floor >= 22.16.0 per A-2 recipe)
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+
+      - name: "Node floor assertion (>= 22.16.0)"
+        shell: bash
+        run: |
+          node -e "const [a,b]=process.versions.node.split('.').map(Number);if(a<22||(a===22&&b<16)){console.error('node >= 22.16.0 required, got '+process.version);process.exit(1)}console.log('node floor ok: '+process.version)"
 
       # The ubuntu-24.04 runner image ships Google Chrome (listed under
       # Browsers and Drivers in the runner-images readme). If a future image
